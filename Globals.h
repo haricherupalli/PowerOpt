@@ -1,0 +1,9 @@
+extern int rowNum;
+extern int colNum;
+extern bool loadAnaData;
+extern bool swapCell;
+extern bool swapByPath;
+extern bool anaTiming;
+extern bool saveAnaData;
+extern double swapRatio;
+extern int numSwapCellsPerPath;
