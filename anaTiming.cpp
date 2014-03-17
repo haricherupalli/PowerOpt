@@ -568,7 +568,10 @@ namespace POWEROPT {
   double
   designTiming::getPathSlack(string  PathString)
   {
-    if ( PathString == "" ) return (0);
+    if ( PathString == "" )
+    {
+      return (0);
+    }
     else {
     _tclInputString = "DoOnePtCommand \"PtPathSlack " + PathString + "\"";
     //cout << "tcl :" << _tclInputString << endl;

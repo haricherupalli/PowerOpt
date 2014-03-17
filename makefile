@@ -8,7 +8,7 @@ SUFFIX  = cpp
 GCC = g++
 
 #OAROOT = /project/sartori00/CAD_SCRIPTS/home/tool/oa/oa2.2.6
-OAROOT = /ece/home/cheru007/OpenAccess/
+OAROOT = /ece/home/cheru007/OpenAccess
 #OALIBDIR = $(OAROOT)/lib/linux_rhel30_gcc411_32/opt
 OALIBDIR = $(OAROOT)/lib/linux_rhel50_gcc44x_64/dbg
 OAINC = $(OAROOT)/include/oa
@@ -32,7 +32,7 @@ TCLLIBPATH = /usr/lib64
 #IFLAG = -I. -I$(OAINC) -I$(TCLINC) -I/usr/include/c++/3.4.6/backward/ -I /usr/include/linux/
 IFLAG = -I. -I$(OAINC) -I$(TCLINC) -I/usr/local/apps/00/01/common/gcc/4.2.0/Linux/x86_64/include/c++/4.2.0/backward/
 #IFLAG = -I. -I$(OAINC) -I$(TCLINC)
-LFLAG = -fPIC -L$(OALIBDIR) $(OALIBS) -L$(TCLLIBPATH) $(TCLLIB) -lm -lpthread -ldl -Wl,-R/lib
+LFLAG = -fPIC $(DBG) -L$(OALIBDIR) $(OALIBS) -L$(TCLLIBPATH) $(TCLLIB) -lm -lpthread -ldl -Wl,-R/lib
 
 BINPATH = ../bin
 OBJPATH = ../obj
@@ -48,7 +48,7 @@ TARGET = $(BINPATH)/PowerOpt$(EXPER)
 
 $(TARGET):$(OBJECTS)
 	@echo "Now Generating $(TARGET)"
-	$(PY) $(GCC) -o $(TARGET) $(IFLAG) \
+	$(PY) $(GCC)  -o $(TARGET)  $(IFLAG) \
 	$(OBJECTS) \
 	$(LFLAG)
 	@echo "Done!"
@@ -66,6 +66,8 @@ clean:
 	@echo "Done!"
 debug:
 	@$(MAKE) -f makefile DBG="-g"
+profile:
+	@$(MAKE) -f makefile DBG="-pg"
 opt:
 	@$(MAKE) -f makefile DBG="-O2"
 test:

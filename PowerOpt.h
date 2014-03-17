@@ -56,8 +56,8 @@ class PowerOpt {
     void reportToggleFF(designTiming *T);
     void parseVCDALL(designTiming *T);
     void optimizeTargER(designTiming *T);
-    int  resizePaths(designTiming *T); 
     void reducePower(designTiming *T);
+    int  resizePaths(designTiming *T);
     void reducePowerSO(designTiming *T);
     bool resizePathCell(designTiming *T, Gate *g, string PathString, int PathItr);
     void calER(designTiming *T);
@@ -73,7 +73,7 @@ class PowerOpt {
     void swap_razor_flops(designTiming *T);
     // JMS-SHK end
     void resizeCycleVectors(int total_cyc);
-    int  parseVCD(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset); 
+    int  parseVCD(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
     void extractPaths(int cycle_num, int &pathID);
     void clearToggled();
     void findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths);
@@ -84,16 +84,16 @@ class PowerOpt {
     void updateBiasCell();
     void writeOut(designTiming *T);
     void setDontTouch();
-    void findLeakage(designTiming *T); 
-    void findLeakageLib(int lib_idx); 
-    void findLeakagePT(designTiming *T); 
+    void findLeakage(designTiming *T);
+    void findLeakageLib(int lib_idx);
+    void findLeakagePT(designTiming *T);
     double getLeakPower();
     void testCellPowerDelay(string cellName, designTiming *T);
     void testCellSize();
     void testRunTime();
     void testSlack();
     void restoreNet(designTiming *T);
-    double getCellSlack(Gate *g, designTiming *T); 
+    double getCellSlack(Gate *g, designTiming *T);
     double computeSF1(Gate *g, designTiming *T, bool change);
     double computeSF2(Gate *g, designTiming *T, bool change);
     double computeSF3(Gate *g, designTiming *T, bool change);
@@ -109,14 +109,14 @@ class PowerOpt {
     double computeTimingSF1(Gate *g, designTiming *T);
     double computeTimingSF2(Gate *g, designTiming *T, bool change);
     double computeTimingSF3(Gate *g, designTiming *T, bool change);
-    int downsizeAll(designTiming *T); 
-    int downsizeTest(designTiming *T); 
+    int downsizeAll(designTiming *T);
+    int downsizeTest(designTiming *T);
     int kick_move(designTiming *T, double kick_val);
     void updateCellLib(designTiming *T);
     void setBestLib(designTiming *T);
     void restoreLib(designTiming *T);
-    void checkCTSCells(); 
-    void setBaseName(); 
+    void checkCTSCells();
+    void setBaseName();
     string findBaseName(string master);
     string findSuffixName(string master);
     string findDownCell(string master);
@@ -134,8 +134,8 @@ class PowerOpt {
     void sensitivityUpdateFast(list<Gate *> gate_list, designTiming *T);
     void reduceLeak(designTiming *T);
     void reduceLeakMultiSwap(designTiming *T);
-    void checkGateFanin(Gate *g); 
-    void checkGateFanout(Gate *g); 
+    void checkGateFanin(Gate *g);
+    void checkGateFanout(Gate *g);
     void optTiming(designTiming *T);
     void PTEvaluation(designTiming *T);
     void PTEvaluation(designTiming *T, int freq, int test);
@@ -150,16 +150,16 @@ class PowerOpt {
     void setInitWNSMin(double x) { initWNSMin = x; }
     double  getInitWNS() { return initWNS; }
     double  getInitWNSMin() { return initWNSMin; }
-    double  getTargWNS() { 
+    double  getTargWNS() {
         if (initWNS > 0) return (double) 0;
         else return initWNS; }
-    double  getTargWNSMin() { 
+    double  getTargWNSMin() {
         if (initWNSMin > 0) return (double) 0;
         else return initWNSMin; }
-    double  getTargWNS_mmmc(int i) { 
+    double  getTargWNS_mmmc(int i) {
         if (initWNS_mmmc[i] > 0) return (double) 0;
         else return initWNS_mmmc[i]; }
-    double  getTargWNSMin_mmmc(int i) { 
+    double  getTargWNSMin_mmmc(int i) {
         if (initWNSMin_mmmc[i] > 0) return (double) 0;
         else return initWNSMin_mmmc[i]; }
     void setInitLeak(double x) { initLeak = x; }
@@ -259,8 +259,8 @@ class PowerOpt {
     void addSubnet(Subnet *s) { subnets.push_back(s); }
     void setLayoutName(string lName) { layoutName = lName; }
     void setCellName(string cName) { circuitName = cName; }
-    void setLibName(string lName) { libraryName = lName; }  
-    void setClockName(string cName) { clockName = cName; }  
+    void setLibName(string lName) { libraryName = lName; }
+    void setClockName(string cName) { clockName = cName; }
     void setOADir(char *dir) { oaDir = dir; }
     void setResDir(char *dir) { resDir = dir; }
     void setVCDName(char *VCDName) { VCDfilename = VCDName; }
@@ -279,7 +279,7 @@ class PowerOpt {
     bool checkViolationMMMC( string cellInst, int mmmc_num );
     void initSTA( designTiming *T );
     void exitPT();
-    
+
     //accossers
     void getCellPowers(designTiming *T);
     int getNumErrorCycles() { return numErrorCycles; }
@@ -457,12 +457,12 @@ class PowerOpt {
     int getSiteTop() { return m_siteBox.top(); }
     void setCellSwapping(bool b) { m_cellSwapping = b; }
 
-    int getTokenI(string line, string option); 
-    float getTokenF(string line, string option); 
-    char* getTokenC(string line, string option); 
-    string getTokenS(string line, string option); 
+    int getTokenI(string line, string option);
+    float getTokenF(string line, string option);
+    char* getTokenC(string line, string option);
+    string getTokenS(string line, string option);
 
-    int cmpString(string wild, string pattern); 
+    int cmpString(string wild, string pattern);
 
     private:
     int varMapWidth;      // width in grids of the variation map (currently width*width grids)
@@ -470,7 +470,7 @@ class PowerOpt {
     map<string,vector<double> > stdDevMap; // used to lookup the stdDev for a gate
     string varMapMatfile; // file containing the A matrix for the variation map
     string varMapSigmafile; // file containing the A matrix for the variation map
-    int varIteration; // number of iteration 
+    int varIteration; // number of iteration
 
     vector<double> path_slack_store;  // stores slack of P+ paths before swaps to know which paths should be in a Gate's path list (based on which path slacks are affected by changing the gate)
     vector<string> gate_master_store; // stores the master cell used for a gate
@@ -478,7 +478,7 @@ class PowerOpt {
     vector<int> error_cycles;  // set of cycles in which at least one negative slack path is toggled
     vector<int> minus_cycles;  // set of cycles in which at least one path in P_- (minus_paths) is toggled
     vector<int> delta_cycles;  // set of unique toggle cycles for a path (declared here so we don't have to allocate and destroy for every call to getDeltaErrors)
-    vector< vector<int> > error_cycle; // temporary storage used during calErrorRate, size is (2, total_cycles);  
+    vector< vector<int> > error_cycle; // temporary storage used during calErrorRate, size is (2, total_cycles);
     int numErrorCycles;    // number of cycles in which a negative slack path toggles (not necessarily equal to errror_cycles.size() )
     int numMinusCycles;    // number of cycles in which a path in P_- toggles (not necessarily equal to minus_cycles.size() )
     double doseSensitivity; //dose sensitivity
@@ -522,7 +522,7 @@ class PowerOpt {
     StrIntMap subnetNameIdMap;
     StrIntMap padNameIdMap;
     StrIntMap m_gateVarMap;
-    StrVector libNameVect;  
+    StrVector libNameVect;
     StrIntMap libNameIdMap;
     StrStrMap libFootprintMap;
     StrIntMap libNameMap;
@@ -545,7 +545,7 @@ class PowerOpt {
     SparseM SMA;
     double m_LDelayWeight;
     double m_WDelayWeight;
-    string layoutName, circuitName, libraryName, clockName, VCDfilename;
+    string layoutName, circuitName, libraryName, clockName, VCDfilename, dutName;
     int NumCritGates;
     vector<string> lefFiles;
     string defFile;
@@ -559,14 +559,14 @@ class PowerOpt {
     vector<string> libSuffix;
     vector<string> mmmcFile;
     vector<designTiming*> T_mmmc;
-    vector<string> dontTouchInst; 
-    vector<string> dontTouchCell; 
+    vector<string> dontTouchInst;
+    vector<string> dontTouchCell;
     vector<string> libNames;
     LibcellVector  m_libCells;
     string vcdPath;
-    vector<string> vcdFile; 
+    vector<string> vcdFile;
     string saifPath;
-    vector<string> saifFile; 
+    vector<string> saifFile;
     string initSwapFile;
     designTiming* T_main;
     string verilogOutFile;
@@ -577,9 +577,9 @@ class PowerOpt {
     int totalSimCycle;
     int testValue1;
     int testValue2;
-    bool ptLogSave; 
-    bool varSave; 
-    bool leakPT; 
+    bool ptLogSave;
+    bool varSave;
+    bool leakPT;
     bool mmmcOn;
     bool ptpxOff;
     bool useGT;
@@ -587,12 +587,12 @@ class PowerOpt {
     bool noSensUp;
     bool noSPEF;
     bool noDEF;
-            
+
     IntVector criticalGateIds;
     bool saveAnaData;
     string resDir;
     string oaDir;
-    
+
     DVector tnss;
     DVector cpss;
     DVector holdTnss;
@@ -634,7 +634,7 @@ class PowerOpt {
     double m_totalDeltaLDelay;
     double m_totalDeltaWDelay;
     double m_leakDelayFactor;
-    
+
     Box m_siteBox;
     bool m_cellSwapping;
     double initWNS;
@@ -642,6 +642,7 @@ class PowerOpt {
     vector<double> initWNS_mmmc;
     vector<double> initWNSMin_mmmc;
 
+    int clockPeriod;
     double initLeak;
     double initPower;
     double curWNS;
@@ -652,17 +653,17 @@ class PowerOpt {
     int swaptry;
     //int ptcnt;
     int swapstep;
-    int sensFunc; 
-    int sensFuncTiming; 
-    int exeOp; 
-    int curOp; 
-    int swapOp; 
-    int updateOp; 
-    int stopCond; 
-    int stopCond2; 
-    int holdCheck; 
-    int maxTrCheck; 
-    int oaGenFlag; 
+    int sensFunc;
+    int sensFuncTiming;
+    int exeOp;
+    int curOp;
+    int swapOp;
+    int updateOp;
+    int stopCond;
+    int stopCond2;
+    int holdCheck;
+    int maxTrCheck;
+    int oaGenFlag;
     int parseCycle;
     int vStart;
     int vEnd;
@@ -686,7 +687,7 @@ class PowerOpt {
     string ptServerName;
     string reportFile;
     int ptPort;
-    int divNum; 
+    int divNum;
     float guardBand;
     float sensVar;
     double chglimit;
@@ -700,7 +701,7 @@ class PowerOpt {
     double areaRZ;
     double areaHB;
     // JMS-SHK end
-    
+
     list<Gate *> ff_src_list;       // Flip-flop list (source side)
     list<Gate *> ff_des_list;       // Flip-flop list (destination)
 

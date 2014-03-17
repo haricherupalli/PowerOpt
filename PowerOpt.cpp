@@ -453,6 +453,12 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             libraryName = getTokenS(line,"-c ");
             layoutName = getTokenS(line,"-c ");
         }
+        if (line.find("-dut") != string::npos) {
+            dutName = getTokenS(line, "-c");
+        }
+        if (line.find("-period") != string::npos) {
+            clockPeriod = getTokenI(line, "-period");
+        }
 
         if (line.find("-vmw ") != string::npos)
             varMapWidth = getTokenI(line, "-vmw ");
@@ -5077,7 +5083,7 @@ void PowerOpt::printSlackDist(designTiming *T) {
         p = toggledPaths[i];
         path_slack = T->getPathSlack(p->getPathStr());
         p->setSlack(path_slack);
-        slackfile << path_slack << "\t" << (double) p->getNumToggled() / (double) totalSimCycle << endl;
+        slackfile << path_slack << "\t" << (double) p->getNumToggled() / (double) totalSimCycle << "\t" << p->getPathStr() << endl;
     }
     slackfile.close();
 }
@@ -5345,264 +5351,271 @@ void PowerOpt::resizeCycleVectors(int total_cyc)
 // parse the VCD file and extract toggle information
   int PowerOpt::parseVCD(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset)
 {
-    FILE * VCDfile;
-    VCDfile = fopen(VCDfilename.c_str(), "r");
-    if(VCDfile == NULL){
-        printf("ERROR, could not open VCD file: %s\n",VCDfilename.c_str());
-        exit(1);
+  FILE * VCDfile;
+  VCDfile = fopen(VCDfilename.c_str(), "r");
+  if(VCDfile == NULL){
+    printf("ERROR, could not open VCD file: %s\n",VCDfilename.c_str());
+    exit(1);
+  }
+
+  char str[2048];
+  char str1[20],str2[20],str3[20];    // dummy placeholder strings
+  char abbrev[MAX_ABBREV];       // abbreviated net name
+  char net_name[MAX_NAME];     // full net name
+  char net_index[16];     // there can be an index for multi-bit nets
+
+  char * end_index;      // the end of the net index
+  char * returnval;      // to check if we reached the end of a file
+  int num_read=0;        // number of values read in fscanf
+  int timescale;
+  char time_unit[10];    // time unit for the timescale
+  int cycle_num=0;       // the current cycle number
+  int cycle_time=0;      // the current time
+  int num_toggled=0;     // the number of nets that toggled in a cycle (minus the clocks)
+  int num_clks=0;        // the number of clocks (that we ignore)
+  char clk_names[MAX_CLKS][MAX_ABBREV];  // the abbreviated names of the clocks
+  int num_nets=0;        // the number of nets in the circuit
+  int j;                 // a loop counter
+  int net_is_clk = 0;    // tells whether the current net is a clock signal
+  vector<string> toggled_nets(VECTOR_INC); // a list of net names that toggled in a cycle
+  /*
+     for(j = toggled_nets.size()-VECTOR_INC; j < toggled_nets.size(); j++){
+     toggled_nets[j] = new char[MAX_ABBREV];
+     }
+   */
+
+  static int pathID = 0; // for Extraction of toggled paths
+
+  map<string,string> net_dictionary;  // dictionary of net abbreviation to net name
+  string strng;
+  map<string,string> source_gate_dictionary;  // dictionary of net name to source gate
+  map<string,string>::iterator gate_lookup;   // a pointer to the gate's entry in the source_gate_dictionary
+
+
+  // make gate_outpin_dictionay
+  Gate *g;
+  string out_pin;
+  for (int i = 0; i < getGateNum(); i ++)
+  {
+    g = m_gates[i];
+    out_pin = T->getOutPin(g->getName());
+    gate_outpin_dictionary[g->getName()] = out_pin;
+  }
+
+  // get the timescale -- we may not need this info
+  do{
+    fgets(str, 2048, VCDfile);
+  }while(strstr(str,"timescale") == NULL);
+
+  fscanf(VCDfile, "%d %s", &timescale, &time_unit);
+  dprintf("Timescale: %d %s\n",timescale, time_unit);
+
+  // seek to the beginning of the dut module
+  const char* dut_name = dutName.c_str();
+  do{
+    fgets(str, 2048, VCDfile);
+  }while(strstr(str, dut_name) == 0 );
+
+  // Crossreference of net abbreviation to net name is here
+  // make a dictionary of net abbrev to net name so I can pass net names to extractPaths
+  // I can possibly use Net.h here
+
+  num_read = fscanf(VCDfile, "%s %s %s %s %s %s", &str1,&str2,&str3,&abbrev,&net_name,&net_index);
+
+  while(strstr(str1,"var") != NULL){
+    num_nets++;
+
+    // net_index may or may not exist
+    // if there is an index, we need to append it to net_name using strcat
+    if( net_index[0] != '$' ){
+      end_index = strchr(net_index,']');
+      strcat(net_name, "\\[");
+      strncat(net_name, &net_index[1], end_index-(&net_index[1]) );
+      strcat(net_name, "\\]");
+      //printf("net with index: %s\n",net_name);
     }
 
-    char str[2048];
-    char str1[20],str2[20],str3[20];    // dummy placeholder strings
-    char abbrev[MAX_ABBREV];       // abbreviated net name
-    char net_name[MAX_NAME];     // full net name
-    char net_index[16];     // there can be an index for multi-bit nets
+    // add the entry <abbrev,name> to the net dictionary
+    strng = abbrev;
+    net_dictionary[strng] = net_name;
+    //dprintf("Added %s,%s to dictionary\n",abbrev,(net_dictionary[strng]).c_str());
 
-    char * end_index;      // the end of the net index
-    char * returnval;      // to check if we reached the end of a file
-    int num_read=0;        // number of values read in fscanf
-    int timescale;
-    char time_unit[10];    // time unit for the timescale
-    int cycle_num=0;       // the current cycle number
-    int cycle_time=0;      // the current time
-    int num_toggled=0;     // the number of nets that toggled in a cycle (minus the clocks)
-    int num_clks=0;        // the number of clocks (that we ignore)
-    char clk_names[MAX_CLKS][MAX_ABBREV];  // the abbreviated names of the clocks
-    int num_nets=0;        // the number of nets in the circuit
-    int j;                 // a loop counter
-    int net_is_clk = 0;    // tells whether the current net is a clock signal
-    vector<string> toggled_nets(VECTOR_INC); // a list of net names that toggled in a cycle
-    /*
-    for(j = toggled_nets.size()-VECTOR_INC; j < toggled_nets.size(); j++){
-      toggled_nets[j] = new char[MAX_ABBREV];
-    }
-    */
-
-    static int pathID = 0; // for Extraction of toggled paths
-
-    map<string,string> net_dictionary;  // dictionary of net abbreviation to net name
-    string strng;
-    map<string,string> source_gate_dictionary;  // dictionary of net name to source gate
-    map<string,string>::iterator gate_lookup;   // a pointer to the gate's entry in the source_gate_dictionary
-
-
-    // make gate_outpin_dictionay
-    Gate *g;
-    string out_pin;
-    for (int i = 0; i < getGateNum(); i ++)
-    {
-        g = m_gates[i];
-        out_pin = T->getOutPin(g->getName());
-        gate_outpin_dictionary[g->getName()] = out_pin;
+    // if the net name contains CLOCKNAME, then we want to ignore the net when capturing toggle cycles
+    // @NOTE: THIS ASSUMES THAT THE CLOCK NAME IS rclk (NOT ANYMORE)
+    // record any clocks to ignore later
+    //if( strstr(net_name,"rclk") != NULL)
+    if( strstr(net_name,clockName.c_str()) != NULL){
+      // to use strcmp, strings must be null terminated
+      returnval = strchr(abbrev,'\n');
+      if(returnval > 0){ *returnval = '\0';}
+      strcpy(clk_names[num_clks],abbrev);
+      dprintf("Found clock %s in netlist with abbreviation %s\n",net_name,clk_names[num_clks]);
+      num_clks++;
     }
 
-    // get the timescale -- we may not need this info
-    do{
-        fgets(str, 2048, VCDfile);
-    }while(strstr(str,"timescale") == NULL);
-
-    fscanf(VCDfile, "%d %s", &timescale, &time_unit);
-    dprintf("Timescale: %d %s\n",timescale, time_unit);
-
-    // seek to the beginning of the uut module
-    do{
-        fgets(str, 2048, VCDfile);
-    }while(strstr(str,"uut") == NULL);
-
-    // Crossreference of net abbreviation to net name is here
-    // make a dictionary of net abbrev to net name so I can pass net names to extractPaths
-    // I can possibly use Net.h here
-
+    // clear the end of the line and read the next
+    fgets(str, 2048, VCDfile);
     num_read = fscanf(VCDfile, "%s %s %s %s %s %s", &str1,&str2,&str3,&abbrev,&net_name,&net_index);
+  }
+  dprintf("Total nets = %d\n",num_nets);
 
-    while(strstr(str1,"var") != NULL){
-        num_nets++;
 
-      // net_index may or may not exist
-      // if there is an index, we need to append it to net_name using strcat
-        if( net_index[0] != '$' ){
-            end_index = strchr(net_index,']');
-            strcat(net_name, "\\[");
-            strncat(net_name, &net_index[1], end_index-(&net_index[1]) );
-            strcat(net_name, "\\]");
-        //printf("net with index: %s\n",net_name);
+  /*
+  // seek to where the inital values of all nets are dumped -- I don't care about values, just toggles
+  do{
+  fgets(str, 2048, VCDfile);
+  }while(strstr(str,"dumpvars") == NULL);
+   */
+
+  // seek to where the toggle information starts
+  do{
+    fgets(str, 2048, VCDfile);
+  }while(str[0] != '#');
+
+  // now, for each cycle in which nets toggle (ignore clocks):
+  // record the toggled nets
+  // traverse the netlist with toggled nets to extract toggled paths
+  // record the current cycle as a toggle cycle for all extracted paths
+
+  // the rest of the file is toggle information, so keep going until the end if parse_cyc is negative
+  // or else, go until parse_cyc cycles have been parsed
+  while( (!feof(VCDfile)) && ((cycle_num < parse_cyc) || (parse_cyc < 0)) ){
+
+    // we only care about toggles at the positive clock edge (when more than just the clock toggles)
+    // current string value is a cycle time, check if it is the positive clock edge (time % 2000 == 1000)
+
+    cycle_time = atoi(&str[1]);
+    //dprintf("%d\n",cycle_time);
+
+    //if( (cycle_time % clockPeriod) == 2500 ){} // HARI NEED TO GENERALIZE THIS. 1000 is used to detect positive edge ? not generic
+    if((cycle_time == 1000) || (cycle_time == 9300) || ( (cycle_time % 500) == 0 )) { // HARI NEED TO GENERALIZE THIS. 1000 is used to detect positive edge ? not generic
+      // this is a positive clock edge, increase the cycle count
+      cycle_num++;
+      // parse toggle information
+      num_toggled = 0;
+      returnval = fgets(str, 2048, VCDfile);
+
+      while( (str[0] != '#') && (returnval != NULL) ){
+        // extract the net abbreviation from this string
+        // first char is the toggled value and can be ignored, rest is the net abbrev
+
+        ////////////////////////////////////
+        // NOTE: There is an unresolved problem in some VCD files such that some multi-bit signals are not expanded.
+        //       This causes problems for VCD parsing.
+        //       The signal can be treated as a single net for all bits or ignored,
+        //       until there is a resolution for the VCD format.
+        //       Currently, I am ignoring these signals. (unclear how to trace paths through a multibit)
+        //       They can be identified in the following ways:
+        //       1) There is a space between the value and the abbreviation.
+        //       2) The value starts with 'b'.
+        //       I will use (1) for ID, since I don't know if (2) is true in general.
+        ///////////////////////////////////////
+        // If there is a space in str, then discard it (treat it as a clock, which gets ignored)
+        if( strchr(str,' ') != NULL ){
+          net_is_clk = 1;
         }
 
-        // add the entry <abbrev,name> to the net dictionary
-        strng = abbrev;
-        net_dictionary[strng] = net_name;
-        //dprintf("Added %s,%s to dictionary\n",abbrev,(net_dictionary[strng]).c_str());
+        ///////////////////////////////////////
 
-        // if the net name contains CLOCKNAME, then we want to ignore the net when capturing toggle cycles
-        // @NOTE: THIS ASSUMES THAT THE CLOCK NAME IS rclk (NOT ANYMORE)
-        // record any clocks to ignore later
-        //if( strstr(net_name,"rclk") != NULL){
-        if( strstr(net_name,clockName.c_str()) != NULL){
-            // to use strcmp, strings must be null terminated
-            returnval = strchr(abbrev,'\n');
-            if(returnval > 0){*returnval = '\0';}
-            strcpy(clk_names[num_clks],abbrev);
-            dprintf("Found clock %s in netlist with abbreviation %s\n",net_name,clk_names[num_clks]);
-            num_clks++;
+        // strcmp requires strings to be null-terminated
+        returnval = strchr(str,'\n');
+        if(returnval > 0){*returnval = '\0';}
+
+        // if the net is a clock, ignore it, else add it to the list of toggled nets
+        for(j = 0; j < num_clks; j++)
+        {
+          if( strcmp(clk_names[j], &str[1]) == 0 )
+          {
+            //dprintf("Ignoring clock %s\n",&str[1]);
+            net_is_clk = 1;
+            break;
+          }
         }
 
-      // clear the end of the line and read the next
-        fgets(str, 2048, VCDfile);
-        num_read = fscanf(VCDfile, "%s %s %s %s %s %s", &str1,&str2,&str3,&abbrev,&net_name,&net_index);
-    }
-    dprintf("Total nets = %d\n",num_nets);
+        // if this is not a clock, add it to the list of toggled nets
+        if(net_is_clk < 1){
+          //strcpy(toggled_nets[num_toggled],&str[1]);
+          strng = &str[1];
+          toggled_nets[num_toggled] = net_dictionary[strng];
+          num_toggled++;
 
+          //dprintf("Net %s toggled at time %d\n",(toggled_nets[num_toggled-1]).c_str(),cycle_time);
 
-    /*
-    // seek to where the inital values of all nets are dumped -- I don't care about values, just toggles
-    do{
-      fgets(str, 2048, VCDfile);
-    }while(strstr(str,"dumpvars") == NULL);
-    */
+          // if the vector is not big enough, resize it by adding VECTOR_INC more elements
+          if(toggled_nets.size() == num_toggled){
+            toggled_nets.resize(toggled_nets.size() + VECTOR_INC);
+            /*
+               for(j = toggled_nets.size()-VECTOR_INC; j < toggled_nets.size(); j++){
+               toggled_nets[j] = new char[MAX_ABBREV];
+               }
+             */
+            dprintf("Resized vector to size %d\n",toggled_nets.size());
+          }
+        }
 
-    // seek to where the toggle information starts
-    do{
-        fgets(str, 2048, VCDfile);
-    }while(str[0] != '#');
+        net_is_clk = 0;
+        returnval = fgets(str, 2048, VCDfile); // get the next value
+      }
+      //dprintf("Cycle %d at time %d, %d toggled nets\n",cycle_num,cycle_time,num_toggled);
 
-    // now, for each cycle in which nets toggle (ignore clocks):
-    // record the toggled nets
-    // traverse the netlist with toggled nets to extract toggled paths
-    // record the current cycle as a toggle cycle for all extracted paths
-
-    // the rest of the file is toggle information, so keep going until the end if parse_cyc is negative
-    // or else, go until parse_cyc cycles have been parsed
-    while( (!feof(VCDfile)) && ((cycle_num < parse_cyc) || (parse_cyc < 0)) ){
-
-      // we only care about toggles at the positive clock edge (when more than just the clock toggles)
-      // current string value is a cycle time, check if it is the positive clock edge (time % 2000 == 1000)
-
-        cycle_time = atoi(&str[1]);
-        //dprintf("%d\n",cycle_time);
-
-        if( (cycle_time % 2000) == 1000){ // HARI NEED TO GENERALIZE THIS. 2000 is the clock period
-            // this is a positive clock edge, increase the cycle count
-            cycle_num++;
-            // parse toggle information
-            num_toggled = 0;
-            returnval = fgets(str, 2048, VCDfile);
-
-            while( (str[0] != '#') && (returnval != NULL) ){
-                // extract the net abbreviation from this string
-                // first char is the toggled value and can be ignored, rest is the net abbrev
-
-              ////////////////////////////////////
-              // NOTE: There is an unresolved problem in some VCD files such that some multi-bit signals are not expanded.
-              //       This causes problems for VCD parsing.
-              //       The signal can be treated as a single net for all bits or ignored,
-              //       until there is a resolution for the VCD format.
-              //       Currently, I am ignoring these signals. (unclear how to trace paths through a multibit)
-              //       They can be identified in the following ways:
-              //       1) There is a space between the value and the abbreviation.
-              //       2) The value starts with 'b'.
-              //       I will use (1) for ID, since I don't know if (2) is true in general.
-              ///////////////////////////////////////
-              // If there is a space in str, then discard it (treat it as a clock, which gets ignored)
-              if( strchr(str,' ') != NULL ){
-                net_is_clk = 1;
-              }
-
-              ///////////////////////////////////////
-
-                // strcmp requires strings to be null-terminated
-                returnval = strchr(str,'\n');
-                if(returnval > 0){*returnval = '\0';}
-
-                // if the net is a clock, ignore it, else add it to the list of toggled nets
-                for(j = 0; j < num_clks; j++)
-                {
-                    if( strcmp(clk_names[j], &str[1]) == 0 )
-                    {
-                        //dprintf("Ignoring clock %s\n",&str[1]);
-                        net_is_clk = 1;
-                        break;
-                    }
-                }
-
-                // if this is not a clock, add it to the list of toggled nets
-                if(net_is_clk < 1){
-                    //strcpy(toggled_nets[num_toggled],&str[1]);
-                    strng = &str[1];
-                    toggled_nets[num_toggled] = net_dictionary[strng];
-                    num_toggled++;
-
-                    //dprintf("Net %s toggled at time %d\n",(toggled_nets[num_toggled-1]).c_str(),cycle_time);
-
-                    // if the vector is not big enough, resize it by adding VECTOR_INC more elements
-                    if(toggled_nets.size() == num_toggled){
-                        toggled_nets.resize(toggled_nets.size() + VECTOR_INC);
-                        /*
-                        for(j = toggled_nets.size()-VECTOR_INC; j < toggled_nets.size(); j++){
-                          toggled_nets[j] = new char[MAX_ABBREV];
-                        }
-                        */
-                        dprintf("Resized vector to size %d\n",toggled_nets.size());
-                    }
-                }
-
-                net_is_clk = 0;
-                returnval = fgets(str, 2048, VCDfile); // get the next value
-            }
-            //dprintf("Cycle %d at time %d, %d toggled nets\n",cycle_num,cycle_time,num_toggled);
-
-            // feed the toggle information to the path extraction function (if there is any -- check for NULL returnval first)
-            if( (returnval != NULL) && (num_toggled > 0) ){
-                //cout << "toggled number= " << num_toggled << endl;
-                //cout << "cycle number= " << cycle_num << endl;
-                string  cellstr;
-                int     CurInstId;
-                //int     CurNetId;
-                for(j = 0; j < num_toggled; j++){
-            //only lookup the source gate from PT if it is not in the dictionary
-            gate_lookup = source_gate_dictionary.find(toggled_nets[j]);
-            // if the return value is the end of the dictionary, there is no entry yet for this net
-            if( gate_lookup == source_gate_dictionary.end() ){
-              // add the entry to the dictionary
-              cellstr =  T->getCellFromNet(toggled_nets[j]);
-              source_gate_dictionary[toggled_nets[j]] = cellstr;
-            }else{
-              cellstr = (*gate_lookup).second;
-            }
-            //cout << "net : " << toggled_nets[j];
-            //cout << " -- cell : " << cellstr << endl;
-            if ( cellstr != "NULL_CELL" ) {
-                CurInstId = gateNameIdMap[cellstr];
-                m_gates[CurInstId]->setToggled(true);
-            }
-            else{
+      // feed the toggle information to the path extraction function (if there is any -- check for NULL returnval first)
+      if( (returnval != NULL) && (num_toggled > 0) ){
+        //cout << "toggled number= " << num_toggled << endl;
+        //cout << "cycle number= " << cycle_num << endl;
+        string  cellstr;
+        int     CurInstId;
+        //int     CurNetId;
+        for(j = 0; j < num_toggled; j++){
+          //only lookup the source gate from PT if it is not in the dictionary
+          gate_lookup = source_gate_dictionary.find(toggled_nets[j]);
+          // if the return value is the end of the dictionary, there is no entry yet for this net
+          if( gate_lookup == source_gate_dictionary.end() ){
+            // add the entry to the dictionary
+            cellstr =  T->getCellFromNet(toggled_nets[j]);
+            source_gate_dictionary[toggled_nets[j]] = cellstr;
+          }else{
+            cellstr = (*gate_lookup).second;
+          }
+          //cout << "net : " << toggled_nets[j];
+          //cout << " -- cell : " << cellstr << endl;
+          if ( cellstr != "NULL_CELL" ) {
+            CurInstId = gateNameIdMap[cellstr];
+            m_gates[CurInstId]->setToggled(true);
+            //ofstream gate_toggled;
+//            gate_toggled.open("my_output.txt", ios::app);
+//            gate_toggled << "Id is " << CurInstId << " gate name is " << m_gates[CurInstId]->getName() << endl;
+            //std::cout << "Id is " << CurInstId << "gate name is " << m_gates[CurInstId]->getName() << endl;
+            //gate_toggled.close();
+          }
+          else{
             //    CurNetId = subnetNameIdMap[toggled_nets[j]];
             //    cout << "PI : " << subnets[CurNetId]->getName() << endl;
             // if there is no source gate, then the toggled net is a PI
-            }
           }
-          extractPaths(cycle_num+cycle_offset,pathID);
-          clearToggled();
-          }
-        } else{
-            // since this is a negative clock edge, seek to the next clock time
-            do{
-                returnval = fgets(str, 2048, VCDfile);
-            }while( (str[0] != '#') && (returnval != NULL) );
         }
+        extractPaths(cycle_num+cycle_offset,pathID);
+        clearToggled();
+      }
+    } else{
+      // since this is a negative clock edge, seek to the next clock time
+      do{
+        returnval = fgets(str, 2048, VCDfile);
+      }while( (str[0] != '#') && (returnval != NULL) );
     }
+  }
 
-    fclose (VCDfile);
-    // return the number of simulation cycles
-    cout << "Total parsed cycles (all benchmarks) = " << cycle_num+cycle_offset << endl;
-    cout << "All toggled paths = " << toggledPaths.size() << endl;
-    return cycle_num;
+  fclose (VCDfile);
+  // return the number of simulation cycles
+  cout << "Total parsed cycles (all benchmarks) = " << cycle_num+cycle_offset << endl;
+  cout << "All toggled paths = " << toggledPaths.size() << endl;
+  return cycle_num;
 
-    // free up all dynamically allocated memory
-    /*
-    for(j = 0; j < toggled_nets.size(); j++){
-      delete[] toggled_nets[j];
-    }
-    */
+  // free up all dynamically allocated memory
+  /*
+     for(j = 0; j < toggled_nets.size(); j++){
+     delete[] toggled_nets[j];
+     }
+   */
 }
 
 void PowerOpt::extractPaths(int cycle_num, int &pathID)
@@ -5610,6 +5623,7 @@ void PowerOpt::extractPaths(int cycle_num, int &pathID)
     Gate    *g;
     //Path    *p;
 
+    cout << "Total Number of gates is " << getGateNum() << endl;
     for (int i = 0; i < getGateNum(); i ++)
     {
         vector<GateVector> paths; // extracted paths for this gate
@@ -5705,6 +5719,7 @@ void PowerOpt::findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths
   path.push_back(faninD);
   path_stack.push(path);
 
+  int j = 0;
   while( !path_stack.empty() ){
     // get the top element and check if the last gate is a FF
     path.assign( (path_stack.top()).begin(), (path_stack.top()).end() );
@@ -5722,6 +5737,13 @@ void PowerOpt::findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths
           num_toggled_fanins++;
           path_stack.push(path);
           (path_stack.top()).push_back(fanin);
+
+          j++;
+          if (j == 100)
+            j = 0;
+          if (j == 0)
+            printf(" HERE \n");
+
         }
       }
       // now, check if there were no toggled fanins, indicating that a PI caused this gate to toggle
