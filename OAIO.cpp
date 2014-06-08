@@ -15,11 +15,33 @@ using namespace oa;
 
 namespace POWEROPT {
 
+void OAReader::fill_reg_cells_list(PowerOpt *po)
+{
+  ifstream reg_list_file;
+  string reg_cells_file = po->getRegCellsFile();
+  reg_list_file.open("list_of_regs");
+  if (reg_list_file.is_open())
+  {
+    string line;
+    while (getline(reg_list_file, line))
+    {
+      reg_cells_set.insert(line);
+    }
+  }
+  else
+  {
+    cout << "[PowerOpt] List of regs not read. Is the file there where it should be? " << endl;
+    exit(0);
+  }
+}
+
   bool OAReader::readDesign(PowerOpt *po)
   {
 	  ofstream &logFile = po->getLogFile();
 	  bool keepLog = po->getKeepLog();
-	  
+
+    fill_reg_cells_list(po);
+
     StrIntMap &gateNameIdMap = po->getGateNameIdMap();
     StrIntMap &padNameIdMap = po->getPadNameIdMap();
     StrIntMap &subnetNameIdMap = po->getSubnetNameIdMap();
@@ -27,11 +49,11 @@ namespace POWEROPT {
 		string strLibName = po->getLibName();
 		string strCellName = po->getCellName();
 		string strViewName = po->getViewName();
-    
+
     try {
       oaDesignInit();
       oaLibDefList::openLibs();
-      
+
       oaNativeNS	oaNs;
       oaDefNS		oaLefDefNs;
 			oaViewType	*viewType = oaViewType::get(oacMaskLayout);
@@ -50,7 +72,7 @@ namespace POWEROPT {
           return false;
         }
       }
-      
+
       oaDesign * design = oaDesign::open(libName, cellName, viewName, viewType, 'r');
       if (design == NULL || design->getTopBlock() == NULL) {
         cout << " Error : " << endl
@@ -58,12 +80,12 @@ namespace POWEROPT {
         //exit(-1);
         return false;
       }
-			
+
       viewType = design->getViewType();
       oaString viewNameStr;
       viewType->getName(viewNameStr);
       cout<<"ViewType: "<<viewNameStr<<endl;
-      
+
 			Chip & chip = po->getChip();
       int rowW = 0, rowH = 0;
       if (design->getTech())
@@ -90,7 +112,7 @@ namespace POWEROPT {
         //exit(-1);
         return false;
       }
-      
+
       oaBox bBox;
       oaBlock *block = design->getTopBlock();
       if (block == NULL)
@@ -99,12 +121,12 @@ namespace POWEROPT {
         //exit(-1);
         return false;
       }
-			
+
 			int l = INT_MAX, b = INT_MAX, r = 0, t = 0;
 			if( (block->getRows()).getCount() > 0)
 			{
 				oaIter<oaRow> rowIter(block->getRows());
-				while(oaRow * row = rowIter.getNext()) 
+				while(oaRow * row = rowIter.getNext())
 				{
 					oaPoint orgPoint;
 					row-> getOrigin (orgPoint);
@@ -129,7 +151,7 @@ namespace POWEROPT {
 				cout<<"No site information !"<<endl;
 				getchar();
 			}
-			
+
 			int siteLeft = l;
 			int siteRight = r;
 			int siteBottom = b;
@@ -142,7 +164,7 @@ namespace POWEROPT {
 			chip.setSiteRowNum(numH);
 			chip.setSiteColNum(numW);
 			chip.initSiteOrient(numH);
-			
+
 			if((block->getRows()).getCount() > 0)
 			{
 				oaIter<oaRow> rowIter2(block->getRows());
@@ -155,24 +177,24 @@ namespace POWEROPT {
 //					cout << "Orient of row " << y << " : " << row->getSiteOrient() << endl;
 				}
 			}
-			
+
       block->getBBox(bBox);
       int chipLeft = bBox.left();
       int chipBottom = bBox.bottom();
       int chipRight = bBox.right();
       int chipTop = bBox.top();
 			chip.setDim(bBox.left(), bBox.bottom(), bBox.right(), bBox.top());
-			
+
       cout << "Chip Left: " << chipLeft  << "\tChip Bottom: " << chipBottom << endl;
       cout << "Chip Right: " << chipRight  << "\tChip Top: " << chipTop << endl;
       cout << "site Left: " << siteLeft  << "\tsite Right: " << siteRight << endl;
       cout << "site Bottom: " << siteBottom  << "\tsite Top: " << siteTop << endl;
       cout<<"rowW: "<<rowW<<" rowH: "<<rowH<<" numW: "<<numW<<" numH: "<<numH<<endl;
-      
+
       int gateNum = (block->getInsts()).getCount() + (block->getTerms()).getCount();
       cout << "Num of Gates: " << gateNum << endl;
 
-      
+
       //read in the gates
       int gateIndex = 0;
       int padIndex = 0;
@@ -187,23 +209,31 @@ namespace POWEROPT {
 //          cout << "Instance Name: " << gateName << endl;
         inst->getCellName(oaLefDefNs, cellName);
 //          cout << "cell Name: " << cellName << endl;
-				
+
 //					cout<<"isTerm ()?"<<inst->isTerm ()<<endl;
 //					cout<<"isInst () ?"<<inst->isInst () <<endl;
 //					cout<<"  isBitInst ()  ?"<<inst->  isBitInst ()  <<endl;
-				
+
         string strCellName = ((const oaChar*)(cellName));
         string strOrgCellName = strCellName;
 
         bool FFFlag = false;
-        oaString sub1 = "DF";
-				if (cellName.substr(sub1) != cellName.getLength())
-				{
-//							cout<<"cellName.getLength(): "<<cellName.getLength()<<endl;
-//            	cout<<"cellName.substr('FF'): "<<cellName.substr(sub1)<<endl;
-//              cout<<"flip-flop "<<gateName<<" found!"<<endl;
+        //oaString sub1 = "DF";
+//        oaString sub2 = "LH";
+//        oaString sub3 = "LN";
+//        if (cellName.substr(sub1) != cellName.getLength())
+//        {
+//          cout << "Adding cell " << strCellName << " to ff list" << endl;
+//        //							cout<<"cellName.getLength(): "<<cellName.getLength()<<endl;
+//        //            	cout<<"cellName.substr('FF'): "<<cellName.substr(sub1)<<endl;
+//        //              cout<<"flip-flop "<<gateName<<" found!"<<endl;
+//          FFFlag = true;
+//        }
+        if(reg_cells_set.find(strCellName) != reg_cells_set.end()) {
+          cout << "Adding cell " << strCellName << " to ff list" << endl;
           FFFlag = true;
-				}
+        }
+
 
         /*if (!FFFlag)
         {
@@ -218,7 +248,7 @@ namespace POWEROPT {
           }
         }
        */
-        /*LEON 
+        /*LEON
         //be carefull!! this is error-prone
         //change the biased cell names to nominal names
         if (!FFFlag)
@@ -232,7 +262,7 @@ namespace POWEROPT {
           }
 //					cout<<"changed to cell name: "<<cellName<<endl;
         }
-        */ 
+        */
         inst->getBBox(bbox);
         //           inst->getOrigin(point);
         //           cout << "Instance Type: " << inst->getType().getName()<<endl;
@@ -248,7 +278,7 @@ namespace POWEROPT {
 				{
 					oaSnapBoundary * boundary = oaSnapBoundary::find(cv->getTopBlock());
 					oaBox box;
-					
+
 					boundary -> getBBox(box);
 					width = box.getWidth();
 					height = box.getHeight();
@@ -258,10 +288,10 @@ namespace POWEROPT {
 					oaString macroName;
 					cv->getCellName(oaLefDefNs, macroName);
 				}
-        
+
 				// Get and print the origin of the instance.
 				oaOrient orient = inst->getOrient();
-				
+
 				if( orient % 2 == 1)
 				{
 					int tmp = width;
@@ -334,7 +364,7 @@ namespace POWEROPT {
 					cout<<"chip lb point: ";
 					po->printPoint(chipLeft, chipBottom);
 					cout<<endl;
-					
+
 					//exit(0);
                     //return false;
 				}
@@ -376,9 +406,9 @@ namespace POWEROPT {
 						logFile<<"Gate "<<tmpName<<" cell: "<<tmpCellName<<" in row: "<<y/rowH<<" ["<<x<<","<<y<<"], width: "<<width<<" height: "<<height<<" orient: "<<orient<<" siteOrient: "<<siteOrient<<endl;
         po->addGate(g);
       }
-      
+
 //      cout<<"Gate num: "<<po->getGateNum()<<endl;
-			
+
       oaIter<oaTerm> termIter(design->getTopBlock()->getTerms());
       while(oaTerm * term = termIter.getNext())
       {
@@ -399,7 +429,7 @@ namespace POWEROPT {
 
 //           cout<<"term type: "<<term->getTermType()<<endl;
 //           cout<<"term type: "<<term->getTermType().getName()<<endl;
-        
+
         oaIter<oaPin> pinIter(term-> getPins());
         oaPin * pin = pinIter.getNext();
         oaBox box;
@@ -422,7 +452,7 @@ namespace POWEROPT {
           pinfig->getBBox(box);
 //        	cout << "\tBounding Box of pad: " << "[{" << box.left() << "," << box.bottom()<< "} , {" << box.right() << "," << box.top() << "}]" << endl;
       	}
-        
+
         char tmpName[2000];
         strcpy(tmpName, (termName));
         padNameIdMap[tmpName] = padIndex;
@@ -443,8 +473,8 @@ namespace POWEROPT {
       {
         oaString netName;
         net->getName(oaLefDefNs, netName);
-        
-        
+
+
         if (net->getSigType() == oacPowerSigType || net->getSigType() == oacGroundSigType)
           {
             continue;
@@ -472,20 +502,20 @@ namespace POWEROPT {
 //              cout << "Warning: non-sigal net: " <<netName<<": "<< net->getSigType().getName() <<" found."<< endl;
       	  continue;
         }
-        */ 
+        */
         if( (net->getInstTerms()).getCount() == 0)
         {
 //              cout << "0 term net: " << netName <<" found : ignore."<< endl;
     	    continue;
         }
-        
+
 //					cout << "============== net " << netName <<"=============="<< endl;
 //					cout << "index: " << netIndex << endl;
 //					cout<<"number of term instances: "<<net->getInstTerms().getCount()<<endl;
 //					cout<<"number of terms: "<<net->getTerms().getCount()<<endl;
-        
+
 				Net *n = new Net(netIndex++, (const oaChar*)(netName));
-				
+
 				//here are the gates connected to the net
 				oaIter<oaInstTerm> instTerms(net->getInstTerms());
 				while (oaInstTerm *instTerm = instTerms.getNext())
@@ -493,13 +523,13 @@ namespace POWEROPT {
 					oaInst  *instGate = instTerm->getInst();
 					oaString instGateName;
 					instGate->getName(oaLefDefNs, instGateName);
-					
+
 					oaString cellName;
 					instGate->getCellName(oaLefDefNs, cellName);
 
 					char tmpName[2000];
 					strcpy(tmpName, (instGateName));
-					
+
 					if (gateNameIdMap.find(tmpName) == gateNameIdMap.end())
 					{
 						cout<<"Error: Cannot find gate "<<tmpName<<" in map"<<endl;
@@ -511,13 +541,13 @@ namespace POWEROPT {
 						printf("error gate id %d\n", gateId);
 					Gate *g = po->getGate(gateId);
 //						cout<<"Connected gate: "<<g->getName()<<endl;
-          
+
 					oaString termName;
 					instTerm->getTermName(oaLefDefNs, termName);
 					Terminal *term = new Terminal(termIndex++, (const oaChar*)(termName));
 					term->setGate(g);
 					term->addNet(n);
-					
+
           oaTermTypeEnum terminalType = instTerm->getTerm()->getTermType();
         //  assert(terminalType == oacInputTermType || terminalType == oacOutputTermType);
           PinType pinType;
@@ -531,7 +561,7 @@ namespace POWEROPT {
           	pinType = INPUT;
 //          	cout<<"Input pin: "<<termName<<endl;
           }
-					
+
 					if (pinType == OUTPUT)
 					{
 			       term->setPinType(OUTPUT);
@@ -544,18 +574,18 @@ namespace POWEROPT {
 			       g->addFaninTerminal(term);
 			       n->addOutputTerminal(term);
 					}
-					
+
            if (!instTerm->isBound())
            {
               cout << "Warning: InstTerm "<<termName<<" is unbounded" << endl;
               cout<<"insTerm isBound: "<<instTerm->isBound()<<endl;
               getchar();
            }
-           
+
            term->addNet(n);
            po->addTerminal(term);
          }
-         
+
          //here are the pads connected to the net
          oaIter<oaTerm> Terms(net->getTerms());
          while (oaTerm * term = Terms.getNext())
@@ -742,7 +772,7 @@ namespace POWEROPT {
       //                 ////getchar();
       }
     }
-      
+
     //set the gates connected to FF's to GATEPO
     for (int i = 0; i < po->getGateNum(); i ++)
       {
@@ -759,7 +789,7 @@ namespace POWEROPT {
             }
           }
       }
-    
+
     //here we seek to disable the gates on paths between PI/POs and FF's
     IntList liveGates;
     for (int i = 0; i < po->getGateNum(); i ++)
@@ -847,7 +877,7 @@ namespace POWEROPT {
             }
           }
       }
-    
+
     for (int i = 0; i < po->getGateNum(); i ++)
       {
 				Gate *g = po->getGate(i);
@@ -864,7 +894,7 @@ namespace POWEROPT {
 					logFile<<"FanoutgateNum: "<<g->getFanoutGateNum()<<endl;
 					logFile<<"FanoutTerminalNum: "<<g->getFanoutTerminalNum()<<endl;
 					logFile<<"FanoutPadNum: "<<g->getFanoutPadNum()<<endl;
-	        
+
 					logFile<<"----Fanin Terminals----"<<endl;
 					for (int j = 0; j < g->getFaninTerminalNum(); j ++)
 					 {
@@ -919,7 +949,7 @@ namespace POWEROPT {
 			oaNativeNS		  oaNs;
 			oaDefNS		    	oaLefDefNs;
 			oaViewType *    viewType = oaViewType::get(oacMaskLayout);
-		
+
 			string strLibName = po->getLibName();
 			string strCellName = po->getCellName();
 			string strViewName = po->getViewName();
@@ -937,7 +967,7 @@ namespace POWEROPT {
           exit(1);
         }
       }
-			
+
 			oaDesign * design = oaDesign::open(libName, cellName, viewName, viewType, 'a');
 	    if (design == NULL)
 	    {
@@ -945,7 +975,7 @@ namespace POWEROPT {
 				////getchar();
 				exit(-1);
 			}
-			
+
 			oaScalarName viewModelName(oaNs, oaString(po->getViewName().c_str()));
 			char modelName[2000];
 
@@ -975,7 +1005,7 @@ namespace POWEROPT {
 						cellModelName.init(oaNs, oaString(strCellName.c_str()));
 						cout<<"changed to "<<cellName<<endl;
 					}
-					
+
 					//inst->setMaster(libName, cellModelName, viewModelName);
 					//*
 					oaDesign * modelDesign = oaDesign::open(libName, cellModelName, viewModelName, viewType, 'r');
@@ -999,7 +1029,7 @@ namespace POWEROPT {
 			exit(-1);
 		}
 	}
-  
+
   void OAReader::updateModel(PowerOpt *po, bool swap)
   {
 		try
@@ -1007,7 +1037,7 @@ namespace POWEROPT {
 			oaNativeNS		  oaNs;
 			oaDefNS		    	oaLefDefNs;
 			oaViewType *    viewType = oaViewType::get(oacMaskLayout);
-		
+
 			string strLibName = po->getLibName();
 			string strCellName = po->getCellName();
 			string strViewName = po->getViewName();
@@ -1025,14 +1055,14 @@ namespace POWEROPT {
           exit(1);
         }
       }
-			
+
 			oaDesign * design = oaDesign::open(libName, cellName, viewName, viewType, 'a');
 	    if (design == NULL)
 	    {
 				cout << " Error : " << endl << "fail to open design " << endl;
 				exit(-1) ;
 			}
-			
+
 			oaScalarName viewModelName(oaNs, oaString(po->getViewName().c_str()));
 			char modelName[2000];
 
@@ -1044,7 +1074,7 @@ namespace POWEROPT {
 	        //  continue;
 	        if (swap && !g->isSwapped())
 	        	continue;
-	        
+
 	        string gateName = g->getName();
 	        string biasCellName = g->getBiasCellName();
 //	        cout<<"Gate: "<<g->getName()<<" biasedCellName: "<<biasCellName<<endl;
@@ -1065,7 +1095,7 @@ namespace POWEROPT {
 						cellModelName.init(oaNs, oaString(strCellName.c_str()));
 						cout<<"changed to "<<cellName<<endl;
 					}
-					
+
 					//inst->setMaster(libName, cellModelName, viewModelName);
 					//*
 					oaDesign * modelDesign = oaDesign::open(libName, cellModelName, viewModelName, viewType, 'r');
@@ -1088,19 +1118,19 @@ namespace POWEROPT {
 			exit(-1);
 		}
 	}
-	
+
 //any bug???
 	void OAReader::updateCoord(PowerOpt *po, bool all)
 	{
 		ofstream &logFile = po->getLogFile();
 		bool keepLog = po->getKeepLog();
-		
+
 		try
 		{
 			oaNativeNS		  oaNs;
 			oaDefNS		    	oaLefDefNs;
 			oaViewType	    *viewType = oaViewType::get(oacMaskLayout);
-			
+
 			string strLibName = po->getLibName();
 			string strCellName = po->getCellName();
 			string strViewName = po->getViewName();
@@ -1108,21 +1138,21 @@ namespace POWEROPT {
       oaScalarName      libName(oaNs,oaString(strLibName.c_str()));
       oaScalarName      cellName(oaNs,oaString(strCellName.c_str()));
       oaScalarName      viewName(oaNs,oaString(strViewName.c_str()));
-			
+
 			oaDesign * outdesign = oaDesign::open(libName, cellName, viewName, viewType, 'a');
 			if (outdesign == NULL)
 			{
 				cout << " Error : " << endl	<< "fail to open output design " << endl;
 				exit(-1);
 			}
-	
+
 			oaBox box;
 			oaBlock * block = outdesign-> getTopBlock();
 			block-> getBBox( box);
 	#ifdef DEBUG
 			cout << "Chip Width: " << box.getWidth()  << "\tChip Height: " << box.getHeight() << endl;
 	#endif
-	
+
 			int gateId = 0;
       StrIntMap &gateNameIdMap = po->getGateNameIdMap();
 			oaIter<oaInst> instIter(block->getInsts());
@@ -1150,12 +1180,12 @@ namespace POWEROPT {
 				int height = g->getHeight();
 				int lx = g->getLX();
 				int by = g->getBY();
-				
+
 				//cout<<"BBox of gate: ["<<lx<<","<<by<<"]-["<<lx+width<<","<<by+height<<"]"<<endl;
-				
+
 				int row = (int)((by-po->getSiteBottom()) / po->getRowHeight());
 				//cout << "Orient of row " << row << " : " << po->getSiteOrient(row);
-				
+
 				oaOrient orient;
 				if (g->isRollBack() || all)
 				{
@@ -1211,7 +1241,7 @@ namespace POWEROPT {
 				if (keepLog)
 					logFile<<"Computed origin ["<<orgPoint.x()<<","<<orgPoint.y()<<"] new orient "<<inst->getOrient()<<endl;
 			}
-			
+
 			outdesign -> save();
 			outdesign -> close();
 		}
@@ -1220,8 +1250,8 @@ namespace POWEROPT {
 			cout << "ERROR in output: " << (const char *)excp.getMsg() << endl;
 			exit(0);
 		}
-	
+
 		cout << "output finished" << endl;
 	}
-	
+
 }

@@ -5,6 +5,7 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+//#include <unordered_map>
 
 #include <stdio.h>
 #include <string.h>
@@ -13,8 +14,10 @@
 #include <vector>
 #include <string>
 #include <list>
+#include <set>
 
 #include "Gate.h"
+#include "Bus.h"
 #include "Grid.h"
 #include "typedefs.h"
 #include "macros.h"
@@ -31,8 +34,17 @@ namespace POWEROPT {
 class PowerOpt {
     public:
     //constructors
-    PowerOpt()
+    PowerOpt() // TODO HARI: MAKE THIS A SINGLETON CLASS!!
     {
+      toggle_info_file.open ("toggle_info");
+      //unique_not_toggle_gate_sets.open("unique_not_toggle_gate_sets");
+    }
+
+    // destructor
+    ~PowerOpt()
+    {
+      toggle_info_file.close();
+      // unique_not_toggle_gate_sets.close();
     }
 
 
@@ -54,7 +66,23 @@ class PowerOpt {
     void exeSOCE();
 
     void reportToggleFF(designTiming *T);
+    void parsePtReport();
+    void readFlopWorstSlacks();
+    void check_for_toggles(int cycle_num, int cycle_time);
+    void check_for_flop_toggles(int cycle_num, int cycle_time, designTiming* T);
+    void check_for_flop_toggles_fast(int cycle_num, int cycle_time, designTiming* T);
+    void find_dynamic_slack(designTiming* T);
+    void find_dynamic_slack_2(designTiming* T);
+    void read_unt_dump_file();
+    void check_for_flop_paths(int cycle_num, int cycle_time);
+    void trace_toggled_path(int cycle_num, int cycle_time);
     void parseVCDALL(designTiming *T);
+    void parseVCDALL_mode_15(designTiming *T);
+    int parseVCD_mode_15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
+    int parseVCDMode15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
+    int parseVCD_mode_15_new(string vcdfilename, designTiming  *T, int parse_cyc, int cycle_offset);
+    void handle_toggled_nets(vector<string> & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
+    void read_modules_of_interest();
     void optimizeTargER(designTiming *T);
     void reducePower(designTiming *T);
     int  resizePaths(designTiming *T);
@@ -75,8 +103,10 @@ class PowerOpt {
     void resizeCycleVectors(int total_cyc);
     int  parseVCD(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
     void extractPaths(int cycle_num, int &pathID);
+    void extractPaths_mode_15(int cycle_num, int &pathID , designTiming * T);
     void clearToggled();
     void findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths);
+    void findToggledPaths_mode_15(Gate *g, Gate *faninD, vector<GateVector> &paths, designTiming * T);
     string getPathString (GateVector paths);
 
 
@@ -163,6 +193,7 @@ class PowerOpt {
         if (initWNSMin_mmmc[i] > 0) return (double) 0;
         else return initWNSMin_mmmc[i]; }
     void setInitLeak(double x) { initLeak = x; }
+    string getRegCellsFile() { assert(regCellsFile.length()); return regCellsFile; }
     double  getInitLeak() { return initLeak; }
     void setInitPower(double x) { initPower = x; }
     double  getInitPower() { return initPower; }
@@ -242,7 +273,7 @@ class PowerOpt {
     double convertToDouble(const string& s);
     void setLDelayWeight(double w) { m_LDelayWeight = w; }
     void setWDelayWeight(double w) { m_WDelayWeight = w; }
-    void addGate(Gate *g) { m_gates.push_back(g); chip.addGate(g); }
+    void addGate(Gate *g);
     void addToggledPath(Path *p) { toggledPaths.push_back(p);}
     void addCriticalPath(Path *p) { criticalPaths.push_back(p);}
     void addPlusPath(Path *p) { plusPaths.push_back(p);}
@@ -483,6 +514,7 @@ class PowerOpt {
     int numMinusCycles;    // number of cycles in which a path in P_- toggles (not necessarily equal to minus_cycles.size() )
     double doseSensitivity; //dose sensitivity
     GateVector m_gates;
+    map <string, Gate*> gate_name_dictionary;
     TerminalVector terms;
     PadVector m_pads;
     NetVector nets;
@@ -564,6 +596,7 @@ class PowerOpt {
     vector<string> libNames;
     LibcellVector  m_libCells;
     string vcdPath;
+    string ptReport;
     vector<string> vcdFile;
     string saifPath;
     vector<string> saifFile;
@@ -613,6 +646,8 @@ class PowerOpt {
     double delta;
     ofstream logFile;
     ofstream m_timingFile;
+    ofstream toggle_info_file;
+    ofstream unique_not_toggle_gate_sets;
     bool keepLog;
     int iter;
     int L, U;
@@ -665,6 +700,10 @@ class PowerOpt {
     int maxTrCheck;
     int oaGenFlag;
     int parseCycle;
+    int vcdStartCycle;
+    int vcdStopCycle;
+    int ignoreClockGates;
+    int ignoreMultiplier;
     int vStart;
     int vEnd;
     int vStep;
@@ -684,8 +723,10 @@ class PowerOpt {
     string leakListFile;
     string libListTcl;
     string libListFile;
+    string regCellsFile;
     string ptServerName;
     string reportFile;
+    string untDumpFile;
     int ptPort;
     int divNum;
     float guardBand;
@@ -706,7 +747,19 @@ class PowerOpt {
     list<Gate *> ff_des_list;       // Flip-flop list (destination)
 
     map<string,string> gate_outpin_dictionary;  // dictionary of gate name to outpin gate
-    map<string,string>::iterator outpin_lookup;   // a pointer to the gate's entry in the source_gate_dictionary
+    map<string,string>::iterator outpin_lookup; // a pointer to the gate's entry in the source_gate_dictionary
+    map<string,string> net_dictionary;          // dictionary of net abbreviation to net name for VCD parsing
+    map <string, Bus> bus_dict;
+    map<string,string> source_gate_dictionary;  // dictionary of net name to source gate for vcd parsing
+
+    endpoint_pair_list_t endpoint_pair_list;
+    bool_vec_list_t path_toggle_bin_list;
+    set<string> toggled_gate_set;
+    map<vector<string>, float> not_toggled_gate_map;// map of not_toggled_gates and min_worst slack among toggled flip flops
+    vector<vector<string> > not_toggled_gate_vector;
+    map<string, float> endpoint_worst_slacks;
+
+
 };
 
 }

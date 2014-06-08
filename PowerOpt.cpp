@@ -22,6 +22,7 @@
 #include "Path.h"
 #include "Globals.h"
 #include "Timer.h"
+//#include "Bus.h"
 
 using namespace std;
 
@@ -351,6 +352,9 @@ void PowerOpt::readEnvFile(string envFileStr)
             soceCapTableBest = getTokenS(line, "-capb ");
         if (line.find("-leq ") != string::npos)
             libListFile = getTokenS(line, "-leq ");
+        if (line.find("-regCells") != string::npos)
+            regCellsFile = getTokenS(line, "-regCellsFile");
+
     }
     file.close();
 
@@ -410,6 +414,7 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     spefOutFile = "";
     ptOption = "";
     vcdPath = "";
+    ptReport = "";
     saifPath = "";
     initSwapFile = "";
     ptLogSave = false;
@@ -429,6 +434,10 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     testValue1 = 1;
     testValue2 = 1;
     parseCycle = -1;
+    vcdStartCycle = 0;
+    vcdStopCycle = -1;
+    ignoreClockGates = 0;
+    ignoreMultiplier = 0;
     vStart = 120;
     vEnd = 40;
     vStep = 1;
@@ -454,7 +463,7 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             layoutName = getTokenS(line,"-c ");
         }
         if (line.find("-dut") != string::npos) {
-            dutName = getTokenS(line, "-c");
+            dutName = getTokenS(line, "-dut");
         }
         if (line.find("-period") != string::npos) {
             clockPeriod = getTokenI(line, "-period");
@@ -472,6 +481,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             varMapSigmafile = getTokenS(line, "-vmsfile ");
         if (line.find("-vmitr ") != string::npos)
             varIteration = getTokenI(line, "-vmitr ");
+        if (line.find("-untDumpFile") != string::npos)
+            untDumpFile = getTokenS(line,"-untDumpFile");
 
         if (line.find("-def ") != string::npos)
             defFile = getTokenS(line, "-def ");
@@ -543,6 +554,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             dontTouchCell.push_back(getTokenS(line, "-dont_touch_cell "));
         if (line.find("-vcdpath ") != string::npos)
             vcdPath = getTokenS(line, "-vcdpath ");
+        if (line.find("-ptReport ") != string::npos)
+            ptReport = getTokenS(line, "-ptReport ");
         if (line.find("-initSwap ") != string::npos)
             initSwapFile = getTokenS(line, "-initSwap ");
         if (line.find("-vcd ") != string::npos)
@@ -553,6 +566,14 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             saifFile.push_back(getTokenS(line, "-saif "));
         if (line.find("-vcdCycle ") != string::npos)
             parseCycle = getTokenI(line,"-vcdCycle ");
+        if (line.find("-vcdStartCycle ") != string::npos)
+            vcdStartCycle = getTokenI(line,"-vcdStartCycle");
+        if (line.find("-vcdStopCycle ") != string::npos)
+            vcdStopCycle = getTokenI(line,"-vcdStopCycle");
+        if (line.find("-ignoreClockGates") != string::npos)
+            ignoreClockGates = getTokenI(line,"-ignoreClockGates");
+        if (line.find("-ignoreMultiplier") != string::npos)
+            ignoreMultiplier = getTokenI(line,"-ignoreMultiplier");
         if (line.find("-vStart ") != string::npos)
             vStart = getTokenI(line,"-vStart ");
         if (line.find("-vEnd ") != string::npos)
@@ -710,7 +731,7 @@ void PowerOpt::exePTServerOne(bool isPost)
     fout << "source " << ptServerCmdTcl << endl;
     fout << "set svcPort " << ptPort << endl;
     fout << "proc doService {sock msg} {" << endl;
-    fout << "    puts \"got command $msg on ptserver\"" << endl;
+    //fout << "    puts \"got command $msg on ptserver\"" << endl;
     fout << "    puts $sock [eval \"$msg\"]" << endl;
     fout << "    flush $sock" << endl;
     fout << "}" << endl;
@@ -849,7 +870,7 @@ void PowerOpt::exeGTServerOne(bool isPost)
     fout << "source " << gtServerCmdTcl << endl;
     fout << "set svcPort " << ptPort << endl;
     fout << "proc doService {sock msg} {" << endl;
-    fout << "    puts \"got command $msg on ptserver\"" << endl;
+    //fout << "    puts \"got command $msg on ptserver\"" << endl;
     fout << "    puts $sock [eval \"$msg\"]" << endl;
     fout << "    flush $sock" << endl;
     fout << "}" << endl;
@@ -1063,7 +1084,7 @@ void PowerOpt::exePTServerMMMC(int index)
     fout << "source " << ptServerCmdTcl << endl;
     fout << "set svcPort " << ptPort_mmmc << endl;
     fout << "proc doService {sock msg} {" << endl;
-    fout << "    puts \"got command $msg on ptserver\"" << endl;
+    //fout << "    puts \"got command $msg on ptserver\"" << endl;
     fout << "    puts $sock [eval \"$msg\"]" << endl;
     fout << "    flush $sock" << endl;
     fout << "}" << endl;
@@ -1224,7 +1245,7 @@ void PowerOpt::exeGTServerMMMC(int index)
     fout << "source " << gtServerCmdTcl << endl;
     fout << "set svcPort " << ptPort_mmmc << endl;
     fout << "proc doService {sock msg} {" << endl;
-    fout << "    puts \"got command $msg on ptserver\"" << endl;
+    //fout << "    puts \"got command $msg on ptserver\"" << endl;
     fout << "    puts $sock [eval \"$msg\"]" << endl;
     fout << "    flush $sock" << endl;
     fout << "}" << endl;
@@ -5328,10 +5349,35 @@ void PowerOpt::parseVCDALL(designTiming *T) {
         cout << "VCD files are not specified!!"<< endl;
         exit(1);
     }
+
     for (int i = 0; i < vcdFile.size(); i++) {
         cout << "[PowerOpt] Parsing VCD File:" << vcdFile[i] << endl;
         string vcdfilename = vcdPath + "/" + vcdFile[i];
         vcd_cycles = parseVCD(vcdfilename , T, parseCycle, totalSimCycle);
+        totalSimCycle += vcd_cycles;
+        cout << "[PowerOpt] Parsing VCD done with cycles=" << vcd_cycles << "(total=" << totalSimCycle << ")" << endl;
+    }
+    resizeCycleVectors(totalSimCycle);
+    cout << "[PowerOpt] # Toggled Paths : " << getToggledPathsNum() << endl;
+}
+
+// parseCycle is the number of cycles to parse in each VCD file
+// if parseCycle == NEGATIVE, parse the entire VCD
+void PowerOpt::parseVCDALL_mode_15(designTiming *T) {
+    toggledPaths.clear();
+    //int total_cycles=0;           // total number of cycles from all VCD files
+    totalSimCycle = 0;
+    // totalSimCycle also functions as current cycle number offset for setting toggled cycles of paths
+    int vcd_cycles=0;             // number of cycles parsed from the VCD file
+
+    if (vcdFile.size() == 0) {
+        cout << "VCD files are not specified!!"<< endl;
+        exit(1);
+    }
+    for (int i = 0; i < vcdFile.size(); i++) {
+        cout << "[PowerOpt] Parsing VCD File:" << vcdFile[i] << endl;
+        string vcdfilename = vcdPath + "/" + vcdFile[i];
+        vcd_cycles = parseVCD_mode_15_new(vcdfilename , T, parseCycle, totalSimCycle);
         totalSimCycle += vcd_cycles;
         cout << "[PowerOpt] Parsing VCD done with cycles=" << vcd_cycles << "(total=" << totalSimCycle << ")" << endl;
     }
@@ -5347,6 +5393,524 @@ void PowerOpt::resizeCycleVectors(int total_cyc)
     error_cycle.resize(2, vector<int> (total_cyc) );
 }
 
+void PowerOpt::addGate(Gate *g)
+{
+    m_gates.push_back(g);
+    chip.addGate(g);
+    gate_name_dictionary.insert(std::pair<std::string, Gate*>(g->getName(), g) );
+    cout << "Inserting gate : " << g->getName() << " with pointer value : " << g << endl;
+}
+
+
+static void tokenize (string s, char delim, vector<string> & tokens)
+{
+  stringstream iss;
+  iss << s ;
+  string token;
+  while (getline(iss, token, delim))
+  {
+    if (token.size())
+    {
+      tokens.push_back(token);
+    }
+  }
+  iss.clear();
+}
+
+string add_delim (vector<string> tokens, char delim, int start_point)
+{
+  string full_string = "";
+  char * dlm = &delim;
+  for (int i = 2; i < tokens.size(); i++)
+  {
+    full_string.append(tokens[i]);
+    full_string.append(dlm);
+  }
+  return full_string;
+}
+
+set<string> modules_of_interest;
+
+void PowerOpt::read_modules_of_interest()
+{
+    ifstream module_names_file;
+    module_names_file.open("modules_of_interest");
+    if (module_names_file.is_open()){
+      string module;
+      while (getline(module_names_file, module))
+      {
+        modules_of_interest.insert(module);
+        cout << "Inserting module of interest" << module << endl;
+      }
+    }
+    else {
+      cout << "File modules_of_interest not found. Is it where it should be? " << endl;
+      exit(0);
+    }
+}
+
+void PowerOpt::handle_toggled_nets(vector<string> & toggled_nets, designTiming* T, int cycle_num, int cycle_time)
+{
+  if (toggled_nets.size())
+  {
+    cout << "Handling Toggled Nets"  << endl;
+      for (int i = 0 ; i < toggled_nets.size() ; i++)
+      {
+          string cellstr;
+          string net_name;
+          map<string, string>::iterator gate_lookup =  source_gate_dictionary.find(toggled_nets[i]);
+          if( gate_lookup == source_gate_dictionary.end() ){
+            net_name = toggled_nets[i];
+            cellstr =  T->getCellFromNet(net_name);
+            source_gate_dictionary[net_name] = cellstr;
+          }
+          else{
+            cellstr = (*gate_lookup).second;
+          }
+          if ( cellstr != "NULL_CELL" ) {
+            if ( cellstr == "MULTI_DRIVEN_NET" ) {
+              cout << "[ERROR] This net " << net_name << " is driven by multiple cells" << endl;
+            }
+            //map<string, Gate*>::iterator gate_lookup2 =  gate_name_dictionary.find(cellstr);
+            int CurInstId = gateNameIdMap[cellstr];
+            m_gates[CurInstId]->setToggled(true);
+          }
+      }
+      check_for_flop_toggles_fast(cycle_num, cycle_time, T);
+  }
+  clearToggled();
+  toggled_nets.clear();
+}
+
+int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int parse_cyc, int cycle_offset)
+{
+  bool bit_blasted_vcd = false;
+  ifstream vcd_file ;
+  vector<string> toggled_nets;
+  vcd_file.open(vcd_file_name.c_str());
+  T->suppressMessage("UITE-216"); // won't warn that a gate is not a start/endpoint while reseting paths
+  if (vcd_file.is_open())
+  {
+    string line;
+    vector<string> line_contents;
+    vector<string> hierarchy;
+    int time;
+    int min_time = vcdStartCycle,  max_time = vcdStopCycle;
+    bool ignore_module = true;
+    bool valid_time_instant = false;
+    int cycle_num = 0 ;
+    while (getline(vcd_file, line))
+    {
+      if (line.compare(0,6,"$scope") == 0) {
+        string module_name;
+
+        tokenize (line, ' ', line_contents);
+
+        module_name = line_contents[2];
+        hierarchy.push_back(module_name);
+          assert (line_contents[3] == "$end");
+
+          if (modules_of_interest.find(module_name) != modules_of_interest.end()){
+            /* DEBUG
+            for (int i = 0; i < line_contents.size(); i++)
+            {
+               cout << line_contents[i] << endl;
+            }*/
+            cout << "Interested in module " << module_name << endl;
+            ignore_module = false;
+          }
+          else ignore_module = true;
+      }
+      else if (line.compare(0, 8, "$upscope") == 0) {
+        hierarchy.pop_back();
+
+        tokenize (line, ' ', line_contents);
+
+        assert (line_contents[1] == "$end");
+
+        /* DEBUG
+         * for (int i = 0; i < line_contents.size(); i++)
+        {
+           cout << line_contents[i] << endl;
+        }*/
+      }
+      else if (!ignore_module && line.compare(0, 4, "$var") == 0) {
+        tokenize (line, ' ', line_contents);
+        string hierarchy_string = add_delim (hierarchy, '/', 2);
+
+        int lc_size = line_contents.size();
+        assert (line_contents[lc_size-1] == "$end");
+
+        if (line_contents[1] == "wire") // other cases possible, but ignored
+        {
+          int net_size = atoi(line_contents[2].c_str());
+          if (bit_blasted_vcd)
+            assert (net_size == 1); // make sure the design is bit_blasted
+          if (net_size == 1)
+          {
+            assert (lc_size == 6);
+            string abbrev = line_contents[3];
+            string true_net_name = hierarchy_string;
+            true_net_name.append(line_contents[4]);
+            net_dictionary.insert(pair<string, string> (abbrev, true_net_name));
+            //cout << abbrev << ", " << true_net_name << endl;
+          }
+          else
+          {
+            assert (lc_size == 7);
+            string abbrev = line_contents[3];
+            string true_bus_name = hierarchy_string;
+            true_bus_name.append(line_contents[4]);
+
+            int bus_width_str_size = line_contents[5].length();
+            string bus_width_str = line_contents[5].substr(1, bus_width_str_size-2);
+
+            vector<string> bus_width;
+            tokenize(bus_width_str, ':', bus_width);
+            assert(bus_width.size() == 2);
+
+            int max_bus = atoi((bus_width[0].c_str()));
+            int min_bus = atoi((bus_width[1].c_str()));
+            //cout << abbrev << ", " << true_bus_name << " ( " << max_bus << " : " << min_bus << " ) " << endl;
+
+            Bus bus (true_bus_name, (max_bus - min_bus + 1));
+            bus_dict.insert(pair <string, Bus> (abbrev, bus));
+          }
+        }
+      }
+      else if (line.compare(0, 15, "$enddefinitions") == 0) {
+        assert(hierarchy.size() == 0);
+        cout << " Net Dictionary size is " << net_dictionary.size() << endl;
+      }
+      else if (line.compare(0,1, "#") == 0) {
+         handle_toggled_nets(toggled_nets, T, cycle_num, time);// handle all toggled nets from previous cycle
+         time = atoi(line.substr(1).c_str());
+         if (time <= max_time && time >= min_time)
+         {
+           cout << "TIME IS " << time << endl;
+           cycle_num++;
+           valid_time_instant = true;
+         }
+         else
+         {
+            valid_time_instant = false;
+            cout << " Skipping cycle " << time << endl;
+            if (time > max_time)
+              break;
+         }
+      }
+      else if (valid_time_instant){ // parse for time values of interest
+        string value = line.substr(0, 1);
+        string abbrev;
+        if (value == "b")// bus
+        {
+          int pos = line.find(" ",0);
+          value  = line.substr(1, pos-1);
+          abbrev = line.substr(pos+1);
+          map<string, Bus>::iterator  it = bus_dict.find(abbrev);
+          if (it != bus_dict.end())
+          {
+             Bus bus = it->second;
+             int prev_value_size = bus.prev_value.length();
+             assert ( prev_value_size == value.length());
+             //cout << bus.prev_value << ", " << value << endl;
+             for (int i = 0 ; i < prev_value_size ; i++)
+             {
+               if (bus.prev_value[i] != value[i]) // compare each bit and find toggled bits
+               {
+                 string net_name = bus.name;
+                 net_name.append("[");
+                 char buffer[2]; // 2 digits are enough to hold the number 64 (max possible size of a bus till date);
+                 sprintf(buffer, "%d", i);
+                 net_name.append(buffer);
+                 net_name.append("]");
+                 toggled_nets.push_back(net_name);
+               }
+             }
+          }
+        }
+        else if (value == "$") // net
+        {
+          assert (line.compare(0, 9, "$dumpvars") == 0);
+          valid_time_instant = false; // this is just a dump of all vars with probably 'x' as values, so we don't care
+          //exit(0);
+        }
+        else
+        {
+          abbrev = line.substr(1);
+          map<string, string> :: iterator it = net_dictionary.find(abbrev);
+          if (it != net_dictionary.end())
+          {
+            string net_name = net_dictionary[abbrev];
+            toggled_nets.push_back(net_name);
+          }
+        }
+      }
+      line_contents.clear();
+    }
+    handle_toggled_nets(toggled_nets, T, cycle_num, time); // FOR LAST CYCLE
+    cout << "Total parsed cycles (all benchmarks) = " << cycle_num << endl;
+    cout << "Unique toggle groups count = " << toggled_gate_set.size() << endl;
+    cout << "Not Toggled gates size is " << not_toggled_gate_map.size() << endl;
+  }
+}
+// parse the VCD file and extract toggle information
+  int PowerOpt::parseVCD_mode_15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset)
+{
+  FILE * VCDfile;
+  VCDfile = fopen(VCDfilename.c_str(), "r");
+  if(VCDfile == NULL){
+    printf("ERROR, could not open VCD file: %s\n",VCDfilename.c_str());
+    exit(1);
+  }
+
+  char str[2048];
+  char str1[20],str2[20],str3[20];           // dummy placeholder strings
+  char abbrev[MAX_ABBREV];                   // abbreviated net name
+  char net_name[MAX_NAME];                   // full net name
+  char net_index[16];                        // there can be an index for multi-bit nets
+
+  char * end_index;                          // the end of the net index
+  char * returnval;                          // to check if we reached the end of a file
+  int num_read=0;                            // number of values read in fscanf
+  int timescale;
+  char time_unit[10];                        // time unit for the timescale
+  int cycle_num=0;                           // the current cycle number
+  int cycle_time=0;                          // the current time
+  int num_toggled=0;                         // the number of nets that toggled in a cycle (minus the clocks)
+  int num_clks=0;                            // the number of clocks (that we ignore)
+  char clk_names[MAX_CLKS][MAX_ABBREV];      // the abbreviated names of the clocks
+  int num_nets=0;                            // the number of nets in the circuit
+  int j;                                     // a loop counter
+  int net_is_clk = 0;                        // tells whether the current net is a clock signal
+  vector<string> toggled_nets(VECTOR_INC);   // a list of net names that toggled in a cycle
+  static int pathID = 0;                     // for Extraction of toggled paths
+
+  //map<string,string> net_dictionary;         // dictionary of net abbreviation to net name
+  string strng;
+  map<string,string>::iterator gate_lookup;  // a pointer to the gate's entry in the source_gate_dictionary
+
+  Gate *g;
+
+  do{
+    fgets(str, 2048, VCDfile);
+  }while(strstr(str,"timescale") == NULL);
+
+  fscanf(VCDfile, "%d %s", &timescale, &time_unit);
+
+  // seek to the beginning of the dut module among many modules
+  const char* dut_name = dutName.c_str();
+  do{
+    fgets(str, 2048, VCDfile);
+  }while(strstr(str, dut_name) == 0 );
+
+  num_read = fscanf(VCDfile, "%s %s %s %s %s %s", &str1,&str2,&str3,&abbrev,&net_name,&net_index);
+
+  while(strstr(str1,"var") != NULL){
+    num_nets++;
+
+    if( net_index[0] != '$' ){ // multi-bit net handling
+      end_index = strchr(net_index,']');
+      strcat(net_name, "\\[");
+      strncat(net_name, &net_index[1], end_index-(&net_index[1]) );
+      strcat(net_name, "\\]");
+    }
+
+    // add the entry <abbrev,name> to the net dictionary
+    strng = abbrev;
+    net_dictionary[strng] = net_name;
+
+    if( strstr(net_name,"clk") != NULL){
+      returnval = strchr(abbrev,'\n');
+      if(returnval > 0){ *returnval = '\0';} // null terminate the string
+      strcpy(clk_names[num_clks],abbrev);
+      num_clks++;
+    }
+
+    fgets(str, 2048, VCDfile);
+    num_read = fscanf(VCDfile, "%s %s %s %s %s %s", &str1,&str2,&str3,&abbrev,&net_name,&net_index);
+  }
+  //printf("Total nets = %d\n",num_nets);
+
+  // seek to where the inital values of all nets are dumped -- I don't care about values, just toggles
+  if ((strstr(str1, "dumpvars") != NULL) && (strstr(str2, "dumpvars") != NULL) && (strstr(str3, "dumpvars") != NULL) && (strstr(abbrev, "dumpvars") != NULL) && (strstr(net_name, "dumpvars") != NULL) && (strstr(net_index, "dumpvars") != NULL) )
+  {// dumpvars not found in the last parse
+    do{
+        fgets(str, 2048, VCDfile);
+    }while(strstr(str,"dumpvars") == NULL);
+  }
+
+  // seek to where the toggle information starts
+  do{
+    fgets(str, 2048, VCDfile);
+  }while(str[0] != '#');
+
+  // now, for each cycle in which nets toggle (ignore clocks):
+  // record the toggled nets
+  // traverse the netlist with toggled nets to extract toggled paths
+  // record the current cycle as a toggle cycle for all extracted paths
+
+  // the rest of the file is toggle information, so keep going until the end if parse_cyc is negative
+  // or else, go until parse_cyc cycles have been parsed
+  T->suppressMessage("UITE-216"); // won't warn that a gate is not a start/endpoint while reseting paths
+  bool once = true;
+  while( (!feof(VCDfile)) && ((cycle_num < parse_cyc) || (parse_cyc < 0)) ){ // parse_cyc is the vcdCycle given in the cmd file
+
+    // we only care about toggles at the positive clock edge (when more than just the clock toggles)
+    // current string value is a cycle time, check if it is the positive clock edge (time % 2000 == 1000)
+
+    cycle_time = atoi(&str[1]);
+    //printf("%d\n",cycle_time);
+
+    //if( ((vcdStopCycle < 0) || (cycle_time <= vcdStopCycle)) && (cycle_time >= vcdStartCycle)&& ((cycle_time == 9300) || ( (cycle_time % 1000) == 0 /*positive edge only*/ ))) { // HARI NEED TO GENERALIZE THIS. 1000 is used to detect positive edge ? not generic
+    if( ((vcdStopCycle < 0) || (cycle_time <= vcdStopCycle)) && (cycle_time >= vcdStartCycle)) {
+      // this is a positive clock edge, increase the cycle count
+      if (once)
+      {
+        cout << " Completed initial skip" << endl;
+        cout << "STARTED PARSING THE VCD" << endl;
+        cout << "cycle_time is  " << cycle_time << endl;
+        once = false;
+      }
+      cycle_num++;
+      //printf("\n Toggles in cycle: %d and with cycle time : %d ", cycle_num, cycle_time);
+      // parse toggle information
+      num_toggled = 0;
+      returnval = fgets(str, 2048, VCDfile);
+      //printf("parsing cycles now. Current cycle is %d \n", cycle_num);
+
+      while( (str[0] != '#') && (returnval != NULL) ){
+        // extract the net abbreviation from this string
+        // first char is the toggled value and can be ignored, rest is the net abbrev
+
+        ////////////////////////////////////
+        // NOTE: There is an unresolved problem in some VCD files such that some multi-bit signals are not expanded.
+        //       This causes problems for VCD parsing.
+        //       The signal can be treated as a single net for all bits or ignored,
+        //       until there is a resolution for the VCD format.
+        //       Currently, I am ignoring these signals. (unclear how to trace paths through a multibit)
+        //       They can be identified in the following ways:
+        //       1) There is a space between the value and the abbreviation.
+        //       2) The value starts with 'b'.
+        //       I will use (1) for ID, since I don't know if (2) is true in general.
+        ///////////////////////////////////////
+        // If there is a space in str, then discard it (treat it as a clock, which gets ignored)
+        if( strchr(str,' ') != NULL ){
+          net_is_clk = 1;
+        }
+
+        ///////////////////////////////////////
+
+        // strcmp requires strings to be null-terminated
+        returnval = strchr(str,'\n');
+        if(returnval > 0){*returnval = '\0';}
+
+        // if this is not a clock, add it to the list of toggled nets
+        if(net_is_clk < 1){
+          //strcpy(toggled_nets[num_toggled],&str[1]);
+          strng = &str[1];
+          string true_net_name = net_dictionary[strng];
+          if (!true_net_name.empty())
+          {
+            toggled_nets[num_toggled] = true_net_name;
+            num_toggled++;
+          }
+
+          // if the vector is not big enough, resize it by adding VECTOR_INC more elements
+          if(toggled_nets.size() == num_toggled){
+            toggled_nets.resize(toggled_nets.size() + VECTOR_INC);
+            //printf("Resized vector to size %d\n",toggled_nets.size());
+          }
+        }
+
+        net_is_clk = 0;
+        returnval = fgets(str, 2048, VCDfile); // get the next value
+      }
+
+      if( (returnval != NULL) && (num_toggled > 0) ){
+        string  cellstr;
+        int     CurInstId;
+        for(j = 0; j < num_toggled; j++){
+          //only lookup the source gate from PT if it is not in the dictionary
+          gate_lookup = source_gate_dictionary.find(toggled_nets[j]);
+          if( gate_lookup == source_gate_dictionary.end() ){
+//            string test_string ("count[0]");
+//            string test_cell = T->getCellFromNet(test_string);
+//            cout << test_cell << endl;
+            string net_name = toggled_nets[j];
+            cellstr =  T->getCellFromNet(net_name);
+            source_gate_dictionary[net_name] = cellstr;
+            /*// TESTCODE
+//            string net_string = "clock_module_0_por_a";
+//            string test_cell = T->getCellFromNet(net_string);
+//            printf("the cell of the net %s is %s \n", net_string, test_cell);
+
+//            net_string = "watchdog_0_wdtcnt[1]";
+//            test_cell = T->getCellFromNet(net_string);*/
+          }else{
+            cellstr = (*gate_lookup).second;
+          }
+          if ( cellstr != "NULL_CELL" ) {
+            if ( cellstr == "MULTI_DRIVEN_NET" )
+            {
+              cout << "[ERROR] This net " << net_name << " is driven by multiple cells" << endl;
+            }
+            map<string, Gate*>::iterator gate_lookup2 =  gate_name_dictionary.find(cellstr);
+            CurInstId = gateNameIdMap[cellstr];
+            m_gates[CurInstId]->setToggled(true);
+//            if (gate_lookup2 != gate_name_dictionary.end())
+//            {
+//              Gate* g = gate_lookup2->second;
+////              g->setToggled(true);
+////              printf("%s, ", cellstr);
+//            }
+//            else
+//            {
+//              printf("Failed lookup of gate from gate_name \n");
+//              exit(0);
+//            }
+          }
+          else{
+          }
+        }
+//        extractPaths_mode_15(cycle_num+cycle_offset,pathID, T);
+        //check_for_toggles(cycle_num, cycle_time);
+        //check_for_flop_toggles(cycle_num, cycle_time, T);
+        check_for_flop_toggles_fast(cycle_num, cycle_time, T);
+        //trace_toggled_path(cycle_num, cycle_time);
+        clearToggled();
+      }
+    } else{
+    cout << " Skipping cycle " << cycle_time << endl;
+      do{
+        returnval = fgets(str, 2048, VCDfile);
+      }while( (str[0] != '#') && (returnval != NULL) );
+    }
+  }
+
+
+  fclose (VCDfile);
+  // return the number of simulation cycles
+  cout << "Total parsed cycles (all benchmarks) = " << cycle_num+cycle_offset << endl;
+  cout << "All toggled paths = " << toggledPaths.size() << endl;
+  cout << "Unique toggle groups count = " << toggled_gate_set.size() << endl;
+  cout << "Not Toggled gates size is " << not_toggled_gate_map.size() << endl;
+
+  // find_dynamic_slack(T);
+//  toggle_info_file << "Unique toggle groups count = " << gate_set.size() << endl;
+//  for (set<string>::iterator it = gate_set.begin(); it != gate_set.end(); ++it)
+//    toggle_info_file << *it;
+
+
+
+  /*// free up all dynamically allocated memory
+
+     for(j = 0; j < toggled_nets.size(); j++){
+     delete[] toggled_nets[j];
+     }*/
+
+  return cycle_num;
+}
 
 // parse the VCD file and extract toggle information
   int PowerOpt::parseVCD(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset)
@@ -5440,12 +6004,8 @@ void PowerOpt::resizeCycleVectors(int total_cyc)
     net_dictionary[strng] = net_name;
     //dprintf("Added %s,%s to dictionary\n",abbrev,(net_dictionary[strng]).c_str());
 
-    // if the net name contains CLOCKNAME, then we want to ignore the net when capturing toggle cycles
-    // @NOTE: THIS ASSUMES THAT THE CLOCK NAME IS rclk (NOT ANYMORE)
-    // record any clocks to ignore later
-    //if( strstr(net_name,"rclk") != NULL)
+    // Identify clock nets
     if( strstr(net_name,clockName.c_str()) != NULL){
-      // to use strcmp, strings must be null terminated
       returnval = strchr(abbrev,'\n');
       if(returnval > 0){ *returnval = '\0';}
       strcpy(clk_names[num_clks],abbrev);
@@ -5618,6 +6178,411 @@ void PowerOpt::resizeCycleVectors(int total_cyc)
    */
 }
 
+void PowerOpt::check_for_flop_toggles(int cycle_num, int cycle_time, designTiming * T)
+{
+    cout << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+    toggle_info_file << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+    T->resetPathsThroughAllCells();
+    int count_not_toggled = 0;
+    int count_toggled = 0;
+    for (int i = 0; i < getGateNum(); i ++) {
+      Gate* g = m_gates[i];
+      string gate_name = g->getName();
+      if(g->isToggled())
+      {
+        count_toggled++;
+        toggle_info_file << "Flop " << gate_name << " Toggled!" << endl;
+      }
+      else
+      {
+        count_not_toggled++;
+        toggle_info_file << "Flop " << gate_name << " DIDNOT Toggle!" << endl;
+        if (g->getFFFlag())
+        {
+          T->setFalsePathTo(gate_name);
+          T->setFalsePathFrom(gate_name);
+          }
+        else
+          T->setFalsePathThrough(g->getName());
+      }
+    }
+    double worst_slack = T->runTiming(10.0);
+    cout << "[TOG] count_not_toggled is " <<  count_not_toggled << endl;
+    cout << "[TOG] count_toggled is " <<  count_toggled << endl;
+    cout << "[REPORT] Worst Slack is ";
+    cout << worst_slack << endl;
+    toggle_info_file << "[TOG] count_not_toggled is " <<  count_not_toggled << endl;
+    toggle_info_file << "[TOG] count_toggled is " <<  count_toggled << endl;
+    toggle_info_file << "[REPORT] Worst Slack is ";
+    toggle_info_file << worst_slack << endl;
+
+    T->reportTiming(cycle_time) ;
+
+}
+
+void PowerOpt::read_unt_dump_file()
+{
+  ifstream file;
+  string line;
+  file.open(untDumpFile.c_str());
+  if (file.is_open())
+  {
+    while (getline(file,line))
+    {
+      stringstream ssl(line);
+      string gate;
+      vector<string> not_toggled_gates;
+      while (getline(ssl, gate, ',')) {
+        not_toggled_gates.push_back(gate);
+        //cout << "Reading " << gate  << endl;
+      }
+      cout << not_toggled_gates.size() << endl;
+      //not_toggled_gate_map.insert(std::pair<vector<string>, float>(not_toggled_gates, -1));
+      not_toggled_gate_vector.push_back(not_toggled_gates);
+    }
+  }
+  else {
+    cout << " Couldn't Open File" << untDumpFile << endl;
+    exit(0);
+  }
+}
+
+void PowerOpt::find_dynamic_slack_2(designTiming *T)
+{
+  cout << "Finding Dynamic Slack" << endl;
+  float dynamic_slack = 10000.0;
+  for (int i = 0; i < not_toggled_gate_vector.size() ; i++)
+  {
+    vector<string> not_toggled_gates = not_toggled_gate_vector[i];
+    T->resetPathsThroughAllCells();
+    for (int j = 0; j < not_toggled_gates.size(); j++)
+    {
+      string gate = not_toggled_gates[j];
+      //cout << gate ;
+      if (gate_name_dictionary.find(gate)->second->isendpoint())
+      {
+        //cout << " is endpoint " << endl;
+        T->setFalsePathTo(gate);
+        T->setFalsePathFrom(gate);
+      }
+      else
+      {
+        //cout << " is not endpoint " << endl;
+       T->setFalsePathThrough(gate);
+      }
+    }
+    float worst_slack = T->runTiming(10.0);
+    if (worst_slack < dynamic_slack)
+    {
+      dynamic_slack = worst_slack;
+      T->reportTiming(-1);
+      cout << "Updating Dynamic Slack" << endl;
+    }
+    cout << "Worst slack for this gate set ( of size " << not_toggled_gates.size() << " ) is " << worst_slack << " Dynamic Slack is " << dynamic_slack << endl;
+  }
+    cout << "Dynamic Slack for BenchMark is " << dynamic_slack << endl;
+
+}
+
+void PowerOpt::find_dynamic_slack(designTiming* T)
+{
+    cout << "Finding Dynamic Slack" << endl;
+    float dynamic_slack = 10000.0;
+    map <vector<string>, float>::iterator it_dynamic_slack;
+    for (map <vector<string>, float>:: iterator it = not_toggled_gate_map.begin(); it != not_toggled_gate_map.end(); it++)
+    {
+      vector<string> not_toggled_gates = it->first;
+      float wrst_ep_slack = it->second;
+      if (dynamic_slack > wrst_ep_slack)
+      {
+        T->resetPathsThroughAllCells();
+        for (int i =0; i < not_toggled_gates.size(); i++)
+        {
+          string gate = not_toggled_gates[i];
+          cout << gate ;
+          if (gate_name_dictionary.find(gate)->second->isendpoint())
+          {
+            cout << " is endpoint "  << endl;
+            T->setFalsePathTo(gate);
+            T->setFalsePathFrom(gate);
+          }
+          else
+          {
+            cout << " is not endpoint "  << endl;
+            T->setFalsePathThrough(gate);
+          }
+        }
+        float worst_slack = T->runTiming(10.0);// The argument doesn't matter
+        if (worst_slack < dynamic_slack)
+        {
+          dynamic_slack = worst_slack;
+          //it_dynamic_slack = it;
+          T->reportTiming(-1);
+          cout << "Updating Dynamic Slack" << endl;
+        }
+        cout << "Worst slack for this gate set ( of size " << not_toggled_gates.size() << " ) is " << worst_slack << " Dynamic Slack is " << dynamic_slack << endl;
+      }
+    }
+
+    cout << "Dynamic Slack for BenchMark is " << dynamic_slack << endl;
+
+}
+
+void PowerOpt::check_for_flop_toggles_fast(int cycle_num, int cycle_time, designTiming * T)
+{
+    cout << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+    //toggle_info_file << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+    int count_not_toggled = 0;
+    int count_toggled = 0;
+    string toggled_gates;
+    vector<string> not_toggled_gates; // vector for reading easily
+    string not_toggled_gates_str; // string for dumping
+    float ep_wrst_slk_for_cyc = 10000.0; // endpoint worst slack for cycle = LARGE VALUE
+    for (int i = 0; i < getGateNum(); i ++) {
+      Gate* g = m_gates[i];
+      string gate_name = g->getName();
+      if(g->isToggled())
+      {
+        count_toggled++;
+        toggled_gates.append(gate_name);
+        toggled_gates.append(",");
+        if (g->isendpoint())
+        {
+          map<string, float> :: iterator it = endpoint_worst_slacks.find(gate_name);
+          if (it == endpoint_worst_slacks.end())
+          {
+            cout << "Searched for a non-existing flop" << endl;
+            exit(0);
+          }
+          float ep_wrst_slk = it->second; // endpoint_worst_slack
+          //cout << "[DBG] endpoint is " << gate_name << " with slack " << ep_wrst_slk << endl;
+          if (ep_wrst_slk < ep_wrst_slk_for_cyc) {
+            ep_wrst_slk_for_cyc = ep_wrst_slk;
+          }
+        }
+      }
+      else
+      {
+        count_not_toggled++;
+        not_toggled_gates.push_back(gate_name);
+        not_toggled_gates_str.append(gate_name);
+        not_toggled_gates_str.append(",");
+      }
+    }
+    cout << "inserting" << endl;
+    bool unique = toggled_gate_set.insert(toggled_gates).second; // insert returns true if it was a new element and false if an old element that was inserted
+    if (unique)
+    {
+      not_toggled_gate_map.insert(std::pair<vector<string>, float>(not_toggled_gates, ep_wrst_slk_for_cyc));
+      unique_not_toggle_gate_sets << not_toggled_gates_str << endl;
+    }
+    cout << "[TOG] count_not_toggled is " <<  count_not_toggled << endl;
+    cout << "[TOG] count_toggled is " <<  count_toggled << endl;
+    cout << "[TOG] Worst endpoint slack for this cycle is " << ep_wrst_slk_for_cyc << endl;
+    //cout << "[REPORT] Worst Slack is ";
+    toggle_info_file << "[TOG] count_not_toggled is " <<  count_not_toggled << endl;
+    toggle_info_file << "[TOG] count_toggled is " <<  count_toggled << endl;
+    toggle_info_file << "[REPORT] toggled group is  " << toggled_gates << endl;
+    //toggle_info_file << "[REPORT] Worst Slack is ";
+    //double worst_slack = T->runTiming(10.0);
+    //cout << worst_slack << endl;
+    // toggle_info_file << worst_slack << endl;
+
+    //T->reportTiming(cycle_time) ;
+
+}
+
+//void PowerOpt::check_for_flop_paths(int cycle_num, int cycle_time)
+//{
+//  string gate_name = "clock_module_0_sync_cell_dco_wkup_data_sync_reg_1_";
+//  cout << "Checking for toggled paths of just one gate" << gate_name << endl;
+//  Gate * g;
+//  for (int i = 0; i < getGateNum(); i ++) {
+//    g = m_gates[i];
+//    if( g->getName() == gate_name)
+//      break;
+//  }
+//
+//
+//}
+
+void PowerOpt::trace_toggled_path(int cycle_num, int cycle_time)
+{
+  string gate_name = "clock_module_0_sync_cell_dco_wkup_data_sync_reg_1_";
+  cout << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+  cout << "Checking for toggled paths of just one gate" << gate_name << endl;
+  Gate * g;
+  for (int i = 0; i < getGateNum(); i ++) {
+    g = m_gates[i];
+    if( g->getName() == gate_name)
+      break;
+  }
+  cout << " Printing a toggled Path" << endl;
+  if (g->isToggled())
+  {
+    cout << "The gate toggled in this cycle" << endl;
+    while(true)
+    {
+      Gate * fanin;
+      for (int i = 0; i < g->getFaninGateNum(); i++){
+        fanin = g->getFaninGate(i);
+        if (fanin->isToggled()) break; // JUST THE FIRST ONE YOUR FIND
+      }
+      g = fanin;
+      cout << " " << g->getName() << " " << endl;
+      if (g ->getFFFlag()) break;
+    }
+    cout << endl;
+  }
+}
+
+void PowerOpt::check_for_toggles(int cycle_num, int cycle_time)
+{
+  int cycle_toggled_path_count = 0;
+  int end_point_toggle_misses = 0;
+  cout << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+  for(int i = 0 ; i < endpoint_pair_list.size() ; i ++)
+  {
+    endpoint_pair_t endpoint_pair = endpoint_pair_list[i];
+    //path_t test_path = endpoint_pair[0];
+//    string launch_ff_name = test_path.front();
+//    string capture_ff_name = test_path.back();
+//    Gate* launch_ff = gate_name_dictionary.find(launch_ff_name)->second;
+//    Gate* capture_ff = gate_name_dictionary.find(capture_ff_name)->second;
+
+//    if (launch_ff->isToggled() && capture_ff->isToggled())
+//    {
+//      cout << " The launch " << launch_ff->getName() << " and capture " << capture_ff->getName() << " flipflops seem to have toggled " << endl;
+      int bin_toggled_path_count = 0;
+      for (int j = 0; j < endpoint_pair.size(); j++ )
+      {
+        path_t path = endpoint_pair[j];
+        //i++;
+        for ( path_t::iterator it3 = path.begin(); it3 != path.end(); ++it3)
+        {
+          string gate_name = *it3;
+          Gate* gate = gate_name_dictionary.find(gate_name)->second;
+          if (!gate->isToggled()) {
+            if (gate_name == path.back())
+            {
+              cycle_toggled_path_count++;
+              bin_toggled_path_count++;
+              path_toggle_bin_list[i][j] = true;
+              cout << "Toggled Path" << endl;
+              for (int k = 0; k < path.size(); k++)
+              {
+                  cout << path[k] ;
+              }
+              cout << endl;
+              //cout << i << endl;
+              //cout << "PATH MISSED due to " << gate_name <<  "And it is the end point" <<  endl;
+            }
+//            else if ((gate_name == path.front()) && (path.size() > 2))
+//            {
+//              cout << "PATH MISSED due to " << gate_name << " and it is the launch ff" <<   endl;
+//            }
+//            else
+//            {
+//              cout << "PATH MISSED due to " << gate_name << " and it is a middle point" << endl;
+//            }
+            break;
+          }
+          else if (gate_name == path.back()){
+            cycle_toggled_path_count++;
+            bin_toggled_path_count++;
+            path_toggle_bin_list[i][j] = true;
+            cout << "Toggled Path" << endl;
+            for (int k = 0; k < path.size(); k++)
+            {
+                cout << path[k] ;
+            }
+            cout << endl;
+              //cout << i << endl;
+          }
+        }
+      }
+      if (bin_toggled_path_count)
+        cout << "[COV] Number of toggled paths for bin number " << i << " is " << bin_toggled_path_count   << endl;
+    //}
+  }
+  if (cycle_toggled_path_count)
+    cout << "[COV] The number of PCPs that toggled is " << cycle_toggled_path_count << endl;
+    //printf("In cycle %d, the number of PCPs that toggled is %d \n", cycle_num, cycle_toggled_path_count);
+}
+
+void PowerOpt::extractPaths_mode_15(int cycle_num, int &pathID, designTiming * T)
+{
+    Gate    *g;
+    //Path    *p;
+
+    cout << "Total Number of gates is " << getGateNum() << endl;
+    for (int i = 0; i < getGateNum(); i ++)
+    {
+        vector<GateVector> paths; // extracted paths for this gate
+        //printf(" Created a paths vector of max_size: %d \n", paths.max_size());
+        Gate    *faninD;
+        g = m_gates[i];
+        if (!g->getFFFlag()) continue; //@FIX: && !g->getPOFlag() // check if it is a ff
+
+        bool toggled_flag = false;
+        for (int l=0; l < g->getFaninGateNum(); ++l)
+        {
+          Gate *fanin = g->getFaninGate(l);
+          Terminal *iTerm, *oTerm;
+          int isNum = g->getInputSubnetNum();
+          for (int h = 0; h < isNum; h++)
+          {
+            Subnet *s = g->getInputSubnet(h);
+            if (s->inputIsPad() || s->outputIsPad())
+                continue;
+            iTerm = s->getInputTerminal();
+            oTerm = s->getOutputTerminal();
+            if ( iTerm->getGate()->getId() == fanin->getId() && oTerm->getGate()->getId() == g->getId())
+            {
+              if (oTerm->getName() == "D" && fanin->isToggled()) //@FIX: For PO, we need to check if the output is toggled, this check only works for DFF
+              {
+                toggled_flag = true;
+                faninD = fanin;
+              }
+            }
+          }
+        }
+        if (!toggled_flag) continue;
+        // findToggledPaths_mode_15 (g, faninD, paths, T);
+
+        map<string,Path*>::iterator path_lookup;
+        // a pointer to a path's entry in the path_exists_dictionary
+
+        // iterate over extracted paths and add to toggled path data structure
+        for(int ii=0; ii<paths.size(); ii++){
+          string PathString = getPathString (paths[ii]);
+          // check if this path has been extracted previously
+          path_lookup = path_exists_dictionary.find(PathString);
+          // if the return value is the end of the dictionary, there is no entry yet for this path
+          if( path_lookup == path_exists_dictionary.end() ){
+            // create a path and add the entry to the dictionary
+            Path *newPath = new Path(pathID++);
+            newPath->setPathStr(PathString);
+            // reversed the order of this loop since gates are traced and added to gatevectors in reverse order
+            int GateNum = paths[ii].size();
+            for (int k=GateNum-1; k >= 0; k--) {
+              newPath->addGate(paths[ii][k]);
+            }
+            newPath->addCycle(cycle_num);
+            addToggledPath(newPath);
+            //cout << "Path : " << pathID << " : " << cycle_num;
+            //cout << " : " << PathString << endl;
+            // put a pointer to the path in the path exists dictionary
+            path_exists_dictionary[PathString] = newPath;
+          }
+          else
+          {
+            // the path exists, add this cycle to its toggle list
+            ((*path_lookup).second)->addCycle(cycle_num);
+          }
+        }
+    }
+}
 void PowerOpt::extractPaths(int cycle_num, int &pathID)
 {
     Gate    *g;
@@ -5627,6 +6592,7 @@ void PowerOpt::extractPaths(int cycle_num, int &pathID)
     for (int i = 0; i < getGateNum(); i ++)
     {
         vector<GateVector> paths; // extracted paths for this gate
+        //printf(" Created a paths vector of max_size: %d \n", paths.max_size());
         Gate    *faninD;
         g = m_gates[i];
         if (!g->getFFFlag()) continue; //@FIX: && !g->getPOFlag() // check if it is a ff
@@ -5698,6 +6664,301 @@ void PowerOpt::clearToggled()
     }
 }
 
+void PowerOpt::findToggledPaths_mode_15(Gate *g, Gate *faninD, vector<GateVector> &paths, designTiming * T)
+{
+  // start by pushing the faninD gate onto the stack
+  // pop the top and push all toggled fanins as (current path + fanin)
+  // when the source FF is reached, add the path to the paths vector
+  // alernatively, if there is no toggled fanin and one of the input subnets is a PI, then add the path to the paths vector
+
+  GateVector path;
+  int i;
+  Gate *fanin;
+  Gate *gate;
+  int num_toggled_fanins;  // number of toggled fanins (if 0, check for PI)
+
+  stack<GateVector> path_stack;
+
+  // start the first path
+  // @NOTE: gates are added to the vector from end to beginning, so they are processed in reverse order later (outside this fn)
+  path.push_back(g);
+  path.push_back(faninD);
+  path_stack.push(path);
+  int path_count = 0;
+
+  int j = 0;
+  while( !path_stack.empty() ){
+    // get the top element and check if the last gate is a FF
+    path.assign( (path_stack.top()).begin(), (path_stack.top()).end() );
+    path_stack.pop();
+    int size = path_stack.size();
+    // if the last gate is a FF, then add the path to the vector of extracted paths
+    gate = path.back();
+    if( gate->getFFFlag() ){
+      string pathStr = getPathString(path);
+      float path_slack = T->getPathSlack(pathStr);
+      if (path_slack < 1.0) // This is 10% of a clock period of 10.0 . NEED TO GENERALIZE THIS through a cmd file parameter
+      {
+        paths.push_back(path);
+        //path_count++;
+      }
+    }else{
+      // find all the toggled fanins of gate and push their paths onto the stack
+      num_toggled_fanins = 0;
+      for (i = 0; i < gate->getFaninGateNum(); i++){
+        fanin = gate->getFaninGate(i);
+        if ( fanin->isToggled() ){
+          num_toggled_fanins++;
+          path_stack.push(path);
+          (path_stack.top()).push_back(fanin);
+
+          j++;
+          if (j == 1000000)
+            j = 0;
+          if (j == 0)
+          {
+            size = path_stack.size();
+            printf(" HERE path stack size : %d \n", size);
+          }
+            //printf(" size of path stack is %d\n", size);
+
+        }
+      }
+      // now, check if there were no toggled fanins, indicating that a PI caused this gate to toggle
+      if(num_toggled_fanins == 0){
+        // @NOTE: We check here whether an input net is connected to a PI, but it may not be necessary to check
+        //        We could just assume and add the path to the paths vector
+        // What if more than 1 PI is connected? We would need to know which one toggled. We can find out in extractPaths.
+
+        paths.push_back(path);
+        //path_count++;
+
+        /* not checking if connected to a PI, because it must be the case
+        for(i = 0; i < gate->getInputSubnetNum(); i++){
+          if( (gate->getInputSubnet(i))->inputIsPad() ){
+            paths.push_back(path);
+            break;
+          }
+        }
+        */
+      }
+    }
+  }
+  printf("path count is : %d \n", path_count);
+}
+
+void PowerOpt::parsePtReport()
+{
+  string line;
+  ifstream file_list;
+  file_list.open(ptReport.c_str());
+  string file;
+  int total_path_count = 0;
+  if (file_list.is_open())
+  {
+    while (getline(file_list, file))
+    {
+      ifstream epp_file;// endpoint_pair_file
+      epp_file.open(file.c_str());
+      if (epp_file.is_open())
+      {
+        endpoint_pair_t endpoint_pair;
+        int path_count = 0;
+        int path_end_count = 0;
+        while (getline(epp_file, line))
+        {
+          if (ignoreClockGates)
+          {
+            if (line.size() > 10 && (line.compare(2,10,"Startpoint") == 0) && (line.find("clock_gate") != string::npos))
+            {
+              //cout << "ENDING" << endl;
+              while (getline(epp_file,line) && line.size() > 8 && line.compare(2,5,"Point") !=0 ) ;
+              getline(epp_file,line);
+              getline(epp_file,line); // SKIP this path by skipping past "Point" in the file
+              //cout << line << endl;
+            }
+            if (line.size() > 8 && (line.compare(2,8,"Endpoint") == 0) && (line.find("clock_gate") != string::npos))
+            {
+              while (getline(epp_file,line) && line.size() > 8 && line.compare(2,5,"Point") !=0 ) ;
+              getline(epp_file,line);
+              getline(epp_file,line); // SKIP this path by skipping past "Point" in the file
+            }
+          }
+          if (ignoreMultiplier)
+          {
+            if (line.size() > 10 && (line.compare(2,10,"Startpoint") == 0) && (line.find("multiplier") != string::npos))
+            {
+              while (getline(epp_file,line) && line.size() > 8 && line.compare(2,5,"Point") !=0 ) ;
+              getline(epp_file,line);
+              getline(epp_file,line); // SKIP this path by skipping past "Point" in the file
+            }
+            if (line.size() > 8 && (line.compare(2,8,"Endpoint") == 0) && (line.find("multiplier") != string::npos))
+            {
+              while (getline(epp_file,line) && line.size() > 8 && line.compare(2,5,"Point") !=0 ) ;
+              getline(epp_file,line);
+              getline(epp_file,line); // SKIP this path by skipping past "Point" in the file
+            }
+          }
+
+          if(line.size() > 8 &&  line.compare(2, 5, "Point") == 0)
+          {
+            path_count++;
+            path_t  path;
+            getline(epp_file,line); // -------
+            getline(epp_file,line); // clock
+            getline(epp_file,line); // clock network delay
+            getline(epp_file,line); // FlipFlop/CP
+            // The next line will be FlipFlop/D
+            bool full_path_found = false;
+            /*if (getline(epp_file,line))
+            {
+            }*/
+            while (getline(epp_file,line))
+            {
+              if (line.size () >  20  && line.compare(2, 17, "data arrival time") == 0) // END OF PATH
+              {
+                path_end_count++;
+                total_path_count++;
+                full_path_found = true;
+                break;
+              }
+              char buffer[80];
+              std::size_t length = line.copy(buffer,80,2);
+              char * token = strtok(buffer, "/");
+              string gate(token); // converting to string
+              path.push_back(gate);
+              //cout << gate << endl;
+            }
+            if (full_path_found)
+            {
+              endpoint_pair.push_back(path);
+              full_path_found = false;
+            }
+          }
+          //cout << " --------" << endl;
+        }
+        //if (endpoint_pair.size())
+
+        vector<bool> path_toggle_info (endpoint_pair.size(), false);
+        path_toggle_bin_list.push_back(path_toggle_info);
+        endpoint_pair_list.push_back(endpoint_pair);
+        cout << "[PowerOpt] Finished Parsing PT report: " << file << " and Number of Path starts : " << path_count << " and Number of Path ends :" << path_end_count <<  endl;
+        epp_file.close();
+      }
+      else {
+        cout << " File named " << file << " couldn't be opened. "  << endl;
+        exit(0);
+      }
+    }
+  }
+  else {
+    cout << " Coundn't find the file named "<<  ptReport << ". Please check if the file exists in the current folder" << endl;
+    exit(0);
+  }
+  cout << "[PowerOpt] Total paths (among all bins) is : " << total_path_count  << endl;
+
+  file_list.close();
+  // TEST CODE
+//  for(endpoint_pair_list_t::iterator it1 = endpoint_pair_list.begin(); it1 != endpoint_pair_list.end(); ++it1)
+//  {
+//    endpoint_pair_t endpoint_pair = *it1;
+//    cout << "Endpoint Pair" << endl;
+//    for (endpoint_pair_t::iterator it2 = endpoint_pair.begin() ; it2 != endpoint_pair.end(); ++it2)
+//    {
+//      path_t path = *it2;
+//      cout << "Path" << endl;
+//      string right_endpoint = path.back();
+//      cout << "Hello" << endl;
+//      //cout << right_endpoint << endl;
+//      for ( path_t::iterator it3 = path.begin(); it3 != path.end(); ++it3)
+//      {
+//        cout <<  *it3 << endl;
+//      }
+//      //break;
+//
+//    }
+//    //break;
+//
+//  }
+//
+//    // SMALL CHECK
+//  Gate *g;
+//  string out_pin;
+//  for (int i = 0; i < getGateNum(); i ++)
+//  {
+//    g = m_gates[i];
+//    Gate* gate = gate_name_dictionary.find(g->getName())->second;
+//    if(g != gate)
+//    {
+//      cout << "Something wrong at " << i << endl;
+//    }
+//    if (i %100 == 0 )
+//      cout << "Gate  is " << g->getName() <<  " i is " << i << endl;
+//  }
+
+}
+void PowerOpt::readFlopWorstSlacks()
+{
+  ifstream file;
+  string line;
+  string gate;
+  string slack;
+  stringstream iss;
+  //string worst_slacks_file = "";
+  file.open("worst_endpoint_slacks");
+  if (file.is_open())
+  {
+      while(getline(file, line))
+      {
+        iss << line ;
+        getline(iss, gate, ',');
+        getline(iss, slack, ',');
+        map<string, float> :: iterator it = endpoint_worst_slacks.find(gate);
+        if (it != endpoint_worst_slacks.end())
+        {
+          float slack_float = atof(slack.c_str());
+          if (slack_float < it->second)
+          {
+            slack_float  = it->second;
+            endpoint_worst_slacks[gate] = slack_float;
+            map<string, Gate*>::iterator gate_lookup =  gate_name_dictionary.find(gate);
+            if (gate_lookup != gate_name_dictionary.end())
+            {
+              gate_lookup->second->setisendpoint(true);
+            }
+            else
+            {
+              cout << "Failed gate lookup for gate name " << gate << endl;
+              exit(0);
+            }
+          }
+        }
+        else
+        {
+          endpoint_worst_slacks.insert(std::pair<string, float> (gate, atof(slack.c_str())));
+          map<string, Gate*>::iterator gate_lookup =  gate_name_dictionary.find(gate);
+          if (gate_lookup != gate_name_dictionary.end())
+          {
+            gate_lookup->second->setisendpoint(true);
+          }
+          else
+          {
+            cout << "Failed gate lookup for gate name " << gate << endl;
+            exit(0);
+          }
+        }
+        iss.clear();
+      }
+  }
+  else
+  {
+    cout << "Endpoint Worst Slacks File Not Found. Make sure it is in the current directory" << endl;
+    exit(0);
+  }
+  cout << "DONE READING PROPERLY " << endl;
+  cout << "No of endpoints : " << endpoint_worst_slacks.size() << endl;
+}
+
 void PowerOpt::findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths)
 {
   // start by pushing the faninD gate onto the stack
@@ -5718,16 +6979,19 @@ void PowerOpt::findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths
   path.push_back(g);
   path.push_back(faninD);
   path_stack.push(path);
+  int path_count = 0;
 
   int j = 0;
   while( !path_stack.empty() ){
     // get the top element and check if the last gate is a FF
     path.assign( (path_stack.top()).begin(), (path_stack.top()).end() );
     path_stack.pop();
+    int size = path_stack.size();
     // if the last gate is a FF, then add the path to the vector of extracted paths
     gate = path.back();
     if( gate->getFFFlag() ){
-      paths.push_back(path);
+        paths.push_back(path);
+        //path_count++;
     }else{
       // find all the toggled fanins of gate and push their paths onto the stack
       num_toggled_fanins = 0;
@@ -5739,10 +7003,14 @@ void PowerOpt::findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths
           (path_stack.top()).push_back(fanin);
 
           j++;
-          if (j == 100)
+          if (j == 10000000)
             j = 0;
           if (j == 0)
-            printf(" HERE \n");
+          {
+            size = path_stack.size();
+            printf(" HERE path stack size : %d \n", size);
+          }
+            //printf(" size of path stack is %d\n", size);
 
         }
       }
@@ -5751,7 +7019,10 @@ void PowerOpt::findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths
         // @NOTE: We check here whether an input net is connected to a PI, but it may not be necessary to check
         //        We could just assume and add the path to the paths vector
         // What if more than 1 PI is connected? We would need to know which one toggled. We can find out in extractPaths.
+
         paths.push_back(path);
+        //path_count++;
+
         /* not checking if connected to a PI, because it must be the case
         for(i = 0; i < gate->getInputSubnetNum(); i++){
           if( (gate->getInputSubnet(i))->inputIsPad() ){
@@ -5763,11 +7034,11 @@ void PowerOpt::findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths
       }
     }
   }
+  printf("path count is : %d \n", path_count);
 }
 
 string PowerOpt::getPathString (GateVector paths)
-{
-    string out_pin;
+{ string out_pin;
     string PathString = "\\\"";
     int GateNum = paths.size();
     // This loop used to go from 0 to GateNum,

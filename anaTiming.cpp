@@ -95,15 +95,17 @@ namespace POWEROPT {
       }
   }
 
-  void
-  designTiming::reportTiming()
+ string
+  designTiming::reportTiming(int cycle_time)
   {
-    _tclInputString = "DoOnePtCommand \"PtReportTiming\"";
+    string  _strCycleTime = _convertToString(cycle_time);
+    _tclInputString = "DoOnePtCommand \"PtReportTiming " + _strCycleTime + "\"";
     _tclExpression = (char*)_tclInputString.c_str();
     Tcl_Eval(_interpreter, _tclExpression);
 
     _tclAnswer = _interpreter->result;
     string _answerStr(_tclAnswer);
+  return _answerStr;
   }
 
   void
@@ -124,6 +126,7 @@ namespace POWEROPT {
   designTiming::runTiming(double  clockCycleTime)
   {
     string  _strCycleTime = _convertToString(clockCycleTime);
+    //cout << "Trying to get worst slack" << endl;
     _tclInputString = "DoOnePtCommand \"PtGetWorstSlack " + _strCycleTime + "\"";
     _tclExpression = (char*)_tclInputString.c_str();
     Tcl_Eval(_interpreter, _tclExpression);
@@ -275,6 +278,16 @@ namespace POWEROPT {
     fallCap = dv[num-1];
   }
 
+  void designTiming::suppressMessage (string message)
+  {
+    _tclInputString = "DoOnePtCommand \"PtSuppressMessage "+ message + "\"";
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return;
+  }
   // ****************************************************************************
   // getSetupSlack
   // ****************************************************************************
@@ -685,6 +698,19 @@ namespace POWEROPT {
     //return(_answerStr);
   }
 
+  void
+  designTiming::resetPathsThroughAllCells ()
+  {
+    _tclInputString = "DoOnePtCommand \"PtResetPathsForCells\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    //_tclAnswer = _interpreter->result;
+    //string _answerStr(_tclAnswer);
+    //return(_answerStr);
+  }
+
   bool
   designTiming::sizeCell(string	  cellInstance,
                          string	  cellMaster)
@@ -721,6 +747,58 @@ namespace POWEROPT {
         //exit(1);
       }
   }
+
+  void
+  designTiming::setFalsePathTo(string  Cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtSetFalsePathTo " + Cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: set_false_path; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void
+  designTiming::setFalsePathFrom(string  Cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtSetFalsePathFrom " + Cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: set_false_path; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void
+  designTiming::setFalsePathThrough(string  Cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtSetFalsePathThrough " + Cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: set_false_path; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
   void
   designTiming::updateTiming()
   {

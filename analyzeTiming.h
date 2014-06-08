@@ -15,7 +15,7 @@
 using namespace std;
 
 namespace POWEROPT {
-  
+
   class designTiming
     {
     public:
@@ -23,7 +23,7 @@ namespace POWEROPT {
       designTiming();
       // destructor
       ~designTiming();
-     
+
       void setPtcnt(int x) { _pt_access_cnt = x; }
       int  getPtcnt() { return _pt_access_cnt; }
       void incPtcnt() { _pt_access_cnt ++; }
@@ -39,6 +39,11 @@ namespace POWEROPT {
       bool sizeCell(string cellInstance, string cellMaster);
       void swapCell(string cellInstance, string cellMaster);
       void setFalsePath(string  PathString);
+      void resetPathsThroughAllCells();
+      void setFalsePathThrough(string  PathString);
+      void setFalsePathTo(string  Cell);
+      void setFalsePathFrom(string  Cell);
+      void suppressMessage (string message);
       void resetPath(string  PathString);
       void updatePower();
       void updateTiming();
@@ -77,7 +82,7 @@ namespace POWEROPT {
       bool checkMaxTran(string cellName);
       bool checkPT();
       void Exit();
-      
+
       void getNetDelay(double &delay, string sourcePinName, string sinkPinName);
       void getFFDelay(double &rise, double &fall, string pinName);
       void getMaxCellDelay(double &delay, string cellName);
@@ -87,9 +92,9 @@ namespace POWEROPT {
       void getOutLoadCap(double &cap, string pinName);
 
       double  runTiming(double clockCycleTime);
-      void reportTiming();
+      string reportTiming(int cycle_time);
       void reportQoR();
-      
+
       double  getSetupSlack(string startFF, string endFF);
 
       double  getHoldSlack(string startFF, string endFF);

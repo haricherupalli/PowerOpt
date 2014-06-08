@@ -11,15 +11,15 @@
 #include "Net.h"
 
 namespace POWEROPT {
-  
+
   class Grid;
   class Terminal;
   enum GateType {GATEPI, GATEPO, GATEIN, GATEUNKNOWN, GATEPADPI, GATEPADPO, GATEPADPIO};
-  
+
   class Gate {
   public:
     //constructors
-    Gate(int i, bool ffflag, string gName, string cName, double l, int tlx, int tby, int twidth, int theight):id(i), FFFlag(ffflag), name(gName), cellName(cName), biasCellName(cName), bestCellName(cName), channelLength(l), type(GATEUNKNOWN), optChannelLength(l), lx(tlx), by(tby), oldLX(tlx), oldBY(tby), width(twidth), height(theight), weight(0), critical(false), swapped(false), checked(false), exclude(false), checkSrc(false), checkDes(false), toggled(false), holded(false), fixed(false), div(NULL), div_src(NULL), div_des(NULL), leakWeight(1.0), disable(false), rolledBack(false), m_compDelay(false), m_LgateBias(0), m_WgateBias(0), Ad(0), Bd(0), Al(0), Bl(0), Cl(0), WAd(0), WBd(0), WAl(0), WBl(0), swActivity(0), slack(0), delta_slack(0), sensitivity(0), deltaLeak(0), CTSFlag(false), cellLibIndex(-1), RZFlag(false)
+    Gate(int i, bool ffflag, string gName, string cName, double l, int tlx, int tby, int twidth, int theight):id(i), FFFlag(ffflag), name(gName), cellName(cName), biasCellName(cName), bestCellName(cName), channelLength(l), type(GATEUNKNOWN), optChannelLength(l), lx(tlx), by(tby), oldLX(tlx), oldBY(tby), width(twidth), height(theight), weight(0), critical(false), swapped(false), checked(false), exclude(false), checkSrc(false), checkDes(false), toggled(false), holded(false), fixed(false), div(NULL), div_src(NULL), div_des(NULL), leakWeight(1.0), disable(false), rolledBack(false), m_compDelay(false), m_LgateBias(0), m_WgateBias(0), Ad(0), Bd(0), Al(0), Bl(0), Cl(0), WAd(0), WBd(0), WAl(0), WBl(0), swActivity(0), slack(0), delta_slack(0), sensitivity(0), deltaLeak(0), CTSFlag(false), cellLibIndex(-1), RZFlag(false), is_end_point(false)
     {
       bbox.set(tlx, tby, tlx+twidth, tby+theight);
       oldCenterX = centerX = tlx + twidth/2;
@@ -37,10 +37,12 @@ namespace POWEROPT {
     void updateBiasCellName(string bName) { biasCellName = bName; }
     string getBiasCellName() { return biasCellName; }
     void setId(int i) { id = i; }
-    void setFFFlag(bool flag) { FFFlag = flag; }
+    void setFFFlag(bool flag) { FFFlag = flag; } // never invoked
     // JMS-SHK begin
     void setRZFlag(bool flag) { RZFlag = flag; }
     // JMS-SHK end
+    void setisendpoint(bool val) { is_end_point = val; }
+    bool isendpoint() { return is_end_point;}
     void setCTSFlag(bool flag) { CTSFlag = flag; }
     void setChannelLength(double l) { channelLength = l; }
     void setOptChannelLength(double optCL) { oldOptChannelLength = optChannelLength = optCL; }
@@ -175,13 +177,13 @@ namespace POWEROPT {
 	  	centerX = x + width/2;
 	  	centerY = y + height/2;
 	  }
-	  
+
 	  void rollBack();
     void calNetBox();
     int calHPWL();
     int calHPWL(int x, int y);
     int getHPWL() { return hpwl; }
-    
+
     void setCritical(bool b) { critical = b; }
     bool isCritical() { return critical; }
     void setFixed(bool b) { fixed = b; }
@@ -230,14 +232,14 @@ namespace POWEROPT {
         cout << "[SensOpt] Fatal error: Gate.getCellLeak()" << endl;
         return 0;
     }
-    double  getCellDelay() { 
+    double  getCellDelay() {
         for (int i = 0; i < cellList.size(); i++)
             if (cellName.compare(cellList[i]) == 0)
                 return delayList[i];
         cout << "[SensOpt] Fatal error: Gate.getCellDelay()" << endl;
         return 0;
     }
-    double  getCellSlack() { 
+    double  getCellSlack() {
         for (int i = 0; i < cellList.size(); i++)
             if (cellName.compare(cellList[i]) == 0)
                 return slackList[i];
@@ -290,7 +292,7 @@ namespace POWEROPT {
 		double getMinDelay();
 		bool calLeakWeight();
 		double calMaxPossibleDelay();
-		
+
     //assume gate delay is computed as the average value of TPLH and TPHL
     void clearMem();
     void setSortIndex(double val) { sortIndex = val; }
@@ -304,7 +306,7 @@ namespace POWEROPT {
     int getOrgOrient() { return orgOrient; }
     bool isRollBack() { return rolledBack; }
     void setRollBack(bool b) { rolledBack = b; }
-    
+
     NetVector &getNets() { return nets; }
     void addNet(Net *n);
     Net *getNet(int index) { assert(0 <= index && index < nets.size()); return nets[index]; }
@@ -363,6 +365,7 @@ namespace POWEROPT {
     Box bbox;
     Box netBox;
     bool FFFlag;
+    bool is_end_point;
     // JMS-SHK begin
     bool RZFlag;
     // JMS-SHK end
@@ -419,16 +422,16 @@ namespace POWEROPT {
     double m_maxDeltaLDelay;
     double m_maxDeltaWDelay;
     double swActivity;          // Switching Activity
-    double sensitivity; 
-    double deltaLeak; 
-    double deltaDelay; 
+    double sensitivity;
+    double deltaLeak;
+    double deltaDelay;
     vector<double> leakList;
     vector<double> delayList;
     vector<double> slackList;
     vector<string> cellList;
     string PathStr;
   };
-  
+
 
   struct GateSensitivitySorterS2L : public std::binary_function<Gate*,Gate*,bool>
   {

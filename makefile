@@ -42,7 +42,9 @@ OBJECTS = $(SOURCES:%.$(SUFFIX)=$(OBJPATH)/%.o)
 HEADERS = $(wildcard ./*.h)
 CFLAGS = $(IFLAG) -I$(TOOLSDIR)/include/oa \
          -I$(TOOLSDIR)/include \
-         -c -fPIC -Wno-deprecated $(DBG) -Wunused
+         -c -fPIC -Wno-deprecated $(DBG) -Wunused 
+
+#-std=c++0x -std=gnu++0x
 
 TARGET = $(BINPATH)/PowerOpt$(EXPER)
 
@@ -65,7 +67,7 @@ clean:
 	#@-rm -rf $(BINPATH)/$(TARGET)
 	@echo "Done!"
 debug:
-	@$(MAKE) -f makefile DBG="-g"
+	@$(MAKE) -f makefile DBG="-g -O0"
 profile:
 	@$(MAKE) -f makefile DBG="-pg"
 opt:

@@ -438,6 +438,42 @@ int main(int argc, char *argv[])
         return 0;
     }
 
+    if ( po.getExeOp() == 15 ) {      // Print Dynamic Slack Distribution
+        cout<<"[PowerOpt] Print Dynamic Slack Distribution "<<endl;
+        t2  = time(NULL);
+        //po.parsePtReport();
+        po.readFlopWorstSlacks();
+        po.read_modules_of_interest();
+        // TESTCODE
+        po.parseVCDALL_mode_15(&T);
+        //po.check_for_toggles();
+        t4  = time(NULL);
+        //po.printSlackDist(&T);
+        t3  = time(NULL);
+        fout << " Run_Time : " << t3 - t1 << endl;
+        fout << " parseVCDALL_Time : " << t4 - t2 << endl;
+        fout << " printSlackDist_Time : " << t3 - t4 << endl;
+        po.exitPT();
+        fout.close();
+        cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
+        return 0;
+    }
+
+    if ( po.getExeOp() == 16 ) {      //  read unique non-toggled gate sets and compute the slack
+        cout<<"[PowerOpt] Reading in the gate sets"<<endl;
+        t2  = time(NULL);
+        po.readFlopWorstSlacks();
+        po.read_unt_dump_file(); // unt = unique non toggled (gates)
+        t4  = time(NULL);
+        po.find_dynamic_slack_2(&T);
+        //po.printSlackDist(&T);
+        t3  = time(NULL);
+        po.exitPT();
+        fout.close();
+        cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
+        return 0;
+    }
+
     // SOCEncounter
     //if (po.getSwapOp() == 2 && po.getExeOp() != 0 )
     //    po.setSOCEFlag(true);
