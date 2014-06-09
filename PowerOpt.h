@@ -724,6 +724,8 @@ class PowerOpt {
     string libListTcl;
     string libListFile;
     string regCellsFile;
+    string moduleNamesFile;
+    string worstSlacksFile;
     string ptServerName;
     string reportFile;
     string untDumpFile;

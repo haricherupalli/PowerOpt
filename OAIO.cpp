@@ -19,7 +19,7 @@ void OAReader::fill_reg_cells_list(PowerOpt *po)
 {
   ifstream reg_list_file;
   string reg_cells_file = po->getRegCellsFile();
-  reg_list_file.open("list_of_regs");
+  reg_list_file.open(reg_cells_file.c_str());
   if (reg_list_file.is_open())
   {
     string line;

@@ -353,8 +353,11 @@ void PowerOpt::readEnvFile(string envFileStr)
         if (line.find("-leq ") != string::npos)
             libListFile = getTokenS(line, "-leq ");
         if (line.find("-regCells") != string::npos)
-            regCellsFile = getTokenS(line, "-regCellsFile");
-
+            regCellsFile = getTokenS(line, "-regCells");
+        if (line.find("-moduleNamesFile") != string::npos)
+            moduleNamesFile = getTokenS(line, "-moduleNamesFile");
+        if (line.find("-worstSlacksFile") != string::npos)
+            worstSlacksFile = getTokenS(line, "-worstSlacksFile");
     }
     file.close();
 
@@ -5434,7 +5437,7 @@ set<string> modules_of_interest;
 void PowerOpt::read_modules_of_interest()
 {
     ifstream module_names_file;
-    module_names_file.open("modules_of_interest");
+    module_names_file.open(moduleNamesFile.c_str());
     if (module_names_file.is_open()){
       string module;
       while (getline(module_names_file, module))
@@ -6904,8 +6907,7 @@ void PowerOpt::readFlopWorstSlacks()
   string gate;
   string slack;
   stringstream iss;
-  //string worst_slacks_file = "";
-  file.open("worst_endpoint_slacks");
+  file.open(worstSlacksFile.c_str());
   if (file.is_open())
   {
       while(getline(file, line))
