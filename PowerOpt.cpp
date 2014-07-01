@@ -22,6 +22,7 @@
 #include "Path.h"
 #include "Globals.h"
 #include "Timer.h"
+#include "SetTrie.h"
 //#include "Bus.h"
 
 using namespace std;
@@ -471,6 +472,9 @@ void PowerOpt::readCmdFile(string cmdFileStr)
         if (line.find("-period") != string::npos) {
             clockPeriod = getTokenI(line, "-period");
         }
+        if (line.find("-subsets") != string::npos) {
+            swapOp = getTokenI(line, "-subsets");
+        }
 
         if (line.find("-vmw ") != string::npos)
             varMapWidth = getTokenI(line, "-vmw ");
@@ -611,6 +615,26 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     if (useGT) ptpxOff = true;
     file.close();
 }
+
+void PowerOpt::openFiles()
+{
+
+  if (exeOp == 15)
+  {
+    toggle_info_file.open ("toggle_info");
+    unique_not_toggle_gate_sets.open("unique_not_toggle_gate_sets");
+  }
+}
+
+void PowerOpt::closeFiles()
+{
+  if (exeOp == 15)
+  {
+    toggle_info_file.close();
+    unique_not_toggle_gate_sets.close();
+  }
+}
+
 
 void PowerOpt::makeOA()
 {
@@ -5380,6 +5404,7 @@ void PowerOpt::parseVCDALL_mode_15(designTiming *T) {
     for (int i = 0; i < vcdFile.size(); i++) {
         cout << "[PowerOpt] Parsing VCD File:" << vcdFile[i] << endl;
         string vcdfilename = vcdPath + "/" + vcdFile[i];
+        //vcd_cycles = parseVCD_mode_15(vcdfilename , T, parseCycle, totalSimCycle);
         vcd_cycles = parseVCD_mode_15_new(vcdfilename , T, parseCycle, totalSimCycle);
         totalSimCycle += vcd_cycles;
         cout << "[PowerOpt] Parsing VCD done with cycles=" << vcd_cycles << "(total=" << totalSimCycle << ")" << endl;
@@ -5452,6 +5477,20 @@ void PowerOpt::read_modules_of_interest()
     }
 }
 
+void PowerOpt::createSetTrie()
+{
+  tree = new SetTrie;
+}
+
+static bool replace_substr (std::string& str,const std::string& from, const std::string& to)
+{
+  size_t start_pos = str.find(from);
+  if (start_pos == std::string::npos)
+    return false;
+  str.replace(start_pos, from.length(), to);
+  return true;
+}
+
 void PowerOpt::handle_toggled_nets(vector<string> & toggled_nets, designTiming* T, int cycle_num, int cycle_time)
 {
   if (toggled_nets.size())
@@ -5464,12 +5503,14 @@ void PowerOpt::handle_toggled_nets(vector<string> & toggled_nets, designTiming* 
           map<string, string>::iterator gate_lookup =  source_gate_dictionary.find(toggled_nets[i]);
           if( gate_lookup == source_gate_dictionary.end() ){
             net_name = toggled_nets[i];
+            replace_substr(net_name, "[", "\\[" );
             cellstr =  T->getCellFromNet(net_name);
-            source_gate_dictionary[net_name] = cellstr;
+            source_gate_dictionary[toggled_nets[i]] = cellstr;
           }
           else{
             cellstr = (*gate_lookup).second;
           }
+          cout << toggled_nets[i]  << " --> " << cellstr << endl;
           if ( cellstr != "NULL_CELL" ) {
             if ( cellstr == "MULTI_DRIVEN_NET" ) {
               cout << "[ERROR] This net " << net_name << " is driven by multiple cells" << endl;
@@ -5488,7 +5529,11 @@ void PowerOpt::handle_toggled_nets(vector<string> & toggled_nets, designTiming* 
 int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int parse_cyc, int cycle_offset)
 {
   bool bit_blasted_vcd = false;
+  int cycle_num = 0 ;
   ifstream vcd_file ;
+  ofstream missed_nets;
+  missed_nets.open("Missed_nets", fstream::app);
+  missed_nets << "New_cycle " << parse_cyc << endl;
   vector<string> toggled_nets;
   vcd_file.open(vcd_file_name.c_str());
   T->suppressMessage("UITE-216"); // won't warn that a gate is not a start/endpoint while reseting paths
@@ -5501,7 +5546,6 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
     int min_time = vcdStartCycle,  max_time = vcdStopCycle;
     bool ignore_module = true;
     bool valid_time_instant = false;
-    int cycle_num = 0 ;
     while (getline(vcd_file, line))
     {
       if (line.compare(0,6,"$scope") == 0) {
@@ -5572,11 +5616,11 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
             tokenize(bus_width_str, ':', bus_width);
             assert(bus_width.size() == 2);
 
-            int max_bus = atoi((bus_width[0].c_str()));
-            int min_bus = atoi((bus_width[1].c_str()));
-            //cout << abbrev << ", " << true_bus_name << " ( " << max_bus << " : " << min_bus << " ) " << endl;
+            int msb = atoi((bus_width[0].c_str()));
+            int lsb = atoi((bus_width[1].c_str()));
+            //cout << abbrev << ", " << true_bus_name << " ( " << msb << " : " << lsb << " ) " << endl;
 
-            Bus bus (true_bus_name, (max_bus - min_bus + 1));
+            Bus bus (true_bus_name, msb, lsb);
             bus_dict.insert(pair <string, Bus> (abbrev, bus));
           }
         }
@@ -5605,41 +5649,40 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
       else if (valid_time_instant){ // parse for time values of interest
         string value = line.substr(0, 1);
         string abbrev;
-        if (value == "b")// bus
-        {
+        if (value == "b") { // bus
           int pos = line.find(" ",0);
           value  = line.substr(1, pos-1);
           abbrev = line.substr(pos+1);
           map<string, Bus>::iterator  it = bus_dict.find(abbrev);
           if (it != bus_dict.end())
           {
-             Bus bus = it->second;
+             Bus& bus = it->second;
              int prev_value_size = bus.prev_value.length();
              assert ( prev_value_size == value.length());
              //cout << bus.prev_value << ", " << value << endl;
-             for (int i = 0 ; i < prev_value_size ; i++)
+             for (int i = bus.lsb ; i < (bus.lsb + prev_value_size) ; i++)
              {
                if (bus.prev_value[i] != value[i]) // compare each bit and find toggled bits
                {
                  string net_name = bus.name;
+                 int bit_index = prev_value_size - 1 - i + bus.lsb;
                  net_name.append("[");
                  char buffer[2]; // 2 digits are enough to hold the number 64 (max possible size of a bus till date);
-                 sprintf(buffer, "%d", i);
+                 sprintf(buffer, "%d", bit_index);
                  net_name.append(buffer);
                  net_name.append("]");
                  toggled_nets.push_back(net_name);
                }
              }
+            bus.prev_value = value;
           }
         }
-        else if (value == "$") // net
-        {
-          assert (line.compare(0, 9, "$dumpvars") == 0);
+        else if (value == "$") { // net
+          assert (line.compare(0, 9, "$dumpvars") == 0); // I am sure that this line is $dumpvars
           valid_time_instant = false; // this is just a dump of all vars with probably 'x' as values, so we don't care
           //exit(0);
         }
-        else
-        {
+        else {
           abbrev = line.substr(1);
           map<string, string> :: iterator it = net_dictionary.find(abbrev);
           if (it != net_dictionary.end())
@@ -5647,6 +5690,8 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
             string net_name = net_dictionary[abbrev];
             toggled_nets.push_back(net_name);
           }
+          else
+            missed_nets << abbrev << endl;
         }
       }
       line_contents.clear();
@@ -5656,7 +5701,10 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
     cout << "Unique toggle groups count = " << toggled_gate_set.size() << endl;
     cout << "Not Toggled gates size is " << not_toggled_gate_map.size() << endl;
   }
+  missed_nets.close();
+  return cycle_num;
 }
+
 // parse the VCD file and extract toggle information
   int PowerOpt::parseVCD_mode_15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset)
 {
@@ -5671,8 +5719,8 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
   char str1[20],str2[20],str3[20];           // dummy placeholder strings
   char abbrev[MAX_ABBREV];                   // abbreviated net name
   char net_name[MAX_NAME];                   // full net name
-  char net_index[16];                        // there can be an index for multi-bit nets
 
+  char net_index[16];                        // there can be an index for multi-bit nets
   char * end_index;                          // the end of the net index
   char * returnval;                          // to check if we reached the end of a file
   int num_read=0;                            // number of values read in fscanf
@@ -5765,7 +5813,6 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
     cycle_time = atoi(&str[1]);
     //printf("%d\n",cycle_time);
 
-    //if( ((vcdStopCycle < 0) || (cycle_time <= vcdStopCycle)) && (cycle_time >= vcdStartCycle)&& ((cycle_time == 9300) || ( (cycle_time % 1000) == 0 /*positive edge only*/ ))) { // HARI NEED TO GENERALIZE THIS. 1000 is used to detect positive edge ? not generic
     if( ((vcdStopCycle < 0) || (cycle_time <= vcdStopCycle)) && (cycle_time >= vcdStartCycle)) {
       // this is a positive clock edge, increase the cycle count
       if (once)
@@ -5877,14 +5924,15 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
           }
         }
 //        extractPaths_mode_15(cycle_num+cycle_offset,pathID, T);
-        //check_for_toggles(cycle_num, cycle_time);
-        //check_for_flop_toggles(cycle_num, cycle_time, T);
-        check_for_flop_toggles_fast(cycle_num, cycle_time, T);
+        // check_for_toggles(cycle_num, cycle_time);
+        // check_for_flop_toggles(cycle_num, cycle_time, T);
+        // check_for_flop_toggles_fast(cycle_num, cycle_time, T);
+        check_for_flop_toggles_fast_subset(cycle_num, cycle_time, T);
         //trace_toggled_path(cycle_num, cycle_time);
         clearToggled();
       }
     } else{
-    cout << " Skipping cycle " << cycle_time << endl;
+      //cout << " Skipping cycle " << cycle_time << endl;
       do{
         returnval = fgets(str, 2048, VCDfile);
       }while( (str[0] != '#') && (returnval != NULL) );
@@ -5894,12 +5942,15 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
 
   fclose (VCDfile);
   // return the number of simulation cycles
+  cout << "Unique (subsetted, during insert) toggle groups count = " << tree->num_sets() << endl;
+  tree->remove_subsets();
   cout << "Total parsed cycles (all benchmarks) = " << cycle_num+cycle_offset << endl;
   cout << "All toggled paths = " << toggledPaths.size() << endl;
   cout << "Unique toggle groups count = " << toggled_gate_set.size() << endl;
+  cout << "Unique (subsetted) toggle groups count = " << tree->num_sets() << endl;
   cout << "Not Toggled gates size is " << not_toggled_gate_map.size() << endl;
 
-  // find_dynamic_slack(T);
+  // Find_dynamic_slack(T);
 //  toggle_info_file << "Unique toggle groups count = " << gate_set.size() << endl;
 //  for (set<string>::iterator it = gate_set.begin(); it != gate_set.end(); ++it)
 //    toggle_info_file << *it;
@@ -6250,14 +6301,34 @@ void PowerOpt::read_unt_dump_file()
   }
 }
 
+void PowerOpt::reset_all (designTiming* T)
+{
+    for (int i = 0; i < getGateNum(); i ++) {
+        Gate *gate = m_gates[i];
+        string gate_name = gate->getName();
+        if (gate->isendpoint())
+        {
+          T->resetPathTo(gate_name);
+          T->resetPathFrom(gate_name);
+        }
+        else
+        {
+          T->resetPathThrough(gate_name);
+        }
+    }
+}
+
 void PowerOpt::find_dynamic_slack_2(designTiming *T)
 {
   cout << "Finding Dynamic Slack" << endl;
+  T->suppressMessage("UITE-216"); // won't warn that a gate is not a start/endpoint while reseting paths
   float dynamic_slack = 10000.0;
   for (int i = 0; i < not_toggled_gate_vector.size() ; i++)
   {
     vector<string> not_toggled_gates = not_toggled_gate_vector[i];
     T->resetPathsThroughAllCells();
+    cout << "Reseting Paths" << endl;
+    //reset_all(T);
     for (int j = 0; j < not_toggled_gates.size(); j++)
     {
       string gate = not_toggled_gates[j];
@@ -6271,7 +6342,7 @@ void PowerOpt::find_dynamic_slack_2(designTiming *T)
       else
       {
         //cout << " is not endpoint " << endl;
-       T->setFalsePathThrough(gate);
+        T->setFalsePathThrough(gate);
       }
     }
     float worst_slack = T->runTiming(10.0);
@@ -6331,6 +6402,67 @@ void PowerOpt::find_dynamic_slack(designTiming* T)
 
 }
 
+void PowerOpt::check_for_flop_toggles_fast_subset( int cycle_num, int cycle_time, designTiming * T)
+{
+    //cout << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+    //toggle_info_file << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+    int count_not_toggled = 0;
+    int count_toggled = 0;
+    string toggled_gates;
+    vector<string> not_toggled_gates; // vector for reading easily
+    vector<int> toggled_indices;
+    string not_toggled_gates_str; // string for dumping
+    float ep_wrst_slk_for_cyc = 10000.0; // endpoint worst slack for cycle = LARGE VALUE
+    for (int i = 0; i < getGateNum(); i ++) {
+      Gate* g = m_gates[i];
+      string gate_name = g->getName();
+      if(g->isToggled())
+      {
+        count_toggled++;
+        toggled_gates.append(gate_name);
+        toggled_gates.append(",");
+        toggled_indices.push_back(i);
+        //toggle_info_file << "[TOG]" << gate_name << " Toggled !" << endl;
+        if (g->isendpoint())
+        {
+          map<string, float> :: iterator it = endpoint_worst_slacks.find(gate_name);
+          if (it == endpoint_worst_slacks.end())
+          {
+            cout << "Searched for a non-existing flop" << endl;
+            exit(0);
+          }
+          float ep_wrst_slk = it->second; // endpoint_worst_slack
+          //cout << "[DBG] endpoint is " << gate_name << " with slack " << ep_wrst_slk << endl;
+          if (ep_wrst_slk < ep_wrst_slk_for_cyc) {
+            ep_wrst_slk_for_cyc = ep_wrst_slk;
+          }
+        }
+      }
+      else
+      {
+        count_not_toggled++;
+        not_toggled_gates.push_back(gate_name);
+        not_toggled_gates_str.append(gate_name);
+        not_toggled_gates_str.append(",");
+      }
+    }
+    //cout << "inserting" << endl;
+    bool unique = toggled_gate_set.insert(toggled_gates).second; // insert returns true if it was a new element and false if an old element that was inserted
+    if (unique)
+    {
+      not_toggled_gate_map.insert(std::pair<vector<string>, float>(not_toggled_gates, ep_wrst_slk_for_cyc));
+      //unique_not_toggle_gate_sets << not_toggled_gates_str << endl;
+    }
+    if (!tree-> essr(toggled_indices, false))
+      tree->insert(toggled_indices);
+
+    /*cout << "[TOG] count_not_toggled is " <<  count_not_toggled << endl;
+    cout << "[TOG] count_toggled is " <<  count_toggled << endl;
+    cout << "[TOG] Worst endpoint slack for this cycle is " << ep_wrst_slk_for_cyc << endl;
+    toggle_info_file << "[TOG] count_not_toggled is " <<  count_not_toggled << endl;
+    toggle_info_file << "[TOG] count_toggled is " <<  count_toggled << endl;*/
+}
+
 void PowerOpt::check_for_flop_toggles_fast(int cycle_num, int cycle_time, designTiming * T)
 {
     cout << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
@@ -6349,6 +6481,7 @@ void PowerOpt::check_for_flop_toggles_fast(int cycle_num, int cycle_time, design
         count_toggled++;
         toggled_gates.append(gate_name);
         toggled_gates.append(",");
+        toggle_info_file << "[TOG]" << gate_name << " Toggled !" << endl;
         if (g->isendpoint())
         {
           map<string, float> :: iterator it = endpoint_worst_slacks.find(gate_name);
@@ -6385,7 +6518,7 @@ void PowerOpt::check_for_flop_toggles_fast(int cycle_num, int cycle_time, design
     //cout << "[REPORT] Worst Slack is ";
     toggle_info_file << "[TOG] count_not_toggled is " <<  count_not_toggled << endl;
     toggle_info_file << "[TOG] count_toggled is " <<  count_toggled << endl;
-    toggle_info_file << "[REPORT] toggled group is  " << toggled_gates << endl;
+    //toggle_info_file << "[REPORT] toggled group is  " << toggled_gates << endl;
     //toggle_info_file << "[REPORT] Worst Slack is ";
     //double worst_slack = T->runTiming(10.0);
     //cout << worst_slack << endl;

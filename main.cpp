@@ -86,6 +86,7 @@ int main(int argc, char *argv[])
 
     po.readEnvFile(envFileStr);
     po.readCmdFile(cmdFileStr);
+    po.openFiles();
 
     if (po.getOaGenFlag() != 0) {
         cout << "[PowerOpt] OA DB generation ... " << endl;
@@ -444,6 +445,7 @@ int main(int argc, char *argv[])
         //po.parsePtReport();
         po.readFlopWorstSlacks();
         po.read_modules_of_interest();
+        po.createSetTrie();
         // TESTCODE
         po.parseVCDALL_mode_15(&T);
         //po.check_for_toggles();
@@ -519,6 +521,7 @@ int main(int argc, char *argv[])
     }
     fout.close();
     T.Exit();
+    po.closeFiles();
     cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
     return 0;
 }

@@ -26,6 +26,7 @@
 #include "Chip.h"
 #include "Box.h"
 #include "analyzeTiming.h"
+#include "SetTrie.h"
 
 using namespace std;
 
@@ -35,17 +36,11 @@ class PowerOpt {
     public:
     //constructors
     PowerOpt() // TODO HARI: MAKE THIS A SINGLETON CLASS!!
-    {
-      toggle_info_file.open ("toggle_info");
-      //unique_not_toggle_gate_sets.open("unique_not_toggle_gate_sets");
-    }
+    { }
 
     // destructor
     ~PowerOpt()
-    {
-      toggle_info_file.close();
-      // unique_not_toggle_gate_sets.close();
-    }
+    { }
 
 
     //modifiers
@@ -54,6 +49,8 @@ class PowerOpt {
     void readDivFile(string divFileStr);
     void readEnvFile(string envFileStr);
     void readCmdFile(string cmdFileStr);
+    void openFiles();
+    void closeFiles();
     void wait(int seconds);
     void makeOA();
     void exePTServer(bool isPost);
@@ -71,8 +68,10 @@ class PowerOpt {
     void check_for_toggles(int cycle_num, int cycle_time);
     void check_for_flop_toggles(int cycle_num, int cycle_time, designTiming* T);
     void check_for_flop_toggles_fast(int cycle_num, int cycle_time, designTiming* T);
+    void check_for_flop_toggles_fast_subset(int cycle_num, int cycle_time, designTiming* T);
     void find_dynamic_slack(designTiming* T);
     void find_dynamic_slack_2(designTiming* T);
+    void reset_all (designTiming* T);
     void read_unt_dump_file();
     void check_for_flop_paths(int cycle_num, int cycle_time);
     void trace_toggled_path(int cycle_num, int cycle_time);
@@ -83,6 +82,7 @@ class PowerOpt {
     int parseVCD_mode_15_new(string vcdfilename, designTiming  *T, int parse_cyc, int cycle_offset);
     void handle_toggled_nets(vector<string> & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
     void read_modules_of_interest();
+    void createSetTrie();
     void optimizeTargER(designTiming *T);
     void reducePower(designTiming *T);
     int  resizePaths(designTiming *T);
@@ -693,6 +693,7 @@ class PowerOpt {
     int exeOp;
     int curOp;
     int swapOp;
+    int subsets;
     int updateOp;
     int stopCond;
     int stopCond2;
@@ -760,6 +761,7 @@ class PowerOpt {
     map<vector<string>, float> not_toggled_gate_map;// map of not_toggled_gates and min_worst slack among toggled flip flops
     vector<vector<string> > not_toggled_gate_vector;
     map<string, float> endpoint_worst_slacks;
+    SetTrie* tree;
 
 
 };

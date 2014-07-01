@@ -711,6 +711,55 @@ namespace POWEROPT {
     //return(_answerStr);
   }
 
+  void designTiming::resetPathThrough(string cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtResetPathThrough " + cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path_through; check the status on ptserver" << endl;
+        //exit(1);
+      }
+
+  }
+
+  void designTiming::resetPathFrom(string cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtResetPathFrom " + cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path_through; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void designTiming::resetPathTo (string cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtResetPathTo " + cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path_through; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
   bool
   designTiming::sizeCell(string	  cellInstance,
                          string	  cellMaster)
@@ -760,7 +809,7 @@ namespace POWEROPT {
     string _answerStr(_tclAnswer);
     int _returnStatus = _convertToInt(_answerStr);
     if(_returnStatus == 0) {
-        cout << "Fatal error: set_false_path; check the status on ptserver" << endl;
+        cout << "Fatal error: set_false_path_to " << Cell << " ; check the status on ptserver" << endl;
         //exit(1);
       }
   }
@@ -777,7 +826,7 @@ namespace POWEROPT {
     string _answerStr(_tclAnswer);
     int _returnStatus = _convertToInt(_answerStr);
     if(_returnStatus == 0) {
-        cout << "Fatal error: set_false_path; check the status on ptserver" << endl;
+        cout << "Fatal error: set_false_path_from " << Cell << " ; check the status on ptserver" << endl;
         //exit(1);
       }
   }
@@ -794,7 +843,7 @@ namespace POWEROPT {
     string _answerStr(_tclAnswer);
     int _returnStatus = _convertToInt(_answerStr);
     if(_returnStatus == 0) {
-        cout << "Fatal error: set_false_path; check the status on ptserver" << endl;
+        cout << "Fatal error: set_false_path_through " << Cell << " ; check the status on ptserver" << endl;
         //exit(1);
       }
   }

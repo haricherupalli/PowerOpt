@@ -40,6 +40,9 @@ namespace POWEROPT {
       void swapCell(string cellInstance, string cellMaster);
       void setFalsePath(string  PathString);
       void resetPathsThroughAllCells();
+      void resetPathThrough(string cell);
+      void resetPathTo(string cell);
+      void resetPathFrom(string cell);
       void setFalsePathThrough(string  PathString);
       void setFalsePathTo(string  Cell);
       void setFalsePathFrom(string  Cell);
