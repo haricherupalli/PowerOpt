@@ -4,17 +4,21 @@
 #include <cassert>
 #include <cfloat>
 #include <math.h>
+#include <bitset>
 #include "Grid.h"
 #include "Box.h"
 #include "typedefs.h"
 #include "Subnet.h"
 #include "Net.h"
+#include "analyzeTiming.h"
+#include "Graph.h" // Class GNode, Graph
 
 namespace POWEROPT {
 
   class Grid;
   class Terminal;
   enum GateType {GATEPI, GATEPO, GATEIN, GATEUNKNOWN, GATEPADPI, GATEPADPO, GATEPADPIO};
+  enum CellFunc { AND, AOI, BUFF, DFF, INV, LH, MUX, NAND, NOR, OAI, OR, XNOR, XOR};
 
   class Gate {
   public:
@@ -24,9 +28,26 @@ namespace POWEROPT {
       bbox.set(tlx, tby, tlx+twidth, tby+theight);
       oldCenterX = centerX = tlx + twidth/2;
       oldCenterY = centerY = tby + theight/2;
+      toggle_count = 0;
+           if (cellName.compare(0,2,"AN") == 0) { func = AND;   gate_op = "&";}
+      else if (cellName.compare(0,2,"AO") == 0) { func = AOI;   gate_op = "aoi";}
+      else if (cellName.compare(0,2,"BU") == 0) { func = BUFF;  gate_op = "";}
+      else if (cellName.compare(0,2,"DF") == 0) { func = DFF;   gate_op = "";}
+      else if (cellName.compare(0,2,"IN") == 0) { func = INV;   gate_op = "~";}
+      else if (cellName.compare(0,2,"LH") == 0) { func = LH;    gate_op = "";}
+      else if (cellName.compare(0,2,"MU") == 0) { func = MUX;   gate_op = "";}
+      else if (cellName.compare(0,2,"ND") == 0) { func = NAND;  gate_op = "~&";}
+      else if (cellName.compare(0,2,"NR") == 0) { func = NOR;   gate_op = "~|";}
+      else if (cellName.compare(0,2,"OA") == 0) { func = OAI;   gate_op = "oai";}
+      else if (cellName.compare(0,2,"OR") == 0) { func = OR;    gate_op = "|";}
+      else if (cellName.compare(0,2,"XN") == 0) { func = XNOR;  gate_op = "~^";}
+      else if (cellName.compare(0,2,"XO") == 0) { func = XOR;   gate_op = "^";}
+    
+        isClkTree = false;
     }
     // a public structure that holds power info for each possible master cell this cell instance can have
     vector<double> cellPowerLookup;
+    static int max_toggle_profile_size;
     //modifiers
     void setVariation(double v) { variation = v; }
     void setDelayVariation(double v) { delayVariation = v; }
@@ -37,6 +58,8 @@ namespace POWEROPT {
     void updateBiasCellName(string bName) { biasCellName = bName; }
     string getBiasCellName() { return biasCellName; }
     void setId(int i) { id = i; }
+    void setTopoId(int i) { node->setTopoId(i);}
+    void setClusterId(int i) { cluster_id = i;}
     void setFFFlag(bool flag) { FFFlag = flag; } // never invoked
     // JMS-SHK begin
     void setRZFlag(bool flag) { RZFlag = flag; }
@@ -121,7 +144,11 @@ namespace POWEROPT {
     Subnet *getOutputSubnet(int index) { assert(0 <= index && index < outputSubnets.size()); return outputSubnets[index]; }
     //accossers
     int getId() { return id; }
+    int getTopoId() { return node->getTopoId();}
+    int getClusterId() { return cluster_id;}
     bool getFFFlag() { return FFFlag; }
+    bool getIsMux() { return (func == MUX);}
+    bool isClusterBoundaryDriver() ;
     // JMS-SHK begin
     bool getRZFlag() { return RZFlag; }
     // JMS-SHK end
@@ -204,8 +231,17 @@ namespace POWEROPT {
 	bool    isCheckSrc() { return checkSrc; }
 	void    setCheckDes(bool b) { checkDes = b; }
 	bool    isCheckDes() { return checkDes; }
-	void    setToggled(bool b) { toggled = b; }
+	void    setToggled(bool b, string val) { toggled = b; toggledTo = val; }
 	bool    isToggled() { return toggled; }
+        string  getToggledTo() {return toggledTo; }
+        void    incToggleCount() {toggle_count++ ;}
+        void    updateToggleProfile(int cycle_num);
+        void    printToggleProfile(ofstream& file);
+        void    resizeToggleProfile(int val);
+        int     getToggleCountFromProfile() ;
+        int     getToggleCorrelation(Gate* gate);
+        int     getToggleCount() {return toggle_count ;}
+        bool    notInteresting() ;
 	void    setHolded(bool b) { holded = b; }
 	bool    isHolded() { return holded; }
     int     getCellLibIndex() { return cellLibIndex; }
@@ -290,8 +326,70 @@ namespace POWEROPT {
 		bool allFaninTermDisabled();
 		bool allFanoutGateDisabled();
 		double getMinDelay();
+        bool allInpNetsVisited();
 		bool calLeakWeight();
 		double calMaxPossibleDelay();
+                string getMuxSelectPinVal();
+                void untoggleMuxInput(string input);
+                int numToggledInputs();
+                void checkControllingMIS(vector<int> & false_term_ids, designTiming* T); 
+                bool check_toggle_fine();
+                bool checkANDToggle  ( );
+                bool checkAOIToggle  ( );
+                bool checkBUFFToggle ( );
+                bool checkDFFToggle  ( );
+                bool checkINVToggle  ( );
+                bool checkLHToggle   ( );
+                bool checkMUXToggle  ( );
+                bool checkNANDToggle ( );
+                bool checkNORToggle  ( );
+                bool checkOAIToggle  ( );
+                bool checkORToggle   ( );
+                bool checkXNORToggle ( );
+                bool checkXORToggle  ( );
+                void handleANDMIS  (vector<int>& false_term_ids, designTiming* T );
+                void handleAOIMIS  (vector<int>& false_term_ids, designTiming* T );
+                void handleBUFFMIS (vector<int>& false_term_ids, designTiming* T );
+                void handleDFFMIS  (vector<int>& false_term_ids, designTiming* T );
+                void handleINVMIS  (vector<int>& false_term_ids, designTiming* T );
+                void handleLHMIS   (vector<int>& false_term_ids, designTiming* T );
+                void handleMUXMIS  (vector<int>& false_term_ids, designTiming* T );
+                void handleNANDMIS (vector<int>& false_term_ids, designTiming* T );
+                void handleNORMIS  (vector<int>& false_term_ids, designTiming* T );
+                void handleOAIMIS  (vector<int>& false_term_ids, designTiming* T );
+                void handleORMIS   (vector<int>& false_term_ids, designTiming* T );
+                void handleXNORMIS (vector<int>& false_term_ids, designTiming* T );
+                void handleXORMIS  (vector<int>& false_term_ids, designTiming* T );
+                void computeNetExpr();
+                void handleANDExpr  ( );
+                void handleAOIExpr  ( );
+                void handleBUFFExpr ( );
+                void handleDFFExpr  ( );
+                void handleINVExpr  ( );
+                void handleLHExpr   ( );
+                void handleMUXExpr  ( );
+                void handleNANDExpr ( );
+                void handleNORExpr  ( );
+                void handleOAIExpr  ( );
+                void handleORExpr   ( );
+                void handleXNORExpr ( );
+                void handleXORExpr  ( );
+                void computeANDVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeBUFFVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeINVVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeNANDVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeNORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeORVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                void computeVal(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                void transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                string getSimValue();
 
     //assume gate delay is computed as the average value of TPLH and TPHL
     void clearMem();
@@ -307,7 +405,10 @@ namespace POWEROPT {
     bool isRollBack() { return rolledBack; }
     void setRollBack(bool b) { rolledBack = b; }
 
+    void setGNode(GNode* gnode) {node = gnode;} 
+    GNode* getGNode () { return node; }
     NetVector &getNets() { return nets; }
+    void getDriverTopoIds(vector<int>& topo_ids);
     void addNet(Net *n);
     Net *getNet(int index) { assert(0 <= index && index < nets.size()); return nets[index]; }
     void setCompDelay(bool b) { m_compDelay = b; }
@@ -316,6 +417,8 @@ namespace POWEROPT {
     void setWgateBias(double d) { m_WgateBias = d; }
     double getLgateBias() { return m_LgateBias; }
     double getWgateBias() { return m_WgateBias; }
+    void setIsClkTree(bool val) { isClkTree = val; }
+    bool getIsClkTree() { return isClkTree; }
 		//need norminal Lgate
 		double compMaxDeltaLLeakage()
 		{
@@ -333,6 +436,8 @@ namespace POWEROPT {
     int cellLibIndex;  // tells which master cell is being used
     string smallerMasterCell;  // the next smaller master cell, used to when downsizing by 1
     int id;
+    int topo_id;
+    int cluster_id;
     string name;
     string cellName;
     string bestCellName;
@@ -341,6 +446,7 @@ namespace POWEROPT {
     string orgCellName;
     string baseName;
     GateType type;
+    CellFunc func;
     double channelLength;// nm
     double optChannelLength;
     double oldOptChannelLength;
@@ -401,6 +507,7 @@ namespace POWEROPT {
     bool checkSrc;
     bool checkDes;
     bool toggled;
+    string toggledTo;
     bool holded;
     bool fixed;
     Divnet* div;
@@ -409,6 +516,8 @@ namespace POWEROPT {
     double sortIndex;
     double leakWeight;
     bool disable;
+    int toggle_count;
+    vector<bitset<64> > toggle_profile; // ulong is 64
     int orgOrient;
     bool rolledBack;
     int lSiteColIndex;
@@ -430,6 +539,9 @@ namespace POWEROPT {
     vector<double> slackList;
     vector<string> cellList;
     string PathStr;
+    GNode* node;
+    string gate_op;
+    bool isClkTree;
   };
 
 

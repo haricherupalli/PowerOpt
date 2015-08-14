@@ -7,9 +7,11 @@
 #include "Box.h"
 #include "Net.h"
 #include "Subnet.h"
+#include "Graph.h" // Class GNode, Graph
 
 namespace POWEROPT {
   enum PadType {PrimiaryInput, PrimiaryOutput, InputOutput};
+  class sim_wf_compare ;
   
   class Pad {
   public:
@@ -51,7 +53,15 @@ namespace POWEROPT {
     void addSubnet(Subnet *s) { m_subnets.push_back(s); }
     int getSubnetNum() { return m_subnets.size(); }
     Subnet *getSubnet(int index) { assert(0 <= index && index < m_subnets.size()); return m_subnets[index]; }
+    void setGNode(GNode * gnode) { node = gnode; }
+    GNode* getGNode () { return node; }
     void print();
+    void setExpr();
+    void setSimValue(string value, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+    //void setSimValue(string value);
+    string getSimValue() ;
+    int getTopoId() { return node->getTopoId(); }
+    ToggleType getSimToggType() ;
     
   private:
     int id;
@@ -62,6 +72,7 @@ namespace POWEROPT {
     NetVector nets;
     double delay;
     SubnetVector m_subnets;
+    GNode* node;
   };
 }
 #endif //__PAD_H__

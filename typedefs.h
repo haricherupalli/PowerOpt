@@ -130,5 +130,8 @@ namespace POWEROPT {
   //typedef vector<endpoint_pair_t>  slack_bin_list_t;
   typedef vector<bool> bool_vec;
   typedef vector<bool_vec> bool_vec_list_t;
+ 
+  typedef unsigned long long ulong;
+  enum ToggleType {RISE, FALL, UNKN, CONSTANT};
 }
 #endif //__TYPEDEFS_H__

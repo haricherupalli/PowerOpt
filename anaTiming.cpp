@@ -137,6 +137,109 @@ namespace POWEROPT {
     return(_worstSlack);
   }
 
+
+  string 
+  designTiming::getMaxFallSlack(string term)
+  {
+    //cout << "Trying to get worst slack" << endl;
+    _tclInputString = "DoOnePtCommand \"PtGetMaxFallSlack " + term + "\"";
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return _answerStr;
+/*    double _worstSlack ;
+    if (_answerStr == "INFINITY")
+       _worstSlack = _convertToDouble(_answerStr);
+    else 
+        _worstSlack = 10000.0;
+    return(_worstSlack);*/
+  }
+
+  string 
+  designTiming::getMaxFallArrival(string term)
+  {
+    //cout << "Trying to get worst slack" << endl;
+    _tclInputString = "DoOnePtCommand \"PtGetMaxFallArrival " + term + "\"";
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return _answerStr;
+/*    double _worstSlack ;
+    if (_answerStr == "INFINITY")
+       _worstSlack = _convertToDouble(_answerStr);
+    else 
+        _worstSlack = 10000.0;
+    return(_worstSlack);*/
+  }
+
+  string 
+  designTiming::getMaxRiseArrival(string term)
+  {
+    //cout << "Trying to get worst slack" << endl;
+    _tclInputString = "DoOnePtCommand \"PtGetMaxRiseArrival " + term + "\"";
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return _answerStr;
+/*    double _worstSlack ;
+    if (_answerStr == "INFINITY")
+       _worstSlack = _convertToDouble(_answerStr);
+    else 
+        _worstSlack = 10000.0;
+    return(_worstSlack);*/
+  }
+
+  string 
+  designTiming::getMaxRiseSlack(string term)
+  {
+    //cout << "Trying to get worst slack" << endl;
+    _tclInputString = "DoOnePtCommand \"PtGetMaxRiseSlack " + term + "\"";
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return _answerStr;
+/*    double _worstSlack ;
+    if (_answerStr == "INFINITY")
+       _worstSlack = _convertToDouble(_answerStr);
+    else 
+        _worstSlack = 10000.0;
+    return(_worstSlack);*/
+  }
+
+  string designTiming::getClockTreeCells()
+  {
+    _tclInputString = "DoOnePtCommand \"PtGetClkTreeCells \"";
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return _answerStr;
+  }
+  
+  double
+  designTiming::runTimingPBA(double  clockCycleTime)
+  {
+    string  _strCycleTime = _convertToString(clockCycleTime);
+    //cout << "Trying to get worst slack" << endl;
+    _tclInputString = "DoOnePtCommand \"PtGetWorstSlackPBA " + _strCycleTime + "\"";
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    double _worstSlack = _convertToDouble(_answerStr);
+    return(_worstSlack);
+  }
+
   void
   designTiming::getMaxCellDelay(double &delay, string cellName)
   {
@@ -151,6 +254,8 @@ namespace POWEROPT {
     sscanf(_tclAnswer, "%f", &temp);
     delay = temp;
   }
+
+
 
   void
   designTiming::getCellDelay(double &delay, string cellInPin, string cellOutPin)
@@ -673,6 +778,34 @@ namespace POWEROPT {
   }
 
   string
+  designTiming::getTermsFromNet(string NetName)
+  {
+    if (NetName == "") return "NULL_CELL";
+    _tclInputString = "DoOnePtCommand \"PtGetTermsFromNet " + NetName + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return(_answerStr);
+  }
+
+  string 
+  designTiming::getFanoutCellsFromCell (string CellName)
+  {
+    if (CellName == "") return "EMPTY_CELL_GIVEN";
+    _tclInputString = "DoOnePtCommand \"PtGetFanoutCells " + CellName + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return(_answerStr);
+  }
+
+  string
   designTiming::getInst(string PinName)
   {
     _tclInputString = "DoOnePtCommand \"PtGetInst " + PinName + "\"";
@@ -696,6 +829,22 @@ namespace POWEROPT {
     //_tclAnswer = _interpreter->result;
     //string _answerStr(_tclAnswer);
     //return(_answerStr);
+  }
+
+  void designTiming::setFalsePathsThroughAllCells()
+  {
+    _tclInputString = "DoOnePtCommand \"PtSetFalsePathsForCells\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+  }
+
+  void designTiming::setFalsePathsThroughAllPins()
+  {
+    _tclInputString = "DoOnePtCommand \"PtSetFalsePathsForPins\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
   }
 
   void
@@ -726,6 +875,134 @@ namespace POWEROPT {
         //exit(1);
       }
 
+  }
+
+  void designTiming::test(string input)
+  {
+    _tclInputString = "DoOnePtCommand \"testPrintList " + input + "\"";// Terminals in PowerOpt and Pins in PrimeTime are equivalent
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path for the term" << input << " ; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void designTiming::resetPathForCell(string cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtResetPathForCell " + cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path for the cell" << cell << " ; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void designTiming::resetRisePathForTerm(string term)
+  {
+    _tclInputString = "DoOnePtCommand \"PtRRPT " + term + "\"";// Terminals in PowerOpt and Pins in PrimeTime are equivalent
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path for the term" << term << " ; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void designTiming::resetFallPathForTerm(string term)
+  {
+    _tclInputString = "DoOnePtCommand \"PtRFPT " + term + "\"";// Terminals in PowerOpt and Pins in PrimeTime are equivalent
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path for the term" << term << " ; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void designTiming::resetPathForTerm(string term)
+  {
+    _tclInputString = "DoOnePtCommand \"PtRPT " + term + "\"";// Terminals in PowerOpt and Pins in PrimeTime are equivalent
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path for the term" << term << " ; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void designTiming::setFalsePathForTerm(string term)
+  {
+    _tclInputString = "DoOnePtCommand \"PtSFPT " + term + "\"";// Terminals in PowerOpt and Pins in PrimeTime are equivalent
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path for the term" << term << " ; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void designTiming::resetPathForCellRise(string cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtResetPathForCellRise " + cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path for the cell" << cell << " ; check the status on ptserver" << endl;
+        //exit(1);
+      }
+  }
+
+  void designTiming::resetPathForCellFall(string cell)
+  {
+    _tclInputString = "DoOnePtCommand \"PtResetPathForCellFall " + cell + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    int _returnStatus = _convertToInt(_answerStr);
+    if(_returnStatus == 0) {
+        cout << "Fatal error: reset_false_path for the cell" << cell << " ; check the status on ptserver" << endl;
+        //exit(1);
+      }
   }
 
   void designTiming::resetPathFrom(string cell)
@@ -859,11 +1136,11 @@ namespace POWEROPT {
     _tclAnswer = _interpreter->result;
     string _answerStr(_tclAnswer);
     int _returnStatus = _convertToInt(_answerStr);
-    /* if(_returnStatus == 0)
+     if(_returnStatus == 0)
       {
         cout << "Fatal error: updateTiming; check the status on ptserver" << endl;
       }
-    */
+    
   }
 
   void

@@ -5,6 +5,8 @@
 #include <cassert>
 #include <fstream>
 #include <iostream>
+#include <bitset>
+#include <inttypes.h>
 //#include <unordered_map>
 
 #include <stdio.h>
@@ -15,6 +17,9 @@
 #include <string>
 #include <list>
 #include <set>
+#include <stack>
+#include <queue>
+#include <functional>
 
 #include "Gate.h"
 #include "Bus.h"
@@ -27,10 +32,19 @@
 #include "Box.h"
 #include "analyzeTiming.h"
 #include "SetTrie.h"
+#include "Graph.h"
+#include "xbitset.h"
 
 using namespace std;
-
 namespace POWEROPT {
+
+/*  class GateSensitivityL2S {
+  	public:
+  		inline bool operator () (Gate *g1, Gate *g2)
+  		{
+  			return g1->getSensitivity() > g2->getSensitivity();
+  		}
+  };*/
 
 class PowerOpt {
     public:
@@ -69,10 +83,93 @@ class PowerOpt {
     void check_for_flop_toggles(int cycle_num, int cycle_time, designTiming* T);
     void check_for_flop_toggles_fast(int cycle_num, int cycle_time, designTiming* T);
     void check_for_flop_toggles_fast_subset(int cycle_num, int cycle_time, designTiming* T);
+    void check_for_term_toggles_fast(int cycle_num, int cycle_time, designTiming* T);
+    void check_gates();
+    void check_for_term_toggles_fast_subset(int cycle_num, int cycle_time, designTiming* T);
+    void handle_mux_pin (Terminal * term);
+    void topo_search_gates();
+    void set_mux_false_paths();
+    void check_for_dead_ends(designTiming* T);
+    void dump_toggled_sets();
+    void dump_units();
+    void dump_slack_profile();
+    void dump_toggle_counts(); 
+    void dump_Dmemory();
+    void histogram_toggle_counts();
+    void estimate_correlation();
+    void build_net_name_id_map();
+    void mark_clock_tree_cells(designTiming* T);
+    void print_net_name_id_map();
+    void build_term_name_id_map();
+    void print_term_name_id_map();
+    void print_correlations();
+    void print_toggle_profiles() ;
+    void update_profile_sizes();
+    void my_debug(designTiming * T);
+    void print_indexed_toggled_set(vector<int> & unit, float worst_slack);
+    void print_fanin_cone();
+    void print_processor_state_profile(int cycle_num);
+    void print_dmem_contents(int cycle_num);
+    void topoSort();
+    void simulate();
+    bool check_peripherals();
+    bool check_sim_end(int& i, bool wavefront);
+    void readPmemFile();
+    string getPmemAddr();
+    string getDmemAddr();
+    string getDmemDin();
+    string getDmemLow();
+    string getDmemHigh();
+    void handleDmem(int cycle_num, bool wavefront);
+    bool sendInputs();
+    bool readHandShake();
+    void recvInputs1(int cycle_num, bool wavefront);
+    void recvInputs2(int cycle_num, bool wavefront);
+    void debug_per_din(int cycle_num);
+    void readMem(int cycle_num, bool wavefront);
+    void sendInstr(string instr_str);
+    void sendData (string data_str);
+    void sendPerDout (string data_str);
+    void testReadAddr();
+    void initialRun();
+    void initialize_sim_wf();
+    void runSimulation(bool wavefront);
+    void clearSimVisited();
+    void readSimInitFile();
+    void readDmemInitFile();
+    void updateRegOutputs();
+    void updateFromMem();
+    void printRegValues();
+    void printSelectGateValues();
+    void readSelectGatesFile();
+    void readConstantTerminals();
+    void populateGraphDatabase(Graph* graph);
+    void computeExprTopo(Graph* graph);
+    void computeNetExpressions();
+    void computeTopoSort(Graph* graph);
+    void computeTopoSort_new(Graph* graph);
+    void checkTopoOrder(Graph* graph);
+    void printTopoOrder();
+    void print_nets();
+    void print_pads();
+    void print_terminals();
+    void print_gates();
+    void print_regs();
+    void print_term_exprs();
+    void leakage_compute();                
+    void leakage_compute_coarse();                
+    void leakage_compute_per_module();
     void find_dynamic_slack(designTiming* T);
+    void find_dynamic_slack_1(designTiming* T);
     void find_dynamic_slack_2(designTiming* T);
+    void find_dynamic_slack_3(designTiming* T);
+    void find_dynamic_slack_pins_basic(designTiming* T);
+    void find_dynamic_slack_pins_fast(designTiming* T);
+    void find_dynamic_slack_pins_subset(designTiming* T);
+    void find_dynamic_slack_subset(designTiming* T);
     void reset_all (designTiming* T);
     void read_unt_dump_file();
+    void read_ut_dump_file();
     void check_for_flop_paths(int cycle_num, int cycle_time);
     void trace_toggled_path(int cycle_num, int cycle_time);
     void parseVCDALL(designTiming *T);
@@ -80,7 +177,10 @@ class PowerOpt {
     int parseVCD_mode_15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
     int parseVCDMode15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
     int parseVCD_mode_15_new(string vcdfilename, designTiming  *T, int parse_cyc, int cycle_offset);
-    void handle_toggled_nets(vector<string> & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
+    void handle_toggled_nets(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
+    void handle_toggled_nets_new(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
+    void handle_toggled_nets_newer(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
+    void handle_toggled_nets_to_pins(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
     void read_modules_of_interest();
     void createSetTrie();
     void optimizeTargER(designTiming *T);
@@ -105,9 +205,12 @@ class PowerOpt {
     void extractPaths(int cycle_num, int &pathID);
     void extractPaths_mode_15(int cycle_num, int &pathID , designTiming * T);
     void clearToggled();
+    void clearToggledTerms();
     void findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths);
     void findToggledPaths_mode_15(Gate *g, Gate *faninD, vector<GateVector> &paths, designTiming * T);
     string getPathString (GateVector paths);
+    void countClusterCuts();
+    void readClusters();
 
 
     void updateCellDelay(designTiming *T, int voltage);
@@ -311,7 +414,7 @@ class PowerOpt {
     void initSTA( designTiming *T );
     void exitPT();
 
-    //accossers
+    //accessors
     void getCellPowers(designTiming *T);
     int getNumErrorCycles() { return numErrorCycles; }
     int getNumMinusCycles() { return numMinusCycles; }
@@ -329,6 +432,7 @@ class PowerOpt {
     Grid *getGrid(int i) { assert(0 <= i && i < grids.size()); return grids[i]; }
     int getGateNum() { return m_gates.size(); }
     Gate *getGate(int i) { assert(0 <= i && i < m_gates.size()); return m_gates[i]; }
+    Libcell* getLibCell (int i) { assert (0 <= i && i < m_libCells.size()); return m_libCells[i]; }
     int getTerminalNum() { return terms.size(); }
     Terminal *getTerminal(int i) { assert(0 <= i && i < terms.size()); return terms[i]; }
     int getPadNum() { return m_pads.size(); }
@@ -352,6 +456,11 @@ class PowerOpt {
     Chip & getChip() { return chip; }
     void printBox(int lx, int by, int rx, int ty) { cout<<"["<<lx<<","<<by<<"]->["<<rx<<","<<ty<<"]"; }
     void printPoint(int x, int y) { cout<<"["<<x<<","<<y<<"]"; }
+    bool preprocess() { return is_preprocess; }
+    bool postprocess() { return is_postprocess; }
+    bool dump_uts() { return is_dump_uts; }
+    bool dump_units_switch() { return is_dump_units; }
+    bool deadendcheck() { return is_dead_end_check; }
     //functions
     void calTotalSPEFDelay(bool opt, bool compPath);
     void calTotalLeakage(bool opt);
@@ -489,6 +598,7 @@ class PowerOpt {
     void setCellSwapping(bool b) { m_cellSwapping = b; }
 
     int getTokenI(string line, string option);
+    uint64_t getTokenULL(string line, string option);
     float getTokenF(string line, string option);
     char* getTokenC(string line, string option);
     string getTokenS(string line, string option);
@@ -514,6 +624,13 @@ class PowerOpt {
     int numMinusCycles;    // number of cycles in which a path in P_- toggles (not necessarily equal to minus_cycles.size() )
     double doseSensitivity; //dose sensitivity
     GateVector m_gates;
+    GateVector m_gates_topo;
+    list<GNode*> nodes_topo;
+    priority_queue<GNode*, vector<GNode*>, sim_wf_compare> sim_wf; 
+    stack<GNode*> sim_visited;
+    //priority_queue<GNode*> sim_wf; 
+    list<Gate*> m_muxes;
+    list<Gate*> m_regs;
     map <string, Gate*> gate_name_dictionary;
     TerminalVector terms;
     PadVector m_pads;
@@ -554,6 +671,8 @@ class PowerOpt {
     StrIntMap subnetNameIdMap;
     StrIntMap padNameIdMap;
     StrIntMap m_gateVarMap;
+    StrIntMap netNameIdMap;
+    StrIntMap terminalNameIdMap;
     StrVector libNameVect;
     StrIntMap libNameIdMap;
     StrStrMap libFootprintMap;
@@ -647,7 +766,23 @@ class PowerOpt {
     ofstream logFile;
     ofstream m_timingFile;
     ofstream toggle_info_file;
+    ofstream toggled_nets_file;
+    ofstream units_file;
     ofstream unique_not_toggle_gate_sets;
+    ofstream unique_toggle_gate_sets;
+    ofstream slack_profile_file;
+    ofstream net_gate_maps;
+    ofstream net_pin_maps;
+    ofstream toggle_counts_file;
+    ofstream histogram_toggle_counts_file;
+    ofstream toggle_profile_file;
+    ofstream debug_file;
+    ofstream pmem_request_file;
+    ofstream dmem_request_file;
+    ofstream fanins_file;
+    ofstream processor_state_profile_file;
+    ofstream dmem_contents_file;
+    ofstream missed_nets;
     bool keepLog;
     int iter;
     int L, U;
@@ -701,10 +836,18 @@ class PowerOpt {
     int maxTrCheck;
     int oaGenFlag;
     int parseCycle;
-    int vcdStartCycle;
-    int vcdStopCycle;
+    uint64_t vcdStartCycle;
+    uint64_t vcdStopCycle;
+    uint64_t vcdCheckStartCycle;
     int ignoreClockGates;
     int ignoreMultiplier;
+    string internal_module_of_interest;
+    bool is_preprocess;
+    bool is_postprocess;
+    bool is_dump_uts;
+    bool is_dump_units;
+    bool is_dead_end_check;
+    int num_sim_cycles;
     int vStart;
     int vEnd;
     int vStep;
@@ -726,10 +869,21 @@ class PowerOpt {
     string libListFile;
     string regCellsFile;
     string moduleNamesFile;
+    string clusterNamesFile;
+    string simInitFile;
+    string dmemInitFile;
+    string dbgSelectGatesFile;
+    string pmem_file_name;
     string worstSlacksFile;
     string ptServerName;
     string reportFile;
     string untDumpFile;
+    string utDumpFile;
+    vector<int> PMemory;
+    map<int, bitset<16> > DMemory;
+
+
+    
     int ptPort;
     int divNum;
     float guardBand;
@@ -746,24 +900,59 @@ class PowerOpt {
     double areaHB;
     // JMS-SHK end
 
+    // METRICS
+    public:
+    double path_time;
+    double uniquification_time_only;
+    double subsetting_time_only;
+    double pt_run_uniquification_time;
+    double pt_run_subsetting_time;
+
+    private:
+
+
     list<Gate *> ff_src_list;       // Flip-flop list (source side)
     list<Gate *> ff_des_list;       // Flip-flop list (destination)
 
+    set<string> modules_of_interest;
     map<string,string> gate_outpin_dictionary;  // dictionary of gate name to outpin gate
     map<string,string>::iterator outpin_lookup; // a pointer to the gate's entry in the source_gate_dictionary
     map<string,string> net_dictionary;          // dictionary of net abbreviation to net name for VCD parsing
     map <string, Bus> bus_dict;
     map<string,string> source_gate_dictionary;  // dictionary of net name to source gate for vcd parsing
 
+    map<string, string > net_terminal_dictionary;
+
     endpoint_pair_list_t endpoint_pair_list;
     bool_vec_list_t path_toggle_bin_list;
     set<string> toggled_gate_set;
     map<vector<string>, float> not_toggled_gate_map;// map of not_toggled_gates and min_worst slack among toggled flip flops
     vector<vector<string> > not_toggled_gate_vector;
+    vector<vector<string> > toggled_gate_vector;
+    vector<vector< pair<string, string> > > toggled_gate_vector_rise_fall;
+    vector<vector< pair<Terminal*, ToggleType> > > toggled_term_vector;
+    vector<string> dbgSelectGates;
+    
+    vector<int> cycles_of_toggled_gate_vector; // this holds the corresponding cycles for the toggled gate vector.
+    vector<pair<int, map<string, pair< int, pair<int, float> > >::iterator > > per_cycle_toggled_sets; // cycle_time, iterator to map
+    vector<pair<int, map< string, pair<int, pair<int, float> > >::iterator > > per_cycle_toggled_sets_terms;
+    vector<set<string> > toggled_sets;
+    map<string, float> leakage_data;
     map<string, float> endpoint_worst_slacks;
+    map<string, pair< int, pair <int, float > > > toggled_sets_counts; // name, number of occurances, slack
+    map<string,  pair<int, pair< int, float> > > toggled_terms_counts; // terminalname, number of occurances, slack
+    map<int, list <pair<Gate*, Gate*> > > corr_map; // correlation map
+    map<string, vector<Gate*> > clusters; // Power Domains
     SetTrie* tree;
+    Graph * graph;
+    //vector< vector <gate*> > Power_domains;
 
 
+    string dmem_data;
+    string pmem_instr;
+    bool recv_inputs;
+    bool send_data;
+    bool send_instr;
 };
 
 }

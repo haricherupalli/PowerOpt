@@ -1,10 +1,14 @@
 #include <iostream>
+#include <fstream>
 #include "Net.h"
 
 using namespace std;
 
 namespace POWEROPT {
   
+bool check_toggles = false;
+std::ofstream net_debug_file ("PowerOpt/net_debug_file", std::ofstream::out);
+
   Terminal * Net::getInputTerminal()
   {
     assert(0 < terms.size());
@@ -25,6 +29,95 @@ namespace POWEROPT {
     cout<<"=====NET "<<id<<"====="<<endl;
     cout<<"Name "<<name<<endl;
     cout<<"=================="<<endl;
+  }
+
+  void Net::updateToggled()
+  {
+    if ( new_val == "0")
+    {
+      if (prev_val == "1") { toggle_type = FALL; toggled = true; }
+      else if(prev_val == "x") { toggle_type = FALL; toggled = true; }
+      else if (prev_val == "0") toggled = false; // sometimes vcds print the same net multiple times ending in the same value (meaning effectively no toggle)
+      else 
+      { 
+        cout << driver_gate->getName() << "/" << name <<  " : prev_val : " << prev_val << " new_val : " << new_val << endl;
+        assert(0); 
+      }
+    }
+    else if (new_val == "1")
+    {
+      if (prev_val == "0") { toggle_type = RISE; toggled = true; }
+      else if(prev_val == "x")  { toggle_type = RISE; toggled = true; }
+      else if(prev_val == "1")  toggled = false; // sometimes vcds print the same net multiplie times ending in the same value (meaning effectively no toggle)
+      else 
+      { 
+        cout << driver_gate->getName() << "/" << name << " : prev_val : " << prev_val << " new_val : " << new_val << endl;
+        assert(0);
+      }
+    }
+    else if (new_val == "x") 
+    {
+      if (prev_val == "x"){ toggled = false; }
+      else { toggle_type = UNKN; toggled = true; }
+    }
+
+  }
+
+  bool Net::setSimValue(string value) // return value is whether the net toggled or not.
+  {
+     //if (value.empty()) assert(0);
+     if (sim_val != value)
+     {
+       net_debug_file << name << " : " <<  sim_val << " --> " << value << endl;
+       if ((sim_ignore_once == true) && sim_val == "X")
+       {
+         sim_ignore_once = false; 
+         //cout << " IGNORED " << endl;
+       }
+       else 
+       {
+         //net_debug_file << name << " : " <<  sim_val << " --> " << value << endl;
+         if (check_toggles == true){
+            toggled = true; // whether the toggle needs to be registered or not.
+            //net_debug_file << "Setting toggled to true" << endl;
+         }
+         //cout << " TOGGLED " << endl;
+       }
+       if ( sim_val == "X" || value == "X") sim_toggle_type = UNKN;
+       else if (sim_val == "0" && value == "1") sim_toggle_type = FALL;
+       else if (sim_val == "1" && value == "0") sim_toggle_type = RISE;
+       //else assert(0); // empty strings need to be debugged.
+//        if (sim_val == "X" || sim_val == "x") sim_val = value;
+//        else if (sim_val == "0") sim_val = "1";
+//        else if (sim_val == "1") sim_val = "0";
+       sim_val = value; 
+       return true;
+     }
+    sim_toggle_type = CONSTANT;
+     //cout << " NOT " << endl;
+    return false;
+  }
+
+  void Net::flip_check_toggles() { check_toggles = true; } 
+
+  Terminal* Net::getOutputTerminal()
+  {
+    if (out_terms.size() == 1) return out_terms[0];
+    else if (out_terms.size() == 0) return NULL;
+    else { assert(0); }
+  }
+
+  void Net::addFanoutGate(Gate* g)
+  {
+  	for (int i = 0; i < fanout_gates.size(); i ++)
+  	{
+  		if (fanout_gates[i]->getId() == g->getId())
+  		{
+  			//cout<<"fanout gate "<<g->getId()<<" Name: "<<g->getName()<<" already added for gate "<<name<<endl;
+		  	return;
+		}
+  	}
+  	fanout_gates.push_back(g);
   }
 
 }

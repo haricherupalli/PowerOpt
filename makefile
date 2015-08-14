@@ -71,7 +71,7 @@ debug:
 profile:
 	@$(MAKE) -f makefile DBG="-pg"
 opt:
-	@$(MAKE) -f makefile DBG="-O2"
+	@$(MAKE) -f makefile DBG="-O3"
 test:
 	@$(MAKE) -f makefile DBG="-DTEST" EXPER="_test"
 timing:

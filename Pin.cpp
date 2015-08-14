@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstdio>
 #include <algorithm>
+#include "assert.h"
 
 #include "Pin.h"
 
@@ -21,5 +22,6 @@ namespace POWEROPT {
     cout<<"center ( "<<centerX<<" , "<<centerY<<" ) "<<endl;
     cout<<"-------------------"<<endl;
   }
+
   
 }

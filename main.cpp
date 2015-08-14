@@ -3,6 +3,7 @@
  * Date: April. 21, 2010
  */
 #include <iostream>
+#include <signal.h>
 #include <fstream>
 #include <time.h>
 #include <stdio.h>
@@ -37,6 +38,26 @@ void wait ( int seconds )
     while (clock() < endwait) {}
 }
 */
+
+// THESE ARE MADE GLOBAL FOR THE SIGNAL HANDLER (my_handler)
+PowerOpt po;
+designTiming T;
+ofstream fout;
+
+void my_handler (int s) {
+  cout << " Caught signal " << s << endl;     
+  po.dump_slack_profile();
+  po.dump_toggle_counts();
+  po.dump_Dmemory();
+  //po.print_nets();
+  //po.print_term_exprs();
+  po.exitPT();
+  fout.close();
+  T.Exit();
+  po.closeFiles();
+  cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
+  exit(1);
+}
 
 int main(int argc, char *argv[])
 {
@@ -82,11 +103,17 @@ int main(int argc, char *argv[])
     string cmdFileStr = cmdFile;
 
     OAReader reader;
-    PowerOpt po;
 
     po.readEnvFile(envFileStr);
     po.readCmdFile(cmdFileStr);
     po.openFiles();
+
+    struct sigaction sigIntHandler;
+    sigIntHandler.sa_handler = my_handler;
+    sigemptyset(&sigIntHandler.sa_mask);
+    sigIntHandler.sa_flags = 0;
+
+    sigaction(SIGINT, &sigIntHandler, NULL);
 
     if (po.getOaGenFlag() != 0) {
         cout << "[PowerOpt] OA DB generation ... " << endl;
@@ -99,6 +126,7 @@ int main(int argc, char *argv[])
         cout << "Error in Design read (OA)" << endl;
         exit(0);
     }
+    //my_handler(0);
     cout << "[PowerOpt] Design read ... done " << endl;
 
     cout << "[PowerOpt] PrimeTime server excecution ... " << endl;
@@ -111,7 +139,6 @@ int main(int argc, char *argv[])
         cout << "[PowerOpt] PrimeTime server for MMMC excecution ... done " << endl;
     }
 
-    designTiming T;
     cout<<"[PowerOpt] PrimeTime server contact ... "<<endl;
     int pt_trial_cnt = 0;
     while (true) {
@@ -127,13 +154,14 @@ int main(int argc, char *argv[])
 
     cout << "[PowerOpt] Library Cell Read ... "<<endl;
     po.findLeakage(&T);
+    //cout << " Exiting"  << endl; 
+    //exit(0);
     if (!po.getUseGT()) po.readLibCells(&T);
     po.updateLibCells();
     cout << "[PowerOpt] Library Cell Read done... "<<endl;
 
     int gateCount = po.getGateNum();
 
-    ofstream fout;
     fout.open(po.getReportFile().c_str());
 
     po.initSTA(&T);
@@ -164,7 +192,7 @@ int main(int argc, char *argv[])
         po.updateCellLib(&T);
     }
 
-    time_t t1, t2, t3, t4;
+    time_t t1, t2, t3, t4, t5;
     t1  = time(NULL);
 
     // set cell-base name
@@ -178,6 +206,32 @@ int main(int argc, char *argv[])
 
     po.setDontTouch();
     t2  = time(NULL);
+    //po.mark_clock_tree_cells(&T);
+    //po.print_pads();
+    //po.print_gate_leakage_vals();
+    //po.print_gates(); my_handler(0);
+    //po.print_regs(); my_handler(0);
+/*    string arrival = T.getMaxFallArrival("dco_clk");
+    if (arrival.empty()) cout << " EMPTY " << endl;
+    arrival = T.getMaxFallArrival("U102/ZN");
+    if (arrival.empty()) cout << " EMPTY " << endl;
+    else cout << "Arrival is " << arrival << endl;
+    my_handler(0);*/
+    
+    //po.print_nets(); my_handler(0);
+    //po.my_debug(&T); my_handler(0);
+    //po.print_terminals();  my_handler(0);
+    po.build_net_name_id_map();
+//    po.print_net_name_id_map();
+    po.build_term_name_id_map();
+    po.print_fanin_cone();
+//    po.print_term_name_id_map();
+//      string input = "\"Hello World!\"";
+//      T.test(input);
+//    T.resetRisePathForTerm("dco_clk");
+//    T.resetPathForTerm("dco_clk");
+//    T.resetFallPathForTerm("dco_clk");
+//    my_handler(0);
 
     if ( po.getExeOp() == 0 ) {     // TEST
         cout<<"=======PrimeTime Evaluation======== "<<endl;
@@ -426,55 +480,167 @@ int main(int argc, char *argv[])
     if ( po.getExeOp() == 13 ) {      // Print Dynamic Slack Distribution
         cout<<"[PowerOpt] Print Dynamic Slack Distribution "<<endl;
         t2  = time(NULL);
+        //po.read_modules_of_interest();
         po.parseVCDALL(&T);
+        //po.parseVCDALL_mode_15(&T);
         t4  = time(NULL);
         po.printSlackDist(&T);
         t3  = time(NULL);
         fout << " Run_Time : " << t3 - t1 << endl;
         fout << " parseVCDALL_Time : " << t4 - t2 << endl;
         fout << " printSlackDist_Time : " << t3 - t4 << endl;
+        cout << " Run_Time : " << t3 - t1 << endl;
+        cout << " parseVCDALL_Time : " << t4 - t2 << endl;
+        cout << " printSlackDist_Time : " << t3 - t4 << endl;
+        cout << " time = " << po.path_time << endl;
         po.exitPT();
         fout.close();
         cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
         return 0;
     }
 
-    if ( po.getExeOp() == 15 ) {      // Print Dynamic Slack Distribution
+    if ( po.getExeOp() == 15 ) {     // PLAIN MARKING GATESETS AND STA
         cout<<"[PowerOpt] Print Dynamic Slack Distribution "<<endl;
-        t2  = time(NULL);
         //po.parsePtReport();
+        t2  = time(NULL);
         po.readFlopWorstSlacks();
         po.read_modules_of_interest();
-        po.createSetTrie();
-        // TESTCODE
-        po.parseVCDALL_mode_15(&T);
-        //po.check_for_toggles();
-        t4  = time(NULL);
-        //po.printSlackDist(&T);
-        t3  = time(NULL);
-        fout << " Run_Time : " << t3 - t1 << endl;
-        fout << " parseVCDALL_Time : " << t4 - t2 << endl;
-        fout << " printSlackDist_Time : " << t3 - t4 << endl;
+        if (po.preprocess()) {
+          t3  = time(NULL);
+          po.parseVCDALL_mode_15(&T);
+        }
+        if (po.postprocess()) {
+          t4  = time(NULL);
+//          po.leakage_compute();
+//          po.leakage_compute_per_module();
+          //po.leakage_compute_coarse();
+          po.find_dynamic_slack_2(&T);
+        }
+        t5 = time(NULL);
+        fout << " Run_Time : " << t5 - t1 << endl;
+        fout << " parsing_time : " << t4 - t3 << endl;
+        fout << " post_process_time : " << t5 - t4 << endl;
+        cout << " Run_Time : " << t5 - t1 << endl;
+        cout << " parsing_time : " << t4 - t3 << endl;
+        cout << " post_process_time : " << t5 - t4 << endl;
         po.exitPT();
         fout.close();
         cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
         return 0;
     }
 
-    if ( po.getExeOp() == 16 ) {      //  read unique non-toggled gate sets and compute the slack
+    if ( po.getExeOp() == 16 || po.getExeOp() == 23 ) {      // UNIQUIFICATION OVER MARKED GATESETS
         cout<<"[PowerOpt] Reading in the gate sets"<<endl;
         t2  = time(NULL);
-        po.readFlopWorstSlacks();
-        po.read_unt_dump_file(); // unt = unique non toggled (gates)
-        t4  = time(NULL);
-        po.find_dynamic_slack_2(&T);
-        //po.printSlackDist(&T);
-        t3  = time(NULL);
+        //po.readFlopWorstSlacks();
+        po.createSetTrie();
+        po.read_modules_of_interest(); // VCD has many unnecessary modules (like library gates)
+        po.topoSort();
+        //po.read_unt_dump_file(); // unt = unique non toggled (gates)
+        if (po.preprocess()) {
+          t3  = time(NULL);
+          po.parseVCDALL_mode_15(&T);
+        }
+        if (po.postprocess()) {
+          t4  = time(NULL);
+          po.find_dynamic_slack_3(&T);
+          //po.dump_slack_profile();
+        }
+        if (po.deadendcheck())
+          po.check_for_dead_ends(&T);
+        if (po.dump_uts())
+        {
+          po.dump_toggled_sets();
+        }
+        t5 = time(NULL);
+        fout << " Run_Time : " << t5 - t1 << endl;
+        fout << " parsing_time : " << t4 - t3 << endl;
+        fout << " post_process_time : " << t5 - t4 << endl;
+        cout << " Run_Time : " << t5 - t1 << endl;
+        cout << " parsing_time : " << t4 - t3 << endl;
+        cout << " post_process_time : " << t5 - t4 << endl;
         po.exitPT();
         fout.close();
         cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
         return 0;
     }
+
+    if ( po.getExeOp() == 17 || po.getExeOp() == 24 ) {      //  SUBSET BASED UNIQUIFICATION OVER MARKED GATESETS
+        cout<<"[PowerOpt] Reading in the gate sets"<<endl;
+        t2  = time(NULL);
+        //po.readFlopWorstSlacks();
+        po.read_modules_of_interest();
+        po.createSetTrie();
+        //po.read_unt_dump_file(); // unt = unique non toggled (gates)
+        if (po.preprocess()) {
+          t3  = time(NULL);
+          po.parseVCDALL_mode_15(&T);
+        }
+//        if (po.dump_units_switch()) {
+//          po.dump_units();
+//        }
+        if (po.postprocess()) {
+          t4  = time(NULL);
+          po.find_dynamic_slack_subset(&T);
+        }
+        t5 = time(NULL);
+        fout << " Run_Time : " << t5 - t1 << endl;
+        fout << " parsing_time : " << t4 - t3 << endl;
+        fout << " post_process_time : " << t5 - t4 << endl;
+        cout << " Run_Time : " << t5 - t1 << endl;
+        cout << " parsing_time : " << t4 - t3 << endl;
+        cout << " post_process_time : " << t5 - t4 << endl;
+        po.exitPT();
+        fout.close();
+        cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
+        return 0;
+    }
+
+    if (po.getExeOp() == 18 ) { // Build Toposort of the design
+       
+      //po.getClkTree();
+      //po.print_fanin_cone();
+      po.topoSort();
+      po.computeNetExpressions();
+      po.print_term_exprs();
+    
+    }
+
+    if (po.getExeOp() == 19)
+    {
+        po.countClusterCuts();
+    }
+    
+    if (po.getExeOp() == 20)
+    {
+        po.read_ut_dump_file();
+        po.find_dynamic_slack_1(&T);
+    }
+
+    if (po.getExeOp() == 21) // NETLIST SIMULATION
+    {
+      po.readSelectGatesFile();
+      //po.readConstantTerminals();// my_handler(0);
+      po.topoSort(); 
+      //po.print_pads(); return 0;
+      po.readPmemFile();
+      po.simulate();
+      po.dump_Dmemory();
+    }
+    if (po.getExeOp() == 22) //  SIMPLE VCD ANALYSIS
+    {
+       po.read_modules_of_interest();
+       t3  = time(NULL);
+       po.parseVCDALL_mode_15(&T);
+       // READ EVERY CYCLE OF THE VCD
+       // AT THE CYCLE OF INTEREST, start marking if the net toggled
+       // THEN PRINT ALL THE NON-TOGGLED NETS OUT
+       po.print_nets();
+       t4 = time(NULL);
+       cout << " vcd read time : " << t4 - t3 << endl;
+    }
+
+    // 23 AND 24 ARE TAKEN
 
     // SOCEncounter
     //if (po.getSwapOp() == 2 && po.getExeOp() != 0 )
@@ -496,7 +662,7 @@ int main(int argc, char *argv[])
     }
     po.exitPT();
     if (rptPost) {
-        cout << "[PowerOpt] PrimeTime server excecution to report results " << endl;
+        cout << "[PowerOpt] PrimeTime server execution to report results " << endl;
         po.exePTServer(true);
         cout<<"[PowerOpt] PrimeTime server contact ... "<<endl;
         while (true) {
