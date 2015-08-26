@@ -121,7 +121,7 @@ std::ofstream term_debug_file ("PowerOpt/term_debug_file", std::ofstream::out);
     if (toggled) 
     {
       int fo_num = net->getFanoutGateNum();
-      term_debug_file << net->getName() << " : " ;
+      //term_debug_file << net->getName() << " : " ;
       for (int i = 0; i < fo_num; i++)
       {
         Gate* g = net->getFanoutGate(i);
@@ -129,10 +129,10 @@ std::ofstream term_debug_file ("PowerOpt/term_debug_file", std::ofstream::out);
         {
           GNode* node = g->getGNode();
           sim_wf.push(node);
-           term_debug_file << node->getName() << ", " ;
+           //term_debug_file << node->getName() << ", " ;
         }
       }
-      term_debug_file << endl;
+      //term_debug_file << endl;
     }
   }                                         
 

@@ -5,6 +5,9 @@
 #include <set>
 #include "PowerOpt.h"
 
+
+using namespace std;
+
 namespace POWEROPT {
 
   class OAReader {

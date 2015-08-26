@@ -28,6 +28,7 @@
 #include "Globals.h"
 #include "Timer.h"
 #include "SetTrie.h"
+//#include "xbitset.cpp"
 //#include "Bus.h"
 
 using namespace std;
@@ -680,6 +681,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             testValue2 = getTokenI(line,"-test1 ");
         if (line.find("-num_sim_cycles ") != string::npos)
             num_sim_cycles = getTokenI(line,"-num_sim_cycles ");
+        if (line.find("-design ") != string::npos)
+            design = getTokenS(line,"-design ");
     }
 
     if (swapstep == 0) swapstep = 10000;
@@ -5310,14 +5313,13 @@ void PowerOpt::print_processor_state_profile(int cycle_num)
 void PowerOpt::print_dmem_contents(int cycle_num)
 {
   dmem_contents_file <<  "PRINTING DMEM CONTENTS AT CYCLE " << cycle_num << endl;
-  map<int, bitset<16> >::iterator it;
+  map<int, xbitset>::iterator it;
   for (it = DMemory.begin(); it != DMemory.end(); it ++)
   {
      int address = it->first;
-     bitset<16> value = it->second;
-     dmem_contents_file << address << ":" << value << endl;
+     xbitset value = it->second;
+     dmem_contents_file << address << ":" << value.to_string() << endl;
   }
-
 }
 
 void PowerOpt::print_fanin_cone()
@@ -5522,7 +5524,7 @@ void PowerOpt::readDmemInitFile()
       assert(tokens.size() == 2);
       int addr = atoi(tokens[0].c_str());// term or pad name
       string value = tokens[1];
-      bitset<16> value_bs(value);
+      xbitset value_bs(value);
       DMemory.insert(make_pair(addr, value_bs));
     }
   }
@@ -5553,7 +5555,7 @@ void PowerOpt::readSimInitFile()
         Terminal* term = terms[it->second];
         term->setSimValue(value, sim_wf);
       }
-      else //
+      else
       {
         it = padNameIdMap.find(name);
         Pad* pad = m_pads[it->second];
@@ -5583,29 +5585,30 @@ void PowerOpt::clearSimVisited()
   }
 }
 
-void PowerOpt::runSimulation(bool wavefront)
+void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
 {
-  static int cycle_num = 1;
-  cout << "Simulating cycle " << cycle_num << endl;
-  cycle_num ++;
+  if (pos_edge)
+  {
+    cout << "Simulating cycle " << cycle_num << "(p)" << endl;
+  }
+  else
+  {
+    cout << "Simulating cycle " << cycle_num << "(n)" << endl;
+  }
   Pad* dco_clk_pad = m_pads[padNameIdMap["dco_clk"]];
   string dco_clk_value = dco_clk_pad->getSimValue();
   if (dco_clk_value == "1") dco_clk_pad-> setSimValue("0", sim_wf);
   else if (dco_clk_value == "0") dco_clk_pad-> setSimValue("1", sim_wf);
   else { cout << " dco_clk : " <<  dco_clk_value << endl; assert(0); }
   clearSimVisited();
-  //initialize_sim_wf();
   bool once = false;
   if(wavefront)
   {
+    int gate_count = 0;
     while (!sim_wf.empty())
     {
       GNode* node = sim_wf.top(); sim_wf.pop();
-/*      if (!once)
-      {
-        //cout << " * " << endl;
-        once = true;
-      }*/
+      gate_count ++;
       if ((node->getIsPad() == false) && (node->getIsSink() == false)) // Nothing needed for pads
       {
         // Deadcode
@@ -5615,13 +5618,14 @@ void PowerOpt::runSimulation(bool wavefront)
         sim_visited.push(node);
         Gate* gate = node->getGate();
         gate->computeVal(sim_wf); // here we push gates into sim_wf
-        //debug_file << " Node : " << node->getName() << " : " <<  node->getTopoId() << endl;
+
       }
-//      else 
+//      else
 //      {
 //        debug_file << "Missed" << node->getName() << endl;
 //      }
     }
+    debug_file << "In cycle " << cycle_num << " " << gate_count << " gates were simulated." << endl;
   }
   else
   {
@@ -5636,6 +5640,7 @@ void PowerOpt::runSimulation(bool wavefront)
       }
     }
   }
+
 }
 
 void PowerOpt::printRegValues()
@@ -5666,9 +5671,9 @@ void PowerOpt::readSelectGatesFile()
 
 }
 
-void PowerOpt::readConstantTerminals()
+void PowerOpt::readConstantTerminals() // These are gate pins that are constant in the design. Like logic 1 and logic 0.
 {
-  ifstream one_pins_file, zero_pins_file; 
+  ifstream one_pins_file, zero_pins_file;
   one_pins_file.open("one_pins");
   zero_pins_file.open("zero_pins");
   string line;
@@ -5677,7 +5682,7 @@ void PowerOpt::readConstantTerminals()
     while (getline(one_pins_file, line))
     {
       trim(line);
-      vector<string> tokens; 
+      vector<string> tokens;
       tokenize(line, ':', tokens);
       string gate_name = tokens[0];
       string term_name = tokens[1];
@@ -5687,10 +5692,15 @@ void PowerOpt::readConstantTerminals()
       int num_terms = terms.size();
 
       Terminal* term = new Terminal(num_terms+1, term_name);
-      Net *n = new Net(nets.size()+1, term_name); // set the net name to be same as term name
+      //Net *n = new Net(nets.size()+1, term_name); // set the net name to be same as term name
 
       term->setGate(gate);
       term->computeFullName();
+      term->setPinType(INPUT);
+      Net *n = new Net(nets.size()+1, term->getFullName()); // set the net name to be same as term name
+      //debug_file << "Creating one Net with id " << n->getId() << " and name " << n->getName() << endl;
+      n->addInputTerminal(term);
+      n->setTopoSortMarked(true);
       term->addNet(n);
       term->setSimValue("1");
 
@@ -5707,19 +5717,23 @@ void PowerOpt::readConstantTerminals()
     while (getline(zero_pins_file, line))
     {
       trim(line);
-      vector<string> tokens; 
+      vector<string> tokens;
       tokenize(line, ':', tokens);
       string gate_name = tokens[0];
       string term_name = tokens[1];
 
       int id = gateNameIdMap[gate_name];
-      Gate * gate = m_gates[id]; 
+      Gate * gate = m_gates[id];
       int num_terms = terms.size();
       Terminal* term = new Terminal(num_terms+1, term_name);
-      Net *n = new Net(nets.size()+1, term_name); // set the net name to be same as term name
 
       term->setGate(gate);
       term->computeFullName();
+      term->setPinType(INPUT);
+      Net *n = new Net(nets.size()+1, term->getFullName()); // set the net name to be same as term name
+      //debug_file << "Creating zero Net with id " << n->getId() << " and name " << n->getName() << endl;
+      n->addInputTerminal(term);
+      n->setTopoSortMarked(true);
       term->addNet(n);
       term->setSimValue("0");
 
@@ -5755,6 +5769,18 @@ void PowerOpt::updateRegOutputs()
   {
     Gate* ff_gate = *it;
     ff_gate->transferDtoQ(sim_wf);
+
+//    string name = ff_gate->getName();
+//    if ( name == "execution_unit_0_register_file_0_r2_reg_8_" )
+//    {
+//      Terminal* term = ff_gate->getFanoutTerminal(0);
+//      term->setSimValue("0", sim_wf);
+//    }
+//    else if (name == "execution_unit_0_register_file_0_r2_reg_2_")
+//    {
+//      Terminal* term = ff_gate->getFanoutTerminal(0);
+//      term->setSimValue("0", sim_wf);
+//    }
   }
 }
 
@@ -5775,40 +5801,89 @@ void PowerOpt::readPmemFile()
 
 string PowerOpt::getPmemAddr()
 {
-	string pmem_addr_13_val = m_pads[padNameIdMap["pmem_addr\\[13\\]"]]->getSimValue();
-	string pmem_addr_12_val = m_pads[padNameIdMap["pmem_addr\\[12\\]"]]->getSimValue();
-	string pmem_addr_11_val = m_pads[padNameIdMap["pmem_addr\\[11\\]"]]->getSimValue();
-	string pmem_addr_10_val = m_pads[padNameIdMap["pmem_addr\\[10\\]"]]->getSimValue();
-	string pmem_addr_9_val  = m_pads[padNameIdMap["pmem_addr\\[9\\]"]]->getSimValue();
-	string pmem_addr_8_val  = m_pads[padNameIdMap["pmem_addr\\[8\\]"]]->getSimValue();
-	string pmem_addr_7_val  = m_pads[padNameIdMap["pmem_addr\\[7\\]"]]->getSimValue();
-	string pmem_addr_6_val  = m_pads[padNameIdMap["pmem_addr\\[6\\]"]]->getSimValue();
-	string pmem_addr_5_val  = m_pads[padNameIdMap["pmem_addr\\[5\\]"]]->getSimValue();
-	string pmem_addr_4_val  = m_pads[padNameIdMap["pmem_addr\\[4\\]"]]->getSimValue();
-	string pmem_addr_3_val  = m_pads[padNameIdMap["pmem_addr\\[3\\]"]]->getSimValue();
-	string pmem_addr_2_val  = m_pads[padNameIdMap["pmem_addr\\[2\\]"]]->getSimValue();
-	string pmem_addr_1_val  = m_pads[padNameIdMap["pmem_addr\\[1\\]"]]->getSimValue();
-	string pmem_addr_0_val  = m_pads[padNameIdMap["pmem_addr\\[0\\]"]]->getSimValue();
 
+  string pmem_addr_13_val , pmem_addr_12_val , pmem_addr_11_val , pmem_addr_10_val , pmem_addr_9_val  , pmem_addr_8_val  , pmem_addr_7_val  , pmem_addr_6_val  , pmem_addr_5_val  , pmem_addr_4_val  , pmem_addr_3_val  , pmem_addr_2_val  , pmem_addr_1_val  , pmem_addr_0_val;
+  if (design =="flat_no_clk_gt")
+  {
+    pmem_addr_13_val = m_pads[padNameIdMap["pmem_addr\\[13\\]"]]->getSimValue();
+    pmem_addr_12_val = m_pads[padNameIdMap["pmem_addr\\[12\\]"]]->getSimValue();
+    pmem_addr_11_val = m_pads[padNameIdMap["pmem_addr\\[11\\]"]]->getSimValue();
+    pmem_addr_10_val = m_pads[padNameIdMap["pmem_addr\\[10\\]"]]->getSimValue();
+    pmem_addr_9_val  = m_pads[padNameIdMap["pmem_addr\\[9\\]"]]->getSimValue();
+    pmem_addr_8_val  = m_pads[padNameIdMap["pmem_addr\\[8\\]"]]->getSimValue();
+    pmem_addr_7_val  = m_pads[padNameIdMap["pmem_addr\\[7\\]"]]->getSimValue();
+    pmem_addr_6_val  = m_pads[padNameIdMap["pmem_addr\\[6\\]"]]->getSimValue();
+    pmem_addr_5_val  = m_pads[padNameIdMap["pmem_addr\\[5\\]"]]->getSimValue();
+    pmem_addr_4_val  = m_pads[padNameIdMap["pmem_addr\\[4\\]"]]->getSimValue();
+    pmem_addr_3_val  = m_pads[padNameIdMap["pmem_addr\\[3\\]"]]->getSimValue();
+    pmem_addr_2_val  = m_pads[padNameIdMap["pmem_addr\\[2\\]"]]->getSimValue();
+    pmem_addr_1_val  = m_pads[padNameIdMap["pmem_addr\\[1\\]"]]->getSimValue();
+    pmem_addr_0_val  = m_pads[padNameIdMap["pmem_addr\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    pmem_addr_13_val = m_pads[padNameIdMap["pmem_addr[13]"]]->getSimValue();
+    pmem_addr_12_val = m_pads[padNameIdMap["pmem_addr[12]"]]->getSimValue();
+    pmem_addr_11_val = m_pads[padNameIdMap["pmem_addr[11]"]]->getSimValue();
+    pmem_addr_10_val = m_pads[padNameIdMap["pmem_addr[10]"]]->getSimValue();
+    pmem_addr_9_val  = m_pads[padNameIdMap["pmem_addr[9]"]]->getSimValue();
+    pmem_addr_8_val  = m_pads[padNameIdMap["pmem_addr[8]"]]->getSimValue();
+    pmem_addr_7_val  = m_pads[padNameIdMap["pmem_addr[7]"]]->getSimValue();
+    pmem_addr_6_val  = m_pads[padNameIdMap["pmem_addr[6]"]]->getSimValue();
+    pmem_addr_5_val  = m_pads[padNameIdMap["pmem_addr[5]"]]->getSimValue();
+    pmem_addr_4_val  = m_pads[padNameIdMap["pmem_addr[4]"]]->getSimValue();
+    pmem_addr_3_val  = m_pads[padNameIdMap["pmem_addr[3]"]]->getSimValue();
+    pmem_addr_2_val  = m_pads[padNameIdMap["pmem_addr[2]"]]->getSimValue();
+    pmem_addr_1_val  = m_pads[padNameIdMap["pmem_addr[1]"]]->getSimValue();
+    pmem_addr_0_val  = m_pads[padNameIdMap["pmem_addr[0]"]]->getSimValue();
+  }
+  else
+  {
+    assert(0);
+  }
     string pmem_addr_str = pmem_addr_13_val+ pmem_addr_12_val+ pmem_addr_11_val+ pmem_addr_10_val+ pmem_addr_9_val + pmem_addr_8_val + pmem_addr_7_val + pmem_addr_6_val + pmem_addr_5_val + pmem_addr_4_val + pmem_addr_3_val + pmem_addr_2_val + pmem_addr_1_val + pmem_addr_0_val ;
     return pmem_addr_str;
 }
 
 string PowerOpt::getDmemAddr()
 {
-	string dmem_addr_12_val = m_pads[padNameIdMap["dmem_addr\\[12\\]"]]->getSimValue();
-	string dmem_addr_11_val = m_pads[padNameIdMap["dmem_addr\\[11\\]"]]->getSimValue();
-	string dmem_addr_10_val = m_pads[padNameIdMap["dmem_addr\\[10\\]"]]->getSimValue();
-	string dmem_addr_9_val  = m_pads[padNameIdMap["dmem_addr\\[9\\]"]]->getSimValue();
-	string dmem_addr_8_val  = m_pads[padNameIdMap["dmem_addr\\[8\\]"]]->getSimValue();
-	string dmem_addr_7_val  = m_pads[padNameIdMap["dmem_addr\\[7\\]"]]->getSimValue();
-	string dmem_addr_6_val  = m_pads[padNameIdMap["dmem_addr\\[6\\]"]]->getSimValue();
-	string dmem_addr_5_val  = m_pads[padNameIdMap["dmem_addr\\[5\\]"]]->getSimValue();
-	string dmem_addr_4_val  = m_pads[padNameIdMap["dmem_addr\\[4\\]"]]->getSimValue();
-	string dmem_addr_3_val  = m_pads[padNameIdMap["dmem_addr\\[3\\]"]]->getSimValue();
-	string dmem_addr_2_val  = m_pads[padNameIdMap["dmem_addr\\[2\\]"]]->getSimValue();
-	string dmem_addr_1_val  = m_pads[padNameIdMap["dmem_addr\\[1\\]"]]->getSimValue();
-	string dmem_addr_0_val  = m_pads[padNameIdMap["dmem_addr\\[0\\]"]]->getSimValue();
+  string dmem_addr_12_val , dmem_addr_11_val , dmem_addr_10_val , dmem_addr_9_val  , dmem_addr_8_val  , dmem_addr_7_val  , dmem_addr_6_val  , dmem_addr_5_val  , dmem_addr_4_val  , dmem_addr_3_val  , dmem_addr_2_val  , dmem_addr_1_val  , dmem_addr_0_val;
+  if (design == "flat_no_clk_gt")
+  {
+    dmem_addr_12_val = m_pads[padNameIdMap["dmem_addr\\[12\\]"]]->getSimValue();
+    dmem_addr_11_val = m_pads[padNameIdMap["dmem_addr\\[11\\]"]]->getSimValue();
+    dmem_addr_10_val = m_pads[padNameIdMap["dmem_addr\\[10\\]"]]->getSimValue();
+    dmem_addr_9_val  = m_pads[padNameIdMap["dmem_addr\\[9\\]"]]->getSimValue();
+    dmem_addr_8_val  = m_pads[padNameIdMap["dmem_addr\\[8\\]"]]->getSimValue();
+    dmem_addr_7_val  = m_pads[padNameIdMap["dmem_addr\\[7\\]"]]->getSimValue();
+    dmem_addr_6_val  = m_pads[padNameIdMap["dmem_addr\\[6\\]"]]->getSimValue();
+    dmem_addr_5_val  = m_pads[padNameIdMap["dmem_addr\\[5\\]"]]->getSimValue();
+    dmem_addr_4_val  = m_pads[padNameIdMap["dmem_addr\\[4\\]"]]->getSimValue();
+    dmem_addr_3_val  = m_pads[padNameIdMap["dmem_addr\\[3\\]"]]->getSimValue();
+    dmem_addr_2_val  = m_pads[padNameIdMap["dmem_addr\\[2\\]"]]->getSimValue();
+    dmem_addr_1_val  = m_pads[padNameIdMap["dmem_addr\\[1\\]"]]->getSimValue();
+    dmem_addr_0_val  = m_pads[padNameIdMap["dmem_addr\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    dmem_addr_12_val = m_pads[padNameIdMap["dmem_addr[12]"]]->getSimValue();
+    dmem_addr_11_val = m_pads[padNameIdMap["dmem_addr[11]"]]->getSimValue();
+    dmem_addr_10_val = m_pads[padNameIdMap["dmem_addr[10]"]]->getSimValue();
+    dmem_addr_9_val  = m_pads[padNameIdMap["dmem_addr[9]"]]->getSimValue();
+    dmem_addr_8_val  = m_pads[padNameIdMap["dmem_addr[8]"]]->getSimValue();
+    dmem_addr_7_val  = m_pads[padNameIdMap["dmem_addr[7]"]]->getSimValue();
+    dmem_addr_6_val  = m_pads[padNameIdMap["dmem_addr[6]"]]->getSimValue();
+    dmem_addr_5_val  = m_pads[padNameIdMap["dmem_addr[5]"]]->getSimValue();
+    dmem_addr_4_val  = m_pads[padNameIdMap["dmem_addr[4]"]]->getSimValue();
+    dmem_addr_3_val  = m_pads[padNameIdMap["dmem_addr[3]"]]->getSimValue();
+    dmem_addr_2_val  = m_pads[padNameIdMap["dmem_addr[2]"]]->getSimValue();
+    dmem_addr_1_val  = m_pads[padNameIdMap["dmem_addr[1]"]]->getSimValue();
+    dmem_addr_0_val  = m_pads[padNameIdMap["dmem_addr[0]"]]->getSimValue();
+  }
+  else
+  {
+    assert(0);
+  }
 
     string dmem_addr_str =  dmem_addr_12_val+ dmem_addr_11_val+ dmem_addr_10_val+ dmem_addr_9_val + dmem_addr_8_val + dmem_addr_7_val + dmem_addr_6_val + dmem_addr_5_val + dmem_addr_4_val + dmem_addr_3_val + dmem_addr_2_val + dmem_addr_1_val + dmem_addr_0_val ;
     return dmem_addr_str;
@@ -5816,22 +5891,49 @@ string PowerOpt::getDmemAddr()
 
 string PowerOpt::getDmemDin()
 {
-	string dmem_din_15_val = m_pads[padNameIdMap["dmem_din\\[15\\]"]]->getSimValue();
-	string dmem_din_14_val = m_pads[padNameIdMap["dmem_din\\[14\\]"]]->getSimValue();
-	string dmem_din_13_val = m_pads[padNameIdMap["dmem_din\\[13\\]"]]->getSimValue();
-	string dmem_din_12_val = m_pads[padNameIdMap["dmem_din\\[12\\]"]]->getSimValue();
-	string dmem_din_11_val = m_pads[padNameIdMap["dmem_din\\[11\\]"]]->getSimValue();
-	string dmem_din_10_val = m_pads[padNameIdMap["dmem_din\\[10\\]"]]->getSimValue();
-	string dmem_din_9_val  = m_pads[padNameIdMap["dmem_din\\[9\\]"]]->getSimValue();
-	string dmem_din_8_val  = m_pads[padNameIdMap["dmem_din\\[8\\]"]]->getSimValue();
-	string dmem_din_7_val  = m_pads[padNameIdMap["dmem_din\\[7\\]"]]->getSimValue();
-	string dmem_din_6_val  = m_pads[padNameIdMap["dmem_din\\[6\\]"]]->getSimValue();
-	string dmem_din_5_val  = m_pads[padNameIdMap["dmem_din\\[5\\]"]]->getSimValue();
-	string dmem_din_4_val  = m_pads[padNameIdMap["dmem_din\\[4\\]"]]->getSimValue();
-	string dmem_din_3_val  = m_pads[padNameIdMap["dmem_din\\[3\\]"]]->getSimValue();
-	string dmem_din_2_val  = m_pads[padNameIdMap["dmem_din\\[2\\]"]]->getSimValue();
-	string dmem_din_1_val  = m_pads[padNameIdMap["dmem_din\\[1\\]"]]->getSimValue();
-	string dmem_din_0_val  = m_pads[padNameIdMap["dmem_din\\[0\\]"]]->getSimValue();
+  string dmem_din_15_val , dmem_din_14_val , dmem_din_13_val , dmem_din_12_val , dmem_din_11_val , dmem_din_10_val , dmem_din_9_val  , dmem_din_8_val  , dmem_din_7_val  , dmem_din_6_val  , dmem_din_5_val  , dmem_din_4_val  , dmem_din_3_val  , dmem_din_2_val  , dmem_din_1_val  , dmem_din_0_val; 
+  if (design == "flat_no_clk_gt")
+  {
+    dmem_din_15_val = m_pads[padNameIdMap["dmem_din\\[15\\]"]]->getSimValue();
+    dmem_din_14_val = m_pads[padNameIdMap["dmem_din\\[14\\]"]]->getSimValue();
+    dmem_din_13_val = m_pads[padNameIdMap["dmem_din\\[13\\]"]]->getSimValue();
+    dmem_din_12_val = m_pads[padNameIdMap["dmem_din\\[12\\]"]]->getSimValue();
+    dmem_din_11_val = m_pads[padNameIdMap["dmem_din\\[11\\]"]]->getSimValue();
+    dmem_din_10_val = m_pads[padNameIdMap["dmem_din\\[10\\]"]]->getSimValue();
+    dmem_din_9_val  = m_pads[padNameIdMap["dmem_din\\[9\\]"]]->getSimValue();
+    dmem_din_8_val  = m_pads[padNameIdMap["dmem_din\\[8\\]"]]->getSimValue();
+    dmem_din_7_val  = m_pads[padNameIdMap["dmem_din\\[7\\]"]]->getSimValue();
+    dmem_din_6_val  = m_pads[padNameIdMap["dmem_din\\[6\\]"]]->getSimValue();
+    dmem_din_5_val  = m_pads[padNameIdMap["dmem_din\\[5\\]"]]->getSimValue();
+    dmem_din_4_val  = m_pads[padNameIdMap["dmem_din\\[4\\]"]]->getSimValue();
+    dmem_din_3_val  = m_pads[padNameIdMap["dmem_din\\[3\\]"]]->getSimValue();
+    dmem_din_2_val  = m_pads[padNameIdMap["dmem_din\\[2\\]"]]->getSimValue();
+    dmem_din_1_val  = m_pads[padNameIdMap["dmem_din\\[1\\]"]]->getSimValue();
+    dmem_din_0_val  = m_pads[padNameIdMap["dmem_din\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    dmem_din_15_val = m_pads[padNameIdMap["dmem_din[15]"]]->getSimValue();
+    dmem_din_14_val = m_pads[padNameIdMap["dmem_din[14]"]]->getSimValue();
+    dmem_din_13_val = m_pads[padNameIdMap["dmem_din[13]"]]->getSimValue();
+    dmem_din_12_val = m_pads[padNameIdMap["dmem_din[12]"]]->getSimValue();
+    dmem_din_11_val = m_pads[padNameIdMap["dmem_din[11]"]]->getSimValue();
+    dmem_din_10_val = m_pads[padNameIdMap["dmem_din[10]"]]->getSimValue();
+    dmem_din_9_val  = m_pads[padNameIdMap["dmem_din[9]"]]->getSimValue();
+    dmem_din_8_val  = m_pads[padNameIdMap["dmem_din[8]"]]->getSimValue();
+    dmem_din_7_val  = m_pads[padNameIdMap["dmem_din[7]"]]->getSimValue();
+    dmem_din_6_val  = m_pads[padNameIdMap["dmem_din[6]"]]->getSimValue();
+    dmem_din_5_val  = m_pads[padNameIdMap["dmem_din[5]"]]->getSimValue();
+    dmem_din_4_val  = m_pads[padNameIdMap["dmem_din[4]"]]->getSimValue();
+    dmem_din_3_val  = m_pads[padNameIdMap["dmem_din[3]"]]->getSimValue();
+    dmem_din_2_val  = m_pads[padNameIdMap["dmem_din[2]"]]->getSimValue();
+    dmem_din_1_val  = m_pads[padNameIdMap["dmem_din[1]"]]->getSimValue();
+    dmem_din_0_val  = m_pads[padNameIdMap["dmem_din[0]"]]->getSimValue();
+  }
+  else 
+  {
+    assert(0);
+  }
 
   string dmem_din_str = dmem_din_15_val+ dmem_din_14_val+ dmem_din_13_val+ dmem_din_12_val+ dmem_din_11_val+ dmem_din_10_val+ dmem_din_9_val + dmem_din_8_val + dmem_din_7_val + dmem_din_6_val + dmem_din_5_val + dmem_din_4_val + dmem_din_3_val + dmem_din_2_val + dmem_din_1_val + dmem_din_0_val ;
     //string dmem_din_str = dmem_din_0_val+ dmem_din_1_val+ dmem_din_2_val+ dmem_din_3_val+ dmem_din_4_val+ dmem_din_5_val+ dmem_din_6_val+ dmem_din_7_val+ dmem_din_8_val+ dmem_din_9_val+ dmem_din_10_val+ dmem_din_11_val+ dmem_din_12_val+ dmem_din_13_val+ dmem_din_14_val+ dmem_din_15_val;
@@ -5841,14 +5943,33 @@ string PowerOpt::getDmemDin()
 
 string PowerOpt::getDmemLow()
 {
-	string dmem_din_7_val  = m_pads[padNameIdMap["dmem_din\\[7\\]"]]->getSimValue();
-	string dmem_din_6_val  = m_pads[padNameIdMap["dmem_din\\[6\\]"]]->getSimValue();
-	string dmem_din_5_val  = m_pads[padNameIdMap["dmem_din\\[5\\]"]]->getSimValue();
-	string dmem_din_4_val  = m_pads[padNameIdMap["dmem_din\\[4\\]"]]->getSimValue();
-	string dmem_din_3_val  = m_pads[padNameIdMap["dmem_din\\[3\\]"]]->getSimValue();
-	string dmem_din_2_val  = m_pads[padNameIdMap["dmem_din\\[2\\]"]]->getSimValue();
-	string dmem_din_1_val  = m_pads[padNameIdMap["dmem_din\\[1\\]"]]->getSimValue();
-	string dmem_din_0_val  = m_pads[padNameIdMap["dmem_din\\[0\\]"]]->getSimValue();
+  string dmem_din_7_val , dmem_din_6_val , dmem_din_5_val , dmem_din_4_val , dmem_din_3_val , dmem_din_2_val , dmem_din_1_val , dmem_din_0_val ;
+  if (design == "flat_no_clk_gt")
+  {
+    dmem_din_7_val  = m_pads[padNameIdMap["dmem_din\\[7\\]"]]->getSimValue();
+    dmem_din_6_val  = m_pads[padNameIdMap["dmem_din\\[6\\]"]]->getSimValue();
+    dmem_din_5_val  = m_pads[padNameIdMap["dmem_din\\[5\\]"]]->getSimValue();
+    dmem_din_4_val  = m_pads[padNameIdMap["dmem_din\\[4\\]"]]->getSimValue();
+    dmem_din_3_val  = m_pads[padNameIdMap["dmem_din\\[3\\]"]]->getSimValue();
+    dmem_din_2_val  = m_pads[padNameIdMap["dmem_din\\[2\\]"]]->getSimValue();
+    dmem_din_1_val  = m_pads[padNameIdMap["dmem_din\\[1\\]"]]->getSimValue();
+    dmem_din_0_val  = m_pads[padNameIdMap["dmem_din\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    dmem_din_7_val  = m_pads[padNameIdMap["dmem_din[7]"]]->getSimValue();
+    dmem_din_6_val  = m_pads[padNameIdMap["dmem_din[6]"]]->getSimValue();
+    dmem_din_5_val  = m_pads[padNameIdMap["dmem_din[5]"]]->getSimValue();
+    dmem_din_4_val  = m_pads[padNameIdMap["dmem_din[4]"]]->getSimValue();
+    dmem_din_3_val  = m_pads[padNameIdMap["dmem_din[3]"]]->getSimValue();
+    dmem_din_2_val  = m_pads[padNameIdMap["dmem_din[2]"]]->getSimValue();
+    dmem_din_1_val  = m_pads[padNameIdMap["dmem_din[1]"]]->getSimValue();
+    dmem_din_0_val  = m_pads[padNameIdMap["dmem_din[0]"]]->getSimValue();
+  }
+  else
+  {
+    assert(0);
+  }
 
     string dmem_din_str = dmem_din_7_val + dmem_din_6_val + dmem_din_5_val + dmem_din_4_val + dmem_din_3_val + dmem_din_2_val + dmem_din_1_val + dmem_din_0_val ;
     return dmem_din_str;
@@ -5856,51 +5977,83 @@ string PowerOpt::getDmemLow()
 
 string PowerOpt::getDmemHigh()
 {
-	string dmem_din_15_val = m_pads[padNameIdMap["dmem_din\\[15\\]"]]->getSimValue();
-	string dmem_din_14_val = m_pads[padNameIdMap["dmem_din\\[14\\]"]]->getSimValue();
-	string dmem_din_13_val = m_pads[padNameIdMap["dmem_din\\[13\\]"]]->getSimValue();
-	string dmem_din_12_val = m_pads[padNameIdMap["dmem_din\\[12\\]"]]->getSimValue();
-	string dmem_din_11_val = m_pads[padNameIdMap["dmem_din\\[11\\]"]]->getSimValue();
-	string dmem_din_10_val = m_pads[padNameIdMap["dmem_din\\[10\\]"]]->getSimValue();
-	string dmem_din_9_val  = m_pads[padNameIdMap["dmem_din\\[9\\]"]]->getSimValue();
-	string dmem_din_8_val  = m_pads[padNameIdMap["dmem_din\\[8\\]"]]->getSimValue();
-
+  string dmem_din_15_val , dmem_din_14_val , dmem_din_13_val , dmem_din_12_val , dmem_din_11_val , dmem_din_10_val , dmem_din_9_val  , dmem_din_8_val;
+  if (design == "flat_no_clk_gt")
+  {
+    dmem_din_15_val = m_pads[padNameIdMap["dmem_din\\[15\\]"]]->getSimValue();
+    dmem_din_14_val = m_pads[padNameIdMap["dmem_din\\[14\\]"]]->getSimValue();
+    dmem_din_13_val = m_pads[padNameIdMap["dmem_din\\[13\\]"]]->getSimValue();
+    dmem_din_12_val = m_pads[padNameIdMap["dmem_din\\[12\\]"]]->getSimValue();
+    dmem_din_11_val = m_pads[padNameIdMap["dmem_din\\[11\\]"]]->getSimValue();
+    dmem_din_10_val = m_pads[padNameIdMap["dmem_din\\[10\\]"]]->getSimValue();
+    dmem_din_9_val  = m_pads[padNameIdMap["dmem_din\\[9\\]"]]->getSimValue();
+    dmem_din_8_val  = m_pads[padNameIdMap["dmem_din\\[8\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    dmem_din_15_val = m_pads[padNameIdMap["dmem_din[15]"]]->getSimValue();
+    dmem_din_14_val = m_pads[padNameIdMap["dmem_din[14]"]]->getSimValue();
+    dmem_din_13_val = m_pads[padNameIdMap["dmem_din[13]"]]->getSimValue();
+    dmem_din_12_val = m_pads[padNameIdMap["dmem_din[12]"]]->getSimValue();
+    dmem_din_11_val = m_pads[padNameIdMap["dmem_din[11]"]]->getSimValue();
+    dmem_din_10_val = m_pads[padNameIdMap["dmem_din[10]"]]->getSimValue();
+    dmem_din_8_val  = m_pads[padNameIdMap["dmem_din[8]"]]->getSimValue();
+    dmem_din_9_val  = m_pads[padNameIdMap["dmem_din[9]"]]->getSimValue();
+  }
     string dmem_din_str = dmem_din_15_val+ dmem_din_14_val+ dmem_din_13_val+ dmem_din_12_val+ dmem_din_11_val+ dmem_din_10_val+ dmem_din_9_val + dmem_din_8_val;
     return dmem_din_str;
 }
 
-void PowerOpt::handleDmem(int cycle_num, bool wavefront)
+xbitset operator & (xbitset a, xbitset b)
+{
+  bitset<NUM_BITS> bs_x = (a.get_bs_x() & b.get_bs_val()) | (a.get_bs_val() & b.get_bs_x()) | (a.get_bs_x() & b.get_bs_x());
+  bitset<NUM_BITS> bs_val = a.get_bs_val() & b.get_bs_val();
+  return xbitset(bs_x, bs_val);
+}
+
+xbitset operator | (xbitset a, xbitset b)
+{
+  // Slightly buggy, as it ignores the fact that val can be a 1 when x is a 1. Current implementation makes that impossible however.
+  bitset<NUM_BITS> bs_x = (a.get_bs_x() | b.get_bs_x()) & (~a.get_bs_val()) & (~b.get_bs_val()) ;
+  bitset<NUM_BITS> bs_val = a.get_bs_val() | b.get_bs_val();
+  return xbitset(bs_x, bs_val);
+}
+
+
+void PowerOpt::handleDmem(int cycle_num)
 {
      string dmem_cen = m_pads[padNameIdMap["dmem_cen"]]->getSimValue();
      if (dmem_cen != "0") return;
      string dmem_wen_0 = m_pads[padNameIdMap["dmem_wen\\[0\\]"]]->getSimValue();
      string dmem_wen_1 = m_pads[padNameIdMap["dmem_wen\\[1\\]"]]->getSimValue();
+/*     string dmem_wen_0 = m_pads[padNameIdMap["dmem_wen[0]"]]->getSimValue();
+     string dmem_wen_1 = m_pads[padNameIdMap["dmem_wen[1]"]]->getSimValue();*/
      string dmem_wen = dmem_wen_1 + dmem_wen_0;
      unsigned int dmem_wen_int = strtoull(dmem_wen.c_str(), NULL, 2);
      string dmem_addr_str = getDmemAddr();
      unsigned int dmem_addr = strtoull(dmem_addr_str.c_str(), NULL, 2);
      string dmem_din_str = getDmemDin();
-     bitset<16> dmem_din(dmem_din_str);
-     bitset<16> Dmem_lower;
-     bitset<16> Dmem_higher;
+     xbitset dmem_din(dmem_din_str);
+     xbitset Dmem_lower;
+     xbitset Dmem_higher;
      dmem_request_file << " Accessing Dmem with address : " << hex << dmem_addr << dec << " and write mode  " << dmem_wen_int << ". Size of Memory is " << DMemory.size()  <<  " And cycle num is " << cycle_num << endl;
      pmem_request_file << " Accessing Dmem with address : " << hex << dmem_addr << dec << " and write mode  " << dmem_wen_int << ". Size of Memory is " << DMemory.size()  <<  " And cycle num is " << cycle_num << endl;
 
 
      switch (dmem_wen_int)
      {
-       case 0:  // WRITE BOTH BYTES 
+       case 0:  // WRITE BOTH BYTES
          DMemory[dmem_addr] = dmem_din;
          dmem_request_file << "Writing Data (full) " << dmem_din_str << endl;
          break;
        case 1: // WRITE HIGH BYTE
-         Dmem_lower = DMemory[dmem_addr] & bitset<16> (255);// 11111111
-         DMemory[dmem_addr] = Dmem_lower | (dmem_din & bitset<16>(65280) );// 1111111100000000
+         Dmem_lower = DMemory[dmem_addr] & xbitset(255);// 11111111
+         DMemory[dmem_addr] = Dmem_lower | (dmem_din & xbitset(65280) );// 1111111100000000
          dmem_request_file << "Writing Data (high) " << dmem_din_str << endl;
          break;
        case 2: // WRITE LOW BYTE
-         Dmem_higher = DMemory[dmem_addr] & bitset<16> (65280);
-         DMemory[dmem_addr] = Dmem_higher | (dmem_din & bitset<16>(255) );
+         Dmem_higher = DMemory[dmem_addr] & xbitset(65280);
+         DMemory[dmem_addr] = Dmem_higher | (dmem_din & xbitset(255) );
          dmem_request_file << "Writing Data (low) " << dmem_din_str << endl;
          break;
        case 3: // READ
@@ -5914,67 +6067,98 @@ void PowerOpt::handleDmem(int cycle_num, bool wavefront)
 
 bool PowerOpt::sendInputs()
 {
-  static int i = 0; 
+  static int i = 0;
 	string per_enable_val  = m_pads[padNameIdMap["per_en"]]->getSimValue();
   if (per_enable_val != "1") return false;
-
-	string per_we_1_val  = m_pads[padNameIdMap["per_we\\[1\\]"]]->getSimValue();
-	string per_we_0_val  = m_pads[padNameIdMap["per_we\\[0\\]"]]->getSimValue();
+  string per_we_0_val, per_we_1_val;
+  if (design == "flat_no_clk_gt")
+  {
+     per_we_1_val  = m_pads[padNameIdMap["per_we\\[1\\]"]]->getSimValue();
+     per_we_0_val  = m_pads[padNameIdMap["per_we\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+     per_we_1_val  = m_pads[padNameIdMap["per_we[1]"]]->getSimValue();
+     per_we_0_val  = m_pads[padNameIdMap["per_we[0]"]]->getSimValue();
+  }
+  else assert(0);
 
   string per_we_str = per_we_1_val + per_we_0_val;
   if (per_we_str != "00") return false;
 
-  string per_addr_13_val = m_pads[padNameIdMap["per_addr\\[13\\]"]]->getSimValue();
-  string per_addr_12_val = m_pads[padNameIdMap["per_addr\\[12\\]"]]->getSimValue();
-  string per_addr_11_val = m_pads[padNameIdMap["per_addr\\[11\\]"]]->getSimValue();
-  string per_addr_10_val = m_pads[padNameIdMap["per_addr\\[10\\]"]]->getSimValue();
-  string per_addr_9_val  = m_pads[padNameIdMap["per_addr\\[9\\]"]]->getSimValue();
-  string per_addr_8_val  = m_pads[padNameIdMap["per_addr\\[8\\]"]]->getSimValue();
-  string per_addr_7_val  = m_pads[padNameIdMap["per_addr\\[7\\]"]]->getSimValue();
-  string per_addr_6_val  = m_pads[padNameIdMap["per_addr\\[6\\]"]]->getSimValue();
-  string per_addr_5_val  = m_pads[padNameIdMap["per_addr\\[5\\]"]]->getSimValue();
-  string per_addr_4_val  = m_pads[padNameIdMap["per_addr\\[4\\]"]]->getSimValue();
-  string per_addr_3_val  = m_pads[padNameIdMap["per_addr\\[3\\]"]]->getSimValue();
-  string per_addr_2_val  = m_pads[padNameIdMap["per_addr\\[2\\]"]]->getSimValue();
-  string per_addr_1_val  = m_pads[padNameIdMap["per_addr\\[1\\]"]]->getSimValue();
-  string per_addr_0_val  = m_pads[padNameIdMap["per_addr\\[0\\]"]]->getSimValue();
+  string per_addr_13_val , per_addr_12_val , per_addr_11_val , per_addr_10_val , per_addr_9_val  , per_addr_8_val  , per_addr_7_val  , per_addr_6_val  , per_addr_5_val  , per_addr_4_val  , per_addr_3_val  , per_addr_2_val  , per_addr_1_val  , per_addr_0_val;
+  if (design == "flat_no_clk_gt")
+  {
+    per_addr_13_val = m_pads[padNameIdMap["per_addr\\[13\\]"]]->getSimValue();
+    per_addr_12_val = m_pads[padNameIdMap["per_addr\\[12\\]"]]->getSimValue();
+    per_addr_11_val = m_pads[padNameIdMap["per_addr\\[11\\]"]]->getSimValue();
+    per_addr_10_val = m_pads[padNameIdMap["per_addr\\[10\\]"]]->getSimValue();
+    per_addr_9_val  = m_pads[padNameIdMap["per_addr\\[9\\]"]]->getSimValue();
+    per_addr_8_val  = m_pads[padNameIdMap["per_addr\\[8\\]"]]->getSimValue();
+    per_addr_7_val  = m_pads[padNameIdMap["per_addr\\[7\\]"]]->getSimValue();
+    per_addr_6_val  = m_pads[padNameIdMap["per_addr\\[6\\]"]]->getSimValue();
+    per_addr_5_val  = m_pads[padNameIdMap["per_addr\\[5\\]"]]->getSimValue();
+    per_addr_4_val  = m_pads[padNameIdMap["per_addr\\[4\\]"]]->getSimValue();
+    per_addr_3_val  = m_pads[padNameIdMap["per_addr\\[3\\]"]]->getSimValue();
+    per_addr_2_val  = m_pads[padNameIdMap["per_addr\\[2\\]"]]->getSimValue();
+    per_addr_1_val  = m_pads[padNameIdMap["per_addr\\[1\\]"]]->getSimValue();
+    per_addr_0_val  = m_pads[padNameIdMap["per_addr\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    per_addr_13_val = m_pads[padNameIdMap["per_addr[13]"]]->getSimValue();
+    per_addr_12_val = m_pads[padNameIdMap["per_addr[12]"]]->getSimValue();
+    per_addr_11_val = m_pads[padNameIdMap["per_addr[11]"]]->getSimValue();
+    per_addr_10_val = m_pads[padNameIdMap["per_addr[10]"]]->getSimValue();
+    per_addr_9_val  = m_pads[padNameIdMap["per_addr[9]"]]->getSimValue();
+    per_addr_8_val  = m_pads[padNameIdMap["per_addr[8]"]]->getSimValue();
+    per_addr_7_val  = m_pads[padNameIdMap["per_addr[7]"]]->getSimValue();
+    per_addr_6_val  = m_pads[padNameIdMap["per_addr[6]"]]->getSimValue();
+    per_addr_5_val  = m_pads[padNameIdMap["per_addr[5]"]]->getSimValue();
+    per_addr_4_val  = m_pads[padNameIdMap["per_addr[4]"]]->getSimValue();
+    per_addr_3_val  = m_pads[padNameIdMap["per_addr[3]"]]->getSimValue();
+    per_addr_2_val  = m_pads[padNameIdMap["per_addr[2]"]]->getSimValue();
+    per_addr_1_val  = m_pads[padNameIdMap["per_addr[1]"]]->getSimValue();
+    per_addr_0_val  = m_pads[padNameIdMap["per_addr[0]"]]->getSimValue();
+  }
+  else assert(0);
 
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
   if (per_addr_str != "00000000010000") return false; // per_addrs is 0010
-  string data_str; 
+  string data_str;
   //cout << " Sending Inputs for i " << i << endl;
   //pmem_request_file << " Sending Inputs for i " << i << endl;
   switch (i)
   {
     case 0:
-            //data_str = "0000000001001101"; 
-            data_str = "1000000000000000"; 
-            //data_str = "XXXXXXXX00000000"; 
+            //data_str = "0000000001001101";
+            //data_str = "1000000000000000";
+            data_str = "XXXXXXXX00000000";
             sendPerDout(data_str);
             pmem_request_file << "In Case 0 " << endl;
             break;
     case 1:
-            data_str = "0000000000000000"; 
-            //data_str = "XXXXXXXX00000000"; 
+            //data_str = "0000000000000000";
+            data_str = "XXXXXXXX00000000";
             sendPerDout(data_str);
             pmem_request_file << "In Case 1 " << endl;
             break;
-//    case 2:
-//            data_str = "1100000000000000"; 
-//            //data_str = "XXXXXXXX00000000"; 
-//            sendPerDout(data_str);
-//            pmem_request_file << "In Case 2 " << endl;
-//            break;
-//    case 3:
-//            data_str = "0000000000000000"; 
-//            //data_str = "XXXXXXXX00000000"; 
-//            sendPerDout(data_str);
-//            pmem_request_file << "In Case 3 " << endl;
-//            break;
+    case 2:
+            //data_str = "0010100000000000";
+            data_str = "XXXXXXXX00000000";
+            sendPerDout(data_str);
+            pmem_request_file << "In Case 2 " << endl;
+            break;
+    case 3:
+            //data_str = "0000000000000000";
+            data_str = "XXXXXXXX00000000";
+            sendPerDout(data_str);
+            pmem_request_file << "In Case 3 " << endl;
+            break;
     default : break;
   }
   i++;
-  if (i == 2) return true;
+  if (i == 4) return true;
   return false;
 }
 
@@ -5982,58 +6166,139 @@ void PowerOpt::recvInputs1(int cycle_num, bool wavefront)
 {
 	string per_enable_val  = m_pads[padNameIdMap["per_en"]]->getSimValue();
   if (per_enable_val != "1") return ;
-
-	string per_we_1_val  = m_pads[padNameIdMap["per_we\\[1\\]"]]->getSimValue();
-	string per_we_0_val  = m_pads[padNameIdMap["per_we\\[0\\]"]]->getSimValue();
+  
+  string per_we_0_val, per_we_1_val;
+  if (design == "flat_no_clk_gt")
+  {
+    per_we_1_val  = m_pads[padNameIdMap["per_we\\[1\\]"]]->getSimValue();
+    per_we_0_val  = m_pads[padNameIdMap["per_we\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    per_we_1_val  = m_pads[padNameIdMap["per_we[1]"]]->getSimValue();
+    per_we_0_val  = m_pads[padNameIdMap["per_we[0]"]]->getSimValue();
+  }
+  else assert(0);
 
   string per_we_str = per_we_1_val + per_we_0_val;
   if (per_we_str != "10") return ;
 
-  string per_addr_13_val = m_pads[padNameIdMap["per_addr\\[13\\]"]]->getSimValue();
-  string per_addr_12_val = m_pads[padNameIdMap["per_addr\\[12\\]"]]->getSimValue();
-  string per_addr_11_val = m_pads[padNameIdMap["per_addr\\[11\\]"]]->getSimValue();
-  string per_addr_10_val = m_pads[padNameIdMap["per_addr\\[10\\]"]]->getSimValue();
-  string per_addr_9_val  = m_pads[padNameIdMap["per_addr\\[9\\]"]]->getSimValue();
-  string per_addr_8_val  = m_pads[padNameIdMap["per_addr\\[8\\]"]]->getSimValue();
-  string per_addr_7_val  = m_pads[padNameIdMap["per_addr\\[7\\]"]]->getSimValue();
-  string per_addr_6_val  = m_pads[padNameIdMap["per_addr\\[6\\]"]]->getSimValue();
-  string per_addr_5_val  = m_pads[padNameIdMap["per_addr\\[5\\]"]]->getSimValue();
-  string per_addr_4_val  = m_pads[padNameIdMap["per_addr\\[4\\]"]]->getSimValue();
-  string per_addr_3_val  = m_pads[padNameIdMap["per_addr\\[3\\]"]]->getSimValue();
-  string per_addr_2_val  = m_pads[padNameIdMap["per_addr\\[2\\]"]]->getSimValue();
-  string per_addr_1_val  = m_pads[padNameIdMap["per_addr\\[1\\]"]]->getSimValue();
-  string per_addr_0_val  = m_pads[padNameIdMap["per_addr\\[0\\]"]]->getSimValue();
+  string per_addr_13_val , per_addr_12_val , per_addr_11_val , per_addr_10_val , per_addr_9_val  , per_addr_8_val  , per_addr_7_val  , per_addr_6_val  , per_addr_5_val  , per_addr_4_val  , per_addr_3_val  , per_addr_2_val  , per_addr_1_val  , per_addr_0_val ;
+  if (design == "flat_no_clk_gt")
+  {
+    string per_addr_13_val = m_pads[padNameIdMap["per_addr\\[13\\]"]]->getSimValue();
+    string per_addr_12_val = m_pads[padNameIdMap["per_addr\\[12\\]"]]->getSimValue();
+    string per_addr_11_val = m_pads[padNameIdMap["per_addr\\[11\\]"]]->getSimValue();
+    string per_addr_10_val = m_pads[padNameIdMap["per_addr\\[10\\]"]]->getSimValue();
+    string per_addr_9_val  = m_pads[padNameIdMap["per_addr\\[9\\]"]]->getSimValue();
+    string per_addr_8_val  = m_pads[padNameIdMap["per_addr\\[8\\]"]]->getSimValue();
+    string per_addr_7_val  = m_pads[padNameIdMap["per_addr\\[7\\]"]]->getSimValue();
+    string per_addr_6_val  = m_pads[padNameIdMap["per_addr\\[6\\]"]]->getSimValue();
+    string per_addr_5_val  = m_pads[padNameIdMap["per_addr\\[5\\]"]]->getSimValue();
+    string per_addr_4_val  = m_pads[padNameIdMap["per_addr\\[4\\]"]]->getSimValue();
+    string per_addr_3_val  = m_pads[padNameIdMap["per_addr\\[3\\]"]]->getSimValue();
+    string per_addr_2_val  = m_pads[padNameIdMap["per_addr\\[2\\]"]]->getSimValue();
+    string per_addr_1_val  = m_pads[padNameIdMap["per_addr\\[1\\]"]]->getSimValue();
+    string per_addr_0_val  = m_pads[padNameIdMap["per_addr\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    string per_addr_13_val = m_pads[padNameIdMap["per_addr[13]"]]->getSimValue();
+    string per_addr_12_val = m_pads[padNameIdMap["per_addr[12]"]]->getSimValue();
+    string per_addr_11_val = m_pads[padNameIdMap["per_addr[11]"]]->getSimValue();
+    string per_addr_10_val = m_pads[padNameIdMap["per_addr[10]"]]->getSimValue();
+    string per_addr_9_val  = m_pads[padNameIdMap["per_addr[9]"]]->getSimValue();
+    string per_addr_8_val  = m_pads[padNameIdMap["per_addr[8]"]]->getSimValue();
+    string per_addr_7_val  = m_pads[padNameIdMap["per_addr[7]"]]->getSimValue();
+    string per_addr_6_val  = m_pads[padNameIdMap["per_addr[6]"]]->getSimValue();
+    string per_addr_5_val  = m_pads[padNameIdMap["per_addr[5]"]]->getSimValue();
+    string per_addr_4_val  = m_pads[padNameIdMap["per_addr[4]"]]->getSimValue();
+    string per_addr_3_val  = m_pads[padNameIdMap["per_addr[3]"]]->getSimValue();
+    string per_addr_2_val  = m_pads[padNameIdMap["per_addr[2]"]]->getSimValue();
+    string per_addr_1_val  = m_pads[padNameIdMap["per_addr[1]"]]->getSimValue();
+    string per_addr_0_val  = m_pads[padNameIdMap["per_addr[0]"]]->getSimValue();
+  }
+  else assert(0);
 
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
   if (per_addr_str != "00000000011000") return ; // per_addrs is 0010
-  
+
   recv_inputs = true;
 }
 
 void PowerOpt::recvInputs2(int cycle_num, bool wavefront)
 {
   if (!recv_inputs) return;
-  string per_din_15_val = m_pads[padNameIdMap["per_din\\[15\\]"]]->getSimValue();
-  string per_din_14_val = m_pads[padNameIdMap["per_din\\[14\\]"]]->getSimValue();
-  string per_din_13_val = m_pads[padNameIdMap["per_din\\[13\\]"]]->getSimValue();
-  string per_din_12_val = m_pads[padNameIdMap["per_din\\[12\\]"]]->getSimValue();
-  string per_din_11_val = m_pads[padNameIdMap["per_din\\[11\\]"]]->getSimValue();
-  string per_din_10_val = m_pads[padNameIdMap["per_din\\[10\\]"]]->getSimValue();
-  string per_din_9_val  = m_pads[padNameIdMap["per_din\\[9\\]"]]->getSimValue();
-  string per_din_8_val  = m_pads[padNameIdMap["per_din\\[8\\]"]]->getSimValue();
-  string per_din_7_val  = m_pads[padNameIdMap["per_din\\[7\\]"]]->getSimValue();
-  string per_din_6_val  = m_pads[padNameIdMap["per_din\\[6\\]"]]->getSimValue();
-  string per_din_5_val  = m_pads[padNameIdMap["per_din\\[5\\]"]]->getSimValue();
-  string per_din_4_val  = m_pads[padNameIdMap["per_din\\[4\\]"]]->getSimValue();
-  string per_din_3_val  = m_pads[padNameIdMap["per_din\\[3\\]"]]->getSimValue();
-  string per_din_2_val  = m_pads[padNameIdMap["per_din\\[2\\]"]]->getSimValue();
-  string per_din_1_val  = m_pads[padNameIdMap["per_din\\[1\\]"]]->getSimValue();
-  string per_din_0_val  = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimValue();
-  
+  string per_din_15_val , per_din_14_val , per_din_13_val , per_din_12_val , per_din_11_val , per_din_10_val , per_din_9_val  , per_din_8_val  , per_din_7_val  , per_din_6_val  , per_din_5_val  , per_din_4_val  , per_din_3_val  , per_din_2_val  , per_din_1_val  , per_din_0_val;
+  if (design == "flat_no_clk_gt")
+  {
+    per_din_15_val = m_pads[padNameIdMap["per_din\\[15\\]"]]->getSimValue();
+    per_din_14_val = m_pads[padNameIdMap["per_din\\[14\\]"]]->getSimValue();
+    per_din_13_val = m_pads[padNameIdMap["per_din\\[13\\]"]]->getSimValue();
+    per_din_12_val = m_pads[padNameIdMap["per_din\\[12\\]"]]->getSimValue();
+    per_din_11_val = m_pads[padNameIdMap["per_din\\[11\\]"]]->getSimValue();
+    per_din_10_val = m_pads[padNameIdMap["per_din\\[10\\]"]]->getSimValue();
+    per_din_9_val  = m_pads[padNameIdMap["per_din\\[9\\]"]]->getSimValue();
+    per_din_8_val  = m_pads[padNameIdMap["per_din\\[8\\]"]]->getSimValue();
+    per_din_7_val  = m_pads[padNameIdMap["per_din\\[7\\]"]]->getSimValue();
+    per_din_6_val  = m_pads[padNameIdMap["per_din\\[6\\]"]]->getSimValue();
+    per_din_5_val  = m_pads[padNameIdMap["per_din\\[5\\]"]]->getSimValue();
+    per_din_4_val  = m_pads[padNameIdMap["per_din\\[4\\]"]]->getSimValue();
+    per_din_3_val  = m_pads[padNameIdMap["per_din\\[3\\]"]]->getSimValue();
+    per_din_2_val  = m_pads[padNameIdMap["per_din\\[2\\]"]]->getSimValue();
+    per_din_1_val  = m_pads[padNameIdMap["per_din\\[1\\]"]]->getSimValue();
+    per_din_0_val  = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    per_din_15_val = m_pads[padNameIdMap["per_din[15]"]]->getSimValue();
+    per_din_14_val = m_pads[padNameIdMap["per_din[14]"]]->getSimValue();
+    per_din_13_val = m_pads[padNameIdMap["per_din[13]"]]->getSimValue();
+    per_din_12_val = m_pads[padNameIdMap["per_din[12]"]]->getSimValue();
+    per_din_11_val = m_pads[padNameIdMap["per_din[11]"]]->getSimValue();
+    per_din_10_val = m_pads[padNameIdMap["per_din[10]"]]->getSimValue();
+    per_din_9_val  = m_pads[padNameIdMap["per_din[9]"]]->getSimValue();
+    per_din_8_val  = m_pads[padNameIdMap["per_din[8]"]]->getSimValue();
+    per_din_7_val  = m_pads[padNameIdMap["per_din[7]"]]->getSimValue();
+    per_din_6_val  = m_pads[padNameIdMap["per_din[6]"]]->getSimValue();
+    per_din_5_val  = m_pads[padNameIdMap["per_din[5]"]]->getSimValue();
+    per_din_4_val  = m_pads[padNameIdMap["per_din[4]"]]->getSimValue();
+    per_din_3_val  = m_pads[padNameIdMap["per_din[3]"]]->getSimValue();
+    per_din_2_val  = m_pads[padNameIdMap["per_din[2]"]]->getSimValue();
+    per_din_1_val  = m_pads[padNameIdMap["per_din[1]"]]->getSimValue();
+    per_din_0_val  = m_pads[padNameIdMap["per_din[0]"]]->getSimValue();
+  }
+  else assert(0);
+
   string per_din_str = per_din_15_val+ per_din_14_val+ per_din_13_val+ per_din_12_val+ per_din_11_val+ per_din_10_val+ per_din_9_val + per_din_8_val + per_din_7_val + per_din_6_val + per_din_5_val + per_din_4_val + per_din_3_val + per_din_2_val + per_din_1_val + per_din_0_val ;
-  
+
   cout << " Output value is " << per_din_str <<  endl;
   recv_inputs = false;
+}
+
+
+void PowerOpt::checkCorruption(int i)
+{
+
+
+}
+
+void PowerOpt::handleCondJumps()
+{
+  if(pmem_instr.compare(13,3,"100") == 0) // IS IT A JUMP?
+  {
+     string cond = pmem_instr.substr(10, 3);
+     if (!cond.compare("000")) {      instr_name = "JNE/JNZ"     ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('Z'); }
+     else if (!cond.compare("100")){  instr_name = "JEQ/JZ"  ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('Z'); }
+     else if (!cond.compare("010")){  instr_name = "JNC/JLO" ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('C'); }
+     else if (!cond.compare("110")){  instr_name = "JC/JHS"  ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('C'); }
+     else if (!cond.compare("001")){  instr_name = "JN"      ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('N'); }
+     else if (!cond.compare("101")){  instr_name = "JGE"     ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('V'); }
+     else if (!cond.compare("011")){  instr_name = "JL"      ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('V'); }
+     else if (!cond.compare("111")){  instr_name = "JMP"     ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('E'); }
+     else  instr_name = "";
+     jump_detected = true;
+  }
 }
 
 void PowerOpt::readMem(int cycle_num, bool wavefront)
@@ -6042,36 +6307,60 @@ void PowerOpt::readMem(int cycle_num, bool wavefront)
     unsigned int pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
     static string  last_addr_string;
     unsigned int instr = PMemory[pmem_addr];
-    if (instr == 25) {
+/*    if (instr == 25) {
       cout << "Writing P3Dout " << endl;
       print_processor_state_profile(cycle_num);
       print_dmem_contents(cycle_num);
       Net::flip_check_toggles();
-    }
+    }*/
     pmem_instr = binary(instr);
+    handleCondJumps();
     send_instr = true;
     pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) instruction is " << hex << instr << dec << " -> " << pmem_instr << " and cycle is " << cycle_num << endl;
-    handleDmem(cycle_num, wavefront);
+    handleDmem(cycle_num);
 }
 
 void PowerOpt::sendPerDout(string data_str)
 {
-	m_pads[padNameIdMap["per_dout\\[15\\]"]] -> setSimValue(data_str.substr(15,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[14\\]"]] -> setSimValue(data_str.substr(14,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[13\\]"]] -> setSimValue(data_str.substr(13,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[12\\]"]] -> setSimValue(data_str.substr(12,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[11\\]"]] -> setSimValue(data_str.substr(11,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[10\\]"]] -> setSimValue(data_str.substr(10,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[9\\]"]]  -> setSimValue(data_str.substr(9 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[8\\]"]]  -> setSimValue(data_str.substr(8 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[7\\]"]]  -> setSimValue(data_str.substr(7 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[6\\]"]]  -> setSimValue(data_str.substr(6 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[5\\]"]]  -> setSimValue(data_str.substr(5 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[4\\]"]]  -> setSimValue(data_str.substr(4 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[3\\]"]]  -> setSimValue(data_str.substr(3 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[2\\]"]]  -> setSimValue(data_str.substr(2 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[1\\]"]]  -> setSimValue(data_str.substr(1 ,1), sim_wf);
-	m_pads[padNameIdMap["per_dout\\[0\\]"]]  -> setSimValue(data_str.substr(0 ,1), sim_wf);
+  if (design == "flat_no_clk_gt")
+  {
+    m_pads[padNameIdMap["per_dout\\[15\\]"]] -> setSimValue(data_str.substr(15,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[14\\]"]] -> setSimValue(data_str.substr(14,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[13\\]"]] -> setSimValue(data_str.substr(13,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[12\\]"]] -> setSimValue(data_str.substr(12,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[11\\]"]] -> setSimValue(data_str.substr(11,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[10\\]"]] -> setSimValue(data_str.substr(10,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[9\\]"]]  -> setSimValue(data_str.substr(9 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[8\\]"]]  -> setSimValue(data_str.substr(8 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[7\\]"]]  -> setSimValue(data_str.substr(7 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[6\\]"]]  -> setSimValue(data_str.substr(6 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[5\\]"]]  -> setSimValue(data_str.substr(5 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[4\\]"]]  -> setSimValue(data_str.substr(4 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[3\\]"]]  -> setSimValue(data_str.substr(3 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[2\\]"]]  -> setSimValue(data_str.substr(2 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[1\\]"]]  -> setSimValue(data_str.substr(1 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout\\[0\\]"]]  -> setSimValue(data_str.substr(0 ,1), sim_wf);
+  }
+  else if (design == "modified_9_hier")
+  {
+    m_pads[padNameIdMap["per_dout[15]"]] -> setSimValue(data_str.substr(15,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[14]"]] -> setSimValue(data_str.substr(14,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[13]"]] -> setSimValue(data_str.substr(13,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[12]"]] -> setSimValue(data_str.substr(12,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[11]"]] -> setSimValue(data_str.substr(11,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[10]"]] -> setSimValue(data_str.substr(10,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[9]"]]  -> setSimValue(data_str.substr(9 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[8]"]]  -> setSimValue(data_str.substr(8 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[7]"]]  -> setSimValue(data_str.substr(7 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[6]"]]  -> setSimValue(data_str.substr(6 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[5]"]]  -> setSimValue(data_str.substr(5 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[4]"]]  -> setSimValue(data_str.substr(4 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[3]"]]  -> setSimValue(data_str.substr(3 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[2]"]]  -> setSimValue(data_str.substr(2 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[1]"]]  -> setSimValue(data_str.substr(1 ,1), sim_wf);
+    m_pads[padNameIdMap["per_dout[0]"]]  -> setSimValue(data_str.substr(0 ,1), sim_wf);
+  }
+  else assert(0);
 }
 
 void PowerOpt::sendData (string data_str)
@@ -6080,186 +6369,263 @@ void PowerOpt::sendData (string data_str)
   dmem_request_file << " Reading Data " << data_str << endl;
   cout << " Reading Data " << data_str << endl;
   // NOTE : inverting the assignments because to_string() of bitset assumes the same orientation of the bits as the constructor. to_string() does NOT invert the bit string for you.
-	m_pads[padNameIdMap["dmem_dout\\[15\\]"]] -> setSimValue(data_str.substr(0 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[14\\]"]] -> setSimValue(data_str.substr(1 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[13\\]"]] -> setSimValue(data_str.substr(2 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[12\\]"]] -> setSimValue(data_str.substr(3 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[11\\]"]] -> setSimValue(data_str.substr(4 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[10\\]"]] -> setSimValue(data_str.substr(5 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[9\\]"]]  -> setSimValue(data_str.substr(6 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[8\\]"]]  -> setSimValue(data_str.substr(7 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[7\\]"]]  -> setSimValue(data_str.substr(8 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[6\\]"]]  -> setSimValue(data_str.substr(9 ,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[5\\]"]]  -> setSimValue(data_str.substr(10,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[4\\]"]]  -> setSimValue(data_str.substr(11,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[3\\]"]]  -> setSimValue(data_str.substr(12,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[2\\]"]]  -> setSimValue(data_str.substr(13,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[1\\]"]]  -> setSimValue(data_str.substr(14,1), sim_wf);
-	m_pads[padNameIdMap["dmem_dout\\[0\\]"]]  -> setSimValue(data_str.substr(15,1), sim_wf);
+  if (design == "flat_no_clk_gt")
+  {
+    m_pads[padNameIdMap["dmem_dout\\[15\\]"]] -> setSimValue(data_str.substr(0 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[14\\]"]] -> setSimValue(data_str.substr(1 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[13\\]"]] -> setSimValue(data_str.substr(2 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[12\\]"]] -> setSimValue(data_str.substr(3 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[11\\]"]] -> setSimValue(data_str.substr(4 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[10\\]"]] -> setSimValue(data_str.substr(5 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[9\\]"]]  -> setSimValue(data_str.substr(6 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[8\\]"]]  -> setSimValue(data_str.substr(7 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[7\\]"]]  -> setSimValue(data_str.substr(8 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[6\\]"]]  -> setSimValue(data_str.substr(9 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[5\\]"]]  -> setSimValue(data_str.substr(10,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[4\\]"]]  -> setSimValue(data_str.substr(11,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[3\\]"]]  -> setSimValue(data_str.substr(12,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[2\\]"]]  -> setSimValue(data_str.substr(13,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[1\\]"]]  -> setSimValue(data_str.substr(14,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout\\[0\\]"]]  -> setSimValue(data_str.substr(15,1), sim_wf);
+  }
+  else if (design == "modified_9_hier")
+  {
+    m_pads[padNameIdMap["dmem_dout[15]"]] -> setSimValue(data_str.substr(0 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[14]"]] -> setSimValue(data_str.substr(1 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[13]"]] -> setSimValue(data_str.substr(2 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[12]"]] -> setSimValue(data_str.substr(3 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[11]"]] -> setSimValue(data_str.substr(4 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[10]"]] -> setSimValue(data_str.substr(5 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[9]"]]  -> setSimValue(data_str.substr(6 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[8]"]]  -> setSimValue(data_str.substr(7 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[7]"]]  -> setSimValue(data_str.substr(8 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[6]"]]  -> setSimValue(data_str.substr(9 ,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[5]"]]  -> setSimValue(data_str.substr(10,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[4]"]]  -> setSimValue(data_str.substr(11,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[3]"]]  -> setSimValue(data_str.substr(12,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[2]"]]  -> setSimValue(data_str.substr(13,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[1]"]]  -> setSimValue(data_str.substr(14,1), sim_wf);
+    m_pads[padNameIdMap["dmem_dout[0]"]]  -> setSimValue(data_str.substr(15,1), sim_wf);
+  }
+  else assert(0);
   send_data = false;
 }
 
 void PowerOpt::sendInstr(string instr_str)
 {
   if (!send_instr) return;
-	m_pads[padNameIdMap["pmem_dout\\[15\\]"]] -> setSimValue(instr_str.substr(15,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[14\\]"]] -> setSimValue(instr_str.substr(14,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[13\\]"]] -> setSimValue(instr_str.substr(13,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[12\\]"]] -> setSimValue(instr_str.substr(12,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[11\\]"]] -> setSimValue(instr_str.substr(11,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[10\\]"]] -> setSimValue(instr_str.substr(10,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[9\\]"]]  -> setSimValue(instr_str.substr(9 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[8\\]"]]  -> setSimValue(instr_str.substr(8 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[7\\]"]]  -> setSimValue(instr_str.substr(7 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[6\\]"]]  -> setSimValue(instr_str.substr(6 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[5\\]"]]  -> setSimValue(instr_str.substr(5 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[4\\]"]]  -> setSimValue(instr_str.substr(4 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[3\\]"]]  -> setSimValue(instr_str.substr(3 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[2\\]"]]  -> setSimValue(instr_str.substr(2 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[1\\]"]]  -> setSimValue(instr_str.substr(1 ,1), sim_wf);
-	m_pads[padNameIdMap["pmem_dout\\[0\\]"]]  -> setSimValue(instr_str.substr(0 ,1), sim_wf);
+  if (design == "flat_no_clk_gt")
+  {
+    m_pads[padNameIdMap["pmem_dout\\[15\\]"]] -> setSimValue(instr_str.substr(15,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[14\\]"]] -> setSimValue(instr_str.substr(14,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[13\\]"]] -> setSimValue(instr_str.substr(13,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[12\\]"]] -> setSimValue(instr_str.substr(12,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[11\\]"]] -> setSimValue(instr_str.substr(11,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[10\\]"]] -> setSimValue(instr_str.substr(10,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[9\\]"]]  -> setSimValue(instr_str.substr(9 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[8\\]"]]  -> setSimValue(instr_str.substr(8 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[7\\]"]]  -> setSimValue(instr_str.substr(7 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[6\\]"]]  -> setSimValue(instr_str.substr(6 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[5\\]"]]  -> setSimValue(instr_str.substr(5 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[4\\]"]]  -> setSimValue(instr_str.substr(4 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[3\\]"]]  -> setSimValue(instr_str.substr(3 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[2\\]"]]  -> setSimValue(instr_str.substr(2 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[1\\]"]]  -> setSimValue(instr_str.substr(1 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout\\[0\\]"]]  -> setSimValue(instr_str.substr(0 ,1), sim_wf);
+  }
+  else if (design == "modified_9_hier")
+  {
+    m_pads[padNameIdMap["pmem_dout[15]"]] -> setSimValue(instr_str.substr(15,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[14]"]] -> setSimValue(instr_str.substr(14,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[13]"]] -> setSimValue(instr_str.substr(13,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[12]"]] -> setSimValue(instr_str.substr(12,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[11]"]] -> setSimValue(instr_str.substr(11,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[10]"]] -> setSimValue(instr_str.substr(10,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[9]"]]  -> setSimValue(instr_str.substr(9 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[8]"]]  -> setSimValue(instr_str.substr(8 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[7]"]]  -> setSimValue(instr_str.substr(7 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[6]"]]  -> setSimValue(instr_str.substr(6 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[5]"]]  -> setSimValue(instr_str.substr(5 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[4]"]]  -> setSimValue(instr_str.substr(4 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[3]"]]  -> setSimValue(instr_str.substr(3 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[2]"]]  -> setSimValue(instr_str.substr(2 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[1]"]]  -> setSimValue(instr_str.substr(1 ,1), sim_wf);
+    m_pads[padNameIdMap["pmem_dout[0]"]]  -> setSimValue(instr_str.substr(0 ,1), sim_wf);
+  }
+  else assert(0);
   send_instr = false;
 }
 
 void PowerOpt::testReadAddr()
 {
-   m_pads[padNameIdMap["pmem_addr\\[13\\]"]] -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[12\\]"]] -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[11\\]"]] -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[10\\]"]] -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[9\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[8\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[7\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[6\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[5\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[4\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[3\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[2\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[1\\]"]]  -> setSimValue("0", sim_wf);
-   m_pads[padNameIdMap["pmem_addr\\[0\\]"]]  -> setSimValue("0", sim_wf);
-
-//   readAddr() ;
-//
-//   m_pads[padNameIdMap["pmem_addr\\[13\\]"]] -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[12\\]"]] -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[11\\]"]] -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[10\\]"]] -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[9\\]"]]  -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[8\\]"]]  -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[7\\]"]]  -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[6\\]"]]  -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[5\\]"]]  -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[4\\]"]]  -> setSimValue("0");
-//   m_pads[padNameIdMap["pmem_addr\\[3\\]"]]  -> setSimValue("1");
-//   m_pads[padNameIdMap["pmem_addr\\[2\\]"]]  -> setSimValue("1");
-//   m_pads[padNameIdMap["pmem_addr\\[1\\]"]]  -> setSimValue("1");
-//   m_pads[padNameIdMap["pmem_addr\\[0\\]"]]  -> setSimValue("0");
-//
-//   readAddr() ;
-
+  if (design == "flat_no_clk_gt")
+  {
+    m_pads[padNameIdMap["pmem_addr\\[13\\]"]] -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[12\\]"]] -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[11\\]"]] -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[10\\]"]] -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[9\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[8\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[7\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[6\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[5\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[4\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[3\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[2\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[1\\]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr\\[0\\]"]]  -> setSimValue("0", sim_wf);
+  }
+  else if (design == "modified_9_hier")
+  {
+    m_pads[padNameIdMap["pmem_addr[13]"]] -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[12]"]] -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[11]"]] -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[10]"]] -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[9]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[8]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[7]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[6]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[5]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[4]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[3]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[2]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[1]"]]  -> setSimValue("0", sim_wf);
+    m_pads[padNameIdMap["pmem_addr[0]"]]  -> setSimValue("0", sim_wf);
+  }
+  else assert(0);
 }
 
 void PowerOpt::initialRun()
 {
-  string instr_str = "0000000000000101";
-  pmem_request_file << "Applying instr " << instr_str << endl;
-  for (int i = 0; i < 100; i++)
-  {
-    readMem(-1, false);
-    runSimulation(false);
-    updateRegOutputs();
-    updateFromMem();
-  }
   readConstantTerminals();
-/*  for (int i = 0; i < 1; i++)
-  {
-    m_pads[padNameIdMap["reset_n"]] -> setSimValue("0", sim_wf);
-    sendInstr(instr_str);
-    runSimulation(false);
-    updateRegOutputs();
-    string pmem_addr_str = getPmemAddr();
-    unsigned int pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);
-    pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) instruction is FORCED " << endl;
-    //print_processor_state_profile(-2);
-    //printSelectGateValues();
-  }
-  for (int i = 0; i < 1; i++)
-  {
-    m_pads[padNameIdMap["reset_n"]] -> setSimValue("X", sim_wf);
-    sendInstr(instr_str);
-    runSimulation(false);
-    updateRegOutputs();
-    string pmem_addr_str = getPmemAddr();
-    unsigned int pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);
-    pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) instruction is FORCED " << endl;
-    // print_processor_state_profile(-1);
-    // printSelectGateValues();
-  }*/
 }
-
 
 bool PowerOpt::check_peripherals()
 {
 	string per_enable_val  = m_pads[padNameIdMap["per_en"]]->getSimValue();
   if (per_enable_val != "1") return false;
-  
-	string per_we_1_val  = m_pads[padNameIdMap["per_we\\[1\\]"]]->getSimValue();
-	string per_we_0_val  = m_pads[padNameIdMap["per_we\\[0\\]"]]->getSimValue();
+
+  string per_we_0_val, per_we_1_val;
+  if (design == "flat_no_clk_gt")
+  {
+     per_we_1_val  = m_pads[padNameIdMap["per_we\\[1\\]"]]->getSimValue();
+     per_we_0_val  = m_pads[padNameIdMap["per_we\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+     per_we_1_val  = m_pads[padNameIdMap["per_we[1]"]]->getSimValue();
+     per_we_0_val  = m_pads[padNameIdMap["per_we[0]"]]->getSimValue();
+  }
+  else assert(0);
 
   string per_we_str = per_we_1_val + per_we_0_val;
   if (per_we_str != "10") return false;
-  
-  string per_addr_13_val = m_pads[padNameIdMap["per_addr\\[13\\]"]]->getSimValue();
-  string per_addr_12_val = m_pads[padNameIdMap["per_addr\\[12\\]"]]->getSimValue();
-  string per_addr_11_val = m_pads[padNameIdMap["per_addr\\[11\\]"]]->getSimValue();
-  string per_addr_10_val = m_pads[padNameIdMap["per_addr\\[10\\]"]]->getSimValue();
-  string per_addr_9_val  = m_pads[padNameIdMap["per_addr\\[9\\]"]]->getSimValue();
-  string per_addr_8_val  = m_pads[padNameIdMap["per_addr\\[8\\]"]]->getSimValue();
-  string per_addr_7_val  = m_pads[padNameIdMap["per_addr\\[7\\]"]]->getSimValue();
-  string per_addr_6_val  = m_pads[padNameIdMap["per_addr\\[6\\]"]]->getSimValue();
-  string per_addr_5_val  = m_pads[padNameIdMap["per_addr\\[5\\]"]]->getSimValue();
-  string per_addr_4_val  = m_pads[padNameIdMap["per_addr\\[4\\]"]]->getSimValue();
-  string per_addr_3_val  = m_pads[padNameIdMap["per_addr\\[3\\]"]]->getSimValue();
-  string per_addr_2_val  = m_pads[padNameIdMap["per_addr\\[2\\]"]]->getSimValue();
-  string per_addr_1_val  = m_pads[padNameIdMap["per_addr\\[1\\]"]]->getSimValue();
-  string per_addr_0_val  = m_pads[padNameIdMap["per_addr\\[0\\]"]]->getSimValue();
+
+  string per_addr_13_val , per_addr_12_val , per_addr_11_val , per_addr_10_val , per_addr_9_val  , per_addr_8_val  , per_addr_7_val  , per_addr_6_val  , per_addr_5_val  , per_addr_4_val  , per_addr_3_val  , per_addr_2_val  , per_addr_1_val  , per_addr_0_val;
+  if (design == "flat_no_clk_gt")
+  {
+     per_addr_13_val = m_pads[padNameIdMap["per_addr\\[13\\]"]]->getSimValue();
+     per_addr_12_val = m_pads[padNameIdMap["per_addr\\[12\\]"]]->getSimValue();
+     per_addr_11_val = m_pads[padNameIdMap["per_addr\\[11\\]"]]->getSimValue();
+     per_addr_10_val = m_pads[padNameIdMap["per_addr\\[10\\]"]]->getSimValue();
+     per_addr_9_val  = m_pads[padNameIdMap["per_addr\\[9\\]"]]->getSimValue();
+     per_addr_8_val  = m_pads[padNameIdMap["per_addr\\[8\\]"]]->getSimValue();
+     per_addr_7_val  = m_pads[padNameIdMap["per_addr\\[7\\]"]]->getSimValue();
+     per_addr_6_val  = m_pads[padNameIdMap["per_addr\\[6\\]"]]->getSimValue();
+     per_addr_5_val  = m_pads[padNameIdMap["per_addr\\[5\\]"]]->getSimValue();
+     per_addr_4_val  = m_pads[padNameIdMap["per_addr\\[4\\]"]]->getSimValue();
+     per_addr_3_val  = m_pads[padNameIdMap["per_addr\\[3\\]"]]->getSimValue();
+     per_addr_2_val  = m_pads[padNameIdMap["per_addr\\[2\\]"]]->getSimValue();
+     per_addr_1_val  = m_pads[padNameIdMap["per_addr\\[1\\]"]]->getSimValue();
+     per_addr_0_val  = m_pads[padNameIdMap["per_addr\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    per_addr_13_val = m_pads[padNameIdMap["per_addr[13]"]]->getSimValue();
+    per_addr_12_val = m_pads[padNameIdMap["per_addr[12]"]]->getSimValue();
+    per_addr_11_val = m_pads[padNameIdMap["per_addr[11]"]]->getSimValue();
+    per_addr_10_val = m_pads[padNameIdMap["per_addr[10]"]]->getSimValue();
+    per_addr_9_val  = m_pads[padNameIdMap["per_addr[9]"]]->getSimValue();
+    per_addr_8_val  = m_pads[padNameIdMap["per_addr[8]"]]->getSimValue();
+    per_addr_7_val  = m_pads[padNameIdMap["per_addr[7]"]]->getSimValue();
+    per_addr_6_val  = m_pads[padNameIdMap["per_addr[6]"]]->getSimValue();
+    per_addr_5_val  = m_pads[padNameIdMap["per_addr[5]"]]->getSimValue();
+    per_addr_4_val  = m_pads[padNameIdMap["per_addr[4]"]]->getSimValue();
+    per_addr_3_val  = m_pads[padNameIdMap["per_addr[3]"]]->getSimValue();
+    per_addr_2_val  = m_pads[padNameIdMap["per_addr[2]"]]->getSimValue();
+    per_addr_1_val  = m_pads[padNameIdMap["per_addr[1]"]]->getSimValue();
+    per_addr_0_val  = m_pads[padNameIdMap["per_addr[0]"]]->getSimValue();
+  }
+  else assert(0);
+
 
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
   if (per_addr_str != "00000000001100") return false; // per_addrs is 000c
   return true;
 }
 
-
 bool PowerOpt::check_sim_end(int& i, bool wavefront)
 {
 	string per_enable_val  = m_pads[padNameIdMap["per_en"]]->getSimValue();
   if (per_enable_val != "1") return false;
-  
-	string per_we_1_val  = m_pads[padNameIdMap["per_we\\[1\\]"]]->getSimValue();
-	string per_we_0_val  = m_pads[padNameIdMap["per_we\\[0\\]"]]->getSimValue();
 
+  string per_we_0_val, per_we_1_val;
+  if (design == "flat_no_clk_gt")
+  {
+     per_we_1_val  = m_pads[padNameIdMap["per_we\\[1\\]"]]->getSimValue();
+     per_we_0_val  = m_pads[padNameIdMap["per_we\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+     per_we_1_val  = m_pads[padNameIdMap["per_we[1]"]]->getSimValue();
+     per_we_0_val  = m_pads[padNameIdMap["per_we[0]"]]->getSimValue();
+  }
+  else assert(0);
   string per_we_str = per_we_1_val + per_we_0_val;
   if (per_we_str != "10") return false;
 
-  string per_addr_13_val = m_pads[padNameIdMap["per_addr\\[13\\]"]]->getSimValue();
-  string per_addr_12_val = m_pads[padNameIdMap["per_addr\\[12\\]"]]->getSimValue();
-  string per_addr_11_val = m_pads[padNameIdMap["per_addr\\[11\\]"]]->getSimValue();
-  string per_addr_10_val = m_pads[padNameIdMap["per_addr\\[10\\]"]]->getSimValue();
-  string per_addr_9_val  = m_pads[padNameIdMap["per_addr\\[9\\]"]]->getSimValue();
-  string per_addr_8_val  = m_pads[padNameIdMap["per_addr\\[8\\]"]]->getSimValue();
-  string per_addr_7_val  = m_pads[padNameIdMap["per_addr\\[7\\]"]]->getSimValue();
-  string per_addr_6_val  = m_pads[padNameIdMap["per_addr\\[6\\]"]]->getSimValue();
-  string per_addr_5_val  = m_pads[padNameIdMap["per_addr\\[5\\]"]]->getSimValue();
-  string per_addr_4_val  = m_pads[padNameIdMap["per_addr\\[4\\]"]]->getSimValue();
-  string per_addr_3_val  = m_pads[padNameIdMap["per_addr\\[3\\]"]]->getSimValue();
-  string per_addr_2_val  = m_pads[padNameIdMap["per_addr\\[2\\]"]]->getSimValue();
-  string per_addr_1_val  = m_pads[padNameIdMap["per_addr\\[1\\]"]]->getSimValue();
-  string per_addr_0_val  = m_pads[padNameIdMap["per_addr\\[0\\]"]]->getSimValue();
+  string per_addr_13_val , per_addr_12_val , per_addr_11_val , per_addr_10_val , per_addr_9_val  , per_addr_8_val  , per_addr_7_val  , per_addr_6_val  , per_addr_5_val  , per_addr_4_val  , per_addr_3_val  , per_addr_2_val  , per_addr_1_val  , per_addr_0_val;
+  if (design == "flat_no_clk_gt")
+  {
+    per_addr_13_val = m_pads[padNameIdMap["per_addr\\[13\\]"]]->getSimValue();
+    per_addr_12_val = m_pads[padNameIdMap["per_addr\\[12\\]"]]->getSimValue();
+    per_addr_11_val = m_pads[padNameIdMap["per_addr\\[11\\]"]]->getSimValue();
+    per_addr_10_val = m_pads[padNameIdMap["per_addr\\[10\\]"]]->getSimValue();
+    per_addr_9_val  = m_pads[padNameIdMap["per_addr\\[9\\]"]]->getSimValue();
+    per_addr_8_val  = m_pads[padNameIdMap["per_addr\\[8\\]"]]->getSimValue();
+    per_addr_7_val  = m_pads[padNameIdMap["per_addr\\[7\\]"]]->getSimValue();
+    per_addr_6_val  = m_pads[padNameIdMap["per_addr\\[6\\]"]]->getSimValue();
+    per_addr_5_val  = m_pads[padNameIdMap["per_addr\\[5\\]"]]->getSimValue();
+    per_addr_4_val  = m_pads[padNameIdMap["per_addr\\[4\\]"]]->getSimValue();
+    per_addr_3_val  = m_pads[padNameIdMap["per_addr\\[3\\]"]]->getSimValue();
+    per_addr_2_val  = m_pads[padNameIdMap["per_addr\\[2\\]"]]->getSimValue();
+    per_addr_1_val  = m_pads[padNameIdMap["per_addr\\[1\\]"]]->getSimValue();
+    per_addr_0_val  = m_pads[padNameIdMap["per_addr\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    per_addr_13_val = m_pads[padNameIdMap["per_addr[13]"]]->getSimValue();
+    per_addr_12_val = m_pads[padNameIdMap["per_addr[12]"]]->getSimValue();
+    per_addr_11_val = m_pads[padNameIdMap["per_addr[11]"]]->getSimValue();
+    per_addr_10_val = m_pads[padNameIdMap["per_addr[10]"]]->getSimValue();
+    per_addr_9_val  = m_pads[padNameIdMap["per_addr[9]"]]->getSimValue();
+    per_addr_8_val  = m_pads[padNameIdMap["per_addr[8]"]]->getSimValue();
+    per_addr_7_val  = m_pads[padNameIdMap["per_addr[7]"]]->getSimValue();
+    per_addr_6_val  = m_pads[padNameIdMap["per_addr[6]"]]->getSimValue();
+    per_addr_5_val  = m_pads[padNameIdMap["per_addr[5]"]]->getSimValue();
+    per_addr_4_val  = m_pads[padNameIdMap["per_addr[4]"]]->getSimValue();
+    per_addr_3_val  = m_pads[padNameIdMap["per_addr[3]"]]->getSimValue();
+    per_addr_2_val  = m_pads[padNameIdMap["per_addr[2]"]]->getSimValue();
+    per_addr_1_val  = m_pads[padNameIdMap["per_addr[1]"]]->getSimValue();
+    per_addr_0_val  = m_pads[padNameIdMap["per_addr[0]"]]->getSimValue();
+  }
+  else assert(0);
 
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
   if (per_addr_str != "00000000001100") return false;
 
-  string per_din_0_val = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimValue();
+  //string per_din_0_val = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimValue();
+  string per_din_0_val = m_pads[padNameIdMap["per_din[0]"]]->getSimValue();
   //ToggleType per_din_0_tog_type = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimToggType(); // checking for FALL might be hard when starting simulation from a saved state.
   if (per_din_0_val != "0") return false;
   return true;
@@ -6267,29 +6633,53 @@ bool PowerOpt::check_sim_end(int& i, bool wavefront)
 
 void PowerOpt::debug_per_din(int cycle_num)
 {
-  
-  string per_din_15_val = m_pads[padNameIdMap["per_din\\[15\\]"]]->getSimValue();
-  string per_din_14_val = m_pads[padNameIdMap["per_din\\[14\\]"]]->getSimValue();
-  string per_din_13_val = m_pads[padNameIdMap["per_din\\[13\\]"]]->getSimValue();
-  string per_din_12_val = m_pads[padNameIdMap["per_din\\[12\\]"]]->getSimValue();
-  string per_din_11_val = m_pads[padNameIdMap["per_din\\[11\\]"]]->getSimValue();
-  string per_din_10_val = m_pads[padNameIdMap["per_din\\[10\\]"]]->getSimValue();
-  string per_din_9_val  = m_pads[padNameIdMap["per_din\\[9\\]"]]->getSimValue();
-  string per_din_8_val  = m_pads[padNameIdMap["per_din\\[8\\]"]]->getSimValue();
-  string per_din_7_val  = m_pads[padNameIdMap["per_din\\[7\\]"]]->getSimValue();
-  string per_din_6_val  = m_pads[padNameIdMap["per_din\\[6\\]"]]->getSimValue();
-  string per_din_5_val  = m_pads[padNameIdMap["per_din\\[5\\]"]]->getSimValue();
-  string per_din_4_val  = m_pads[padNameIdMap["per_din\\[4\\]"]]->getSimValue();
-  string per_din_3_val  = m_pads[padNameIdMap["per_din\\[3\\]"]]->getSimValue();
-  string per_din_2_val  = m_pads[padNameIdMap["per_din\\[2\\]"]]->getSimValue();
-  string per_din_1_val  = m_pads[padNameIdMap["per_din\\[1\\]"]]->getSimValue();
-  string per_din_0_val  = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimValue();
-  
+
+  string per_din_15_val , per_din_14_val , per_din_13_val , per_din_12_val , per_din_11_val , per_din_10_val , per_din_9_val  , per_din_8_val  , per_din_7_val  , per_din_6_val  , per_din_5_val  , per_din_4_val  , per_din_3_val  , per_din_2_val  , per_din_1_val  , per_din_0_val;
+  if (design == "flat_no_clk_gt")
+  {
+    per_din_15_val = m_pads[padNameIdMap["per_din\\[15\\]"]]->getSimValue();
+    per_din_14_val = m_pads[padNameIdMap["per_din\\[14\\]"]]->getSimValue();
+    per_din_13_val = m_pads[padNameIdMap["per_din\\[13\\]"]]->getSimValue();
+    per_din_12_val = m_pads[padNameIdMap["per_din\\[12\\]"]]->getSimValue();
+    per_din_11_val = m_pads[padNameIdMap["per_din\\[11\\]"]]->getSimValue();
+    per_din_10_val = m_pads[padNameIdMap["per_din\\[10\\]"]]->getSimValue();
+    per_din_9_val  = m_pads[padNameIdMap["per_din\\[9\\]"]]->getSimValue();
+    per_din_8_val  = m_pads[padNameIdMap["per_din\\[8\\]"]]->getSimValue();
+    per_din_7_val  = m_pads[padNameIdMap["per_din\\[7\\]"]]->getSimValue();
+    per_din_6_val  = m_pads[padNameIdMap["per_din\\[6\\]"]]->getSimValue();
+    per_din_5_val  = m_pads[padNameIdMap["per_din\\[5\\]"]]->getSimValue();
+    per_din_4_val  = m_pads[padNameIdMap["per_din\\[4\\]"]]->getSimValue();
+    per_din_3_val  = m_pads[padNameIdMap["per_din\\[3\\]"]]->getSimValue();
+    per_din_2_val  = m_pads[padNameIdMap["per_din\\[2\\]"]]->getSimValue();
+    per_din_1_val  = m_pads[padNameIdMap["per_din\\[1\\]"]]->getSimValue();
+    per_din_0_val  = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    per_din_15_val = m_pads[padNameIdMap["per_din[15]"]]->getSimValue();
+    per_din_14_val = m_pads[padNameIdMap["per_din[14]"]]->getSimValue();
+    per_din_13_val = m_pads[padNameIdMap["per_din[13]"]]->getSimValue();
+    per_din_12_val = m_pads[padNameIdMap["per_din[12]"]]->getSimValue();
+    per_din_11_val = m_pads[padNameIdMap["per_din[11]"]]->getSimValue();
+    per_din_10_val = m_pads[padNameIdMap["per_din[10]"]]->getSimValue();
+    per_din_9_val  = m_pads[padNameIdMap["per_din[9]"]]->getSimValue();
+    per_din_8_val  = m_pads[padNameIdMap["per_din[8]"]]->getSimValue();
+    per_din_7_val  = m_pads[padNameIdMap["per_din[7]"]]->getSimValue();
+    per_din_6_val  = m_pads[padNameIdMap["per_din[6]"]]->getSimValue();
+    per_din_5_val  = m_pads[padNameIdMap["per_din[5]"]]->getSimValue();
+    per_din_4_val  = m_pads[padNameIdMap["per_din[4]"]]->getSimValue();
+    per_din_3_val  = m_pads[padNameIdMap["per_din[3]"]]->getSimValue();
+    per_din_2_val  = m_pads[padNameIdMap["per_din[2]"]]->getSimValue();
+    per_din_1_val  = m_pads[padNameIdMap["per_din[1]"]]->getSimValue();
+    per_din_0_val  = m_pads[padNameIdMap["per_din[0]"]]->getSimValue();
+  }
+  else assert(0);
+
   string per_din_str = per_din_15_val+ per_din_14_val+ per_din_13_val+ per_din_12_val+ per_din_11_val+ per_din_10_val+ per_din_9_val + per_din_8_val + per_din_7_val + per_din_6_val + per_din_5_val + per_din_4_val + per_din_3_val + per_din_2_val + per_din_1_val + per_din_0_val ;
-  
-//  bitset<16> temp(per_din_str); 
+
+//  bitset<16> temp(per_din_str);
 //  unsigned n = temp.to_ulong();
-//  cout << " per_din is " << hex << n << dec << " at cycle " << cycle_num << endl; 
+//  cout << " per_din is " << hex << n << dec << " at cycle " << cycle_num << endl;
 }
 
 bool PowerOpt::readHandShake()
@@ -6302,51 +6692,276 @@ bool PowerOpt::readHandShake()
 void PowerOpt::simulate()
 {
    // Read file for initial values of reg-Q pins and input ports
-  cout << "Simulating" << endl;
   readSimInitFile();
   readDmemInitFile();
-  initialRun();
   bool wavefront = true;
   bool done_inputs = false;
+  jump_cycle = 0;
   for (int i = 0; i < num_sim_cycles; i++)
   {
-    if (check_peripherals() == true) { 
+    if (check_peripherals() == true) {
       cout << " STARTING SIMULATION NOW !! " << endl;
-      dump_Dmemory();
-      print_processor_state_profile(i); 
+      print_dmem_contents(i);
+      print_processor_state_profile(i);
     }
-    readMem(i, wavefront);
-    runSimulation(wavefront); // simulates the negative edge
+    readMem(i, wavefront);// -->  handleCondJumps()
+    runSimulation(wavefront, i, false); // simulates the negative edge
 
+    print_processor_state_profile(i);
     if (!done_inputs)
     {
       done_inputs = sendInputs();
     }
-    else 
+    else
       recvInputs1(i, wavefront);
-    // debug_per_din(i);
-  
-    
-//    string dmem_din_str = getDmemDin();
-//    debug_file << "Dmem_din : " << dmem_din_str << endl;
-
-//    sendData(dmem_data);
-//    handleDmem(i, wavefront);
 
     updateFromMem();
     recvInputs2(i, wavefront);
 
-    runSimulation(wavefront); // simulates  the positive edge
+    runSimulation(wavefront, i, true); // simulates  the positive edge
     updateRegOutputs();
+    if (probeRegisters(i) == true)
+    {
+      print_processor_state_profile(i);
+      dump_Dmemory();
+      cout << "ENDING SIMULATION due to STATE CORRUPTION at " << i << endl;
+      break;
+    }
 
-    if (check_sim_end(i, wavefront) == true ) { 
-      cout << "ENDING SIMULATION" << endl; 
+    if (check_sim_end(i, wavefront) == true ) {
+      cout << "ENDING SIMULATION" << endl;
       break ;
     }
-    //if (i == 65) print_dmem_contents(i);
   }
   print_dmem_contents(num_sim_cycles-1);
 }
+
+
+void PowerOpt::simulate2()
+{
+   // Read file for initial values of reg-Q pins and input ports
+//  readSimInitFile();
+//  readDmemInitFile();
+  bool wavefront = true;
+  bool done_inputs = false;
+  jump_cycle = 0;
+  while(!sys_state_queue.empty())
+  {
+    system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
+    map<int, string>::iterator it;
+    for (it = sys_state->net_sim_value_map.begin(); it != sys_state->net_sim_value_map.end(); it++)
+    {
+       int id = it->first; string sim_val = it->second;
+       nets[id]->setSimValue(sim_val);
+    }
+    sim_wf = sys_state->sim_wf;
+    DMemory = sys_state->DMemory;
+    int start_cycle = sys_state->cycle_num;
+
+    pmem_request_file << "------------------------------ RE-RUNNING FROM SAVED POINT ----------------" << endl;
+    for (int i = start_cycle; i < num_sim_cycles; i++)
+    {
+/*      if (check_peripherals() == true) {
+        cout << " STARTING SIMULATION NOW !! " << endl;
+        print_dmem_contents(i);
+        print_processor_state_profile(i);
+      }*/
+      readMem(i, wavefront);// -->  handleCondJumps()
+      runSimulation(wavefront, i, false); // simulates the negative edge
+
+      if (!done_inputs)
+      {
+        done_inputs = sendInputs();
+      }
+      else
+        recvInputs1(i, wavefront);
+
+      updateFromMem();
+      recvInputs2(i, wavefront);
+
+      runSimulation(wavefront, i, true); // simulates  the positive edge
+      updateRegOutputs();
+      if (probeRegisters(i) == true)
+      {
+        print_processor_state_profile(i);
+        dump_Dmemory();
+        cout << "ENDING SIMULATION due to STATE CORRUPTION at " << i << endl;
+        break;
+      }
+
+      if (check_sim_end(i, wavefront) == true ) {
+        cout << "ENDING SIMULATION" << endl;
+        break ;
+      }
+    }
+  }
+  print_dmem_contents(num_sim_cycles-1);
+}
+
+
+int PowerOpt::getEState()
+{
+  string e_state_3 = m_gates[gateNameIdMap["frontend_0_e_state_reg_3_"]]->getSimValue();
+  string e_state_2 = m_gates[gateNameIdMap["frontend_0_e_state_reg_2_"]]->getSimValue();
+  string e_state_1 = m_gates[gateNameIdMap["frontend_0_e_state_reg_1_"]]->getSimValue();
+  string e_state_0 = m_gates[gateNameIdMap["frontend_0_e_state_reg_0_"]]->getSimValue();
+
+  string e_state_str = e_state_3 + e_state_2 + e_state_1 + e_state_0;
+  int e_state  = strtoull(e_state_str.c_str(), NULL, 2);
+  return e_state;
+}
+
+
+int PowerOpt::getInstType()
+{
+  string inst_type_2 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_2_"]]->getSimValue();
+  string inst_type_1 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_1_"]]->getSimValue();
+  string inst_type_0 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_0_"]]->getSimValue();
+
+  string inst_type_str = inst_type_2 + inst_type_1 + inst_type_0;
+  int inst_type = strtoull(inst_type_str.c_str(), NULL, 2);
+  return inst_type;
+}
+
+
+bool PowerOpt::probeRegisters(int cycle_num)
+{
+   string V = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_8_"]]->getSimValue();
+   string N = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_2_"]]->getSimValue();
+   string Z = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_1_"]]->getSimValue();
+   string C = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_0_"]]->getSimValue();
+
+   int e_state = getEState();
+   int inst_type = getInstType();
+
+   if (jump_detected == true)
+    jump_cycle ++;
+
+   bool state_corrupted = false;
+
+    //debug_file << "E_state " << e_state << " Inst_type " << inst_type <<  " at " << cycle_num << endl;
+   //if (jump_cycle == 4)// e_state == 1011 && inst_type == 010
+   if ((e_state == 5) && (inst_type == 5))// e_state == 1011 && inst_type == 010
+   {
+     if (instr_name == "JNE/JNZ" || instr_name == "JEQ/JZ" )
+     {
+       if (Z == "X")
+       {
+         pmem_request_file << "Z is corrupt\n" ;
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("0", sim_wf);
+         system_state* sys_state_1 = new system_state;
+         for (int i = 0; i < nets.size(); i++)
+         {
+           sys_state_1->cycle_num = cycle_num;
+           sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+           sys_state_1->sim_wf = sim_wf; // copy all contents!
+           sys_state_1->DMemory = DMemory; // copy all contents!
+         }
+         sys_state_queue.push(sys_state_1);
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("1", sim_wf);
+         system_state* sys_state_2 = new system_state;
+         for (int i = 0; i < nets.size(); i++)
+         {
+           sys_state_2->cycle_num = cycle_num;
+           sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+           sys_state_2->sim_wf = sim_wf; // copy all contents!
+           sys_state_2->DMemory = DMemory; // copy all contents!
+         }
+         sys_state_queue.push(sys_state_2);
+       }
+     }
+     else if (instr_name == "JNC/JLO" || instr_name == "JC/JHS" )
+     {
+       if (C == "X")
+       {
+         pmem_request_file << "C is corrupt\n" ;
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("0", sim_wf);
+         system_state* sys_state_1 = new system_state;
+         for (int i = 0; i < nets.size(); i++)
+         {
+           sys_state_1->cycle_num = cycle_num;
+           sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+           sys_state_1->sim_wf = sim_wf; // copy all contents!
+           sys_state_1->DMemory = DMemory; // copy all contents!
+         }
+         sys_state_queue.push(sys_state_1);
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("1", sim_wf);
+         system_state* sys_state_2 = new system_state;
+         for (int i = 0; i < nets.size(); i++)
+         {
+           sys_state_2->cycle_num = cycle_num;
+           sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+           sys_state_2->sim_wf = sim_wf; // copy all contents!
+           sys_state_2->DMemory = DMemory; // copy all contents!
+         }
+         sys_state_queue.push(sys_state_2);
+       }
+     }
+     else if (instr_name == "JN"     )
+     {
+       if (N == "X")
+       {
+         pmem_request_file << "N is corrupt\n" ;
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
+         system_state* sys_state_1 = new system_state;
+         for (int i = 0; i < nets.size(); i++)
+         {
+           sys_state_1->cycle_num = cycle_num;
+           sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+           sys_state_1->sim_wf = sim_wf; // copy all contents!
+           sys_state_1->DMemory = DMemory; // copy all contents!
+         }
+         sys_state_queue.push(sys_state_1);
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
+         system_state* sys_state_2 = new system_state;
+         for (int i = 0; i < nets.size(); i++)
+         {
+           sys_state_2->cycle_num = cycle_num;
+           sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+           sys_state_2->sim_wf = sim_wf; // copy all contents!
+           sys_state_2->DMemory = DMemory; // copy all contents!
+         }
+         sys_state_queue.push(sys_state_2);
+       }
+     }
+     else if (instr_name == "JGE"  ||   instr_name == "JL"      )
+     {
+       if (V == "X" || N == "X")
+       {
+         pmem_request_file << "V or N is corrupt\n" ;
+         state_corrupted = true;
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+         cout << "SAVING STATE 1" << endl;
+         system_state* sys_state_1 = new system_state;
+         for (int i = 0; i < nets.size(); i++)
+         {
+           sys_state_1->cycle_num = cycle_num;
+           sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+           sys_state_1->sim_wf = sim_wf; // copy all contents!
+           sys_state_1->DMemory = DMemory; // copy all contents!
+         }
+         sys_state_queue.push(sys_state_1);
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
+         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+         cout << "SAVING STATE 2" << endl;
+         system_state* sys_state_2 = new system_state;
+         for (int i = 0; i < nets.size(); i++)
+         {
+           sys_state_2->cycle_num = cycle_num;
+           sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+           sys_state_2->sim_wf = sim_wf; // copy all contents!
+           sys_state_2->DMemory = DMemory; // copy all contents!
+         }
+         sys_state_queue.push(sys_state_2);
+       }
+     }
+   }
+
+   if (state_corrupted) return true;
+  return false;
+}
+
 
 
 void PowerOpt::updateFromMem()
@@ -6358,12 +6973,12 @@ void PowerOpt::updateFromMem()
 void PowerOpt::dump_Dmemory()
 {
   debug_file << "DMEM Contents" << endl;
-  
-  map<int, bitset<16> >::iterator it = DMemory.begin();
+
+  map<int, xbitset >::iterator it = DMemory.begin();
   for (; it != DMemory.end(); it++)
   {
     debug_file << it->first << " --> " << (it->second).to_string() << endl;
-  }  
+  }
 
 }
 
@@ -6500,7 +7115,7 @@ void PowerOpt::computeTopoSort_new(Graph* graph)
   while (graph->getWfSize() != 0)
   {
     GNode* node = graph->getWfNode();
-    //cout << "Removing : " << node->getName() << endl;
+    //debug_file << "Removing : " << node->getName() << endl;
     graph->popWfNode();
     nodes_topo.push_back(node);
     node->setTopoId(count++);
@@ -6520,16 +7135,18 @@ void PowerOpt::computeTopoSort_new(Graph* graph)
       net = gate->getFanoutTerminal(0)->getNet(0);
     }
     net->setTopoSortMarked(true);
+    //debug_file << "   Net is : " <<  net->getName() << endl;
     for (int i = 0; i < net->getTerminalNum(); i++)
     {
       Terminal * term = net->getTerminal(i);
       if (term->getPinType() == OUTPUT)
         continue;
+      //debug_file << "       Terminal is : " << term->getFullName() << endl;
       Gate* gate_nxt = term->getGate();
       GNode* node_nxt = gate_nxt->getGNode();
       if (gate_nxt->allInpNetsVisited() == true && node_nxt->getVisited() == false)
       {
-        //cout << "Adding : " << node_nxt->getName() << endl;
+        //debug_file << "Adding : " << node_nxt->getName() << endl;
         graph->addWfNode(node_nxt);// add to queue
       }
     }
@@ -6834,7 +7451,6 @@ void PowerOpt::print_regs()
   }
 }
 
-
 void PowerOpt::print_gates()
 {
   for (int i =0; i < getGateNum(); i++)
@@ -6880,7 +7496,6 @@ void PowerOpt::printTopoOrder()
   }*/
 }
 
-
 void PowerOpt::checkTopoOrder(Graph* graph)
 {
    vector<GNode*>& nodes = graph->getNodeVec();
@@ -6903,10 +7518,10 @@ void PowerOpt::topoSort()
     graph->clear_visited();
     graph->print();
     cout << "Finished Top Sort" << endl;
+    printTopoOrder();
     cout << " Checking topo order ... " ;
     checkTopoOrder(graph);
     cout << " done " << endl;
-    //printTopoOrder();
 
     //TODO: COMPUTE EXPRESSIONS!!!
 

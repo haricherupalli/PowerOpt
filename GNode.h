@@ -18,6 +18,7 @@ namespace POWEROPT {
       isGate = false;
       isPad = false;
       visited = false;
+      topo_id = -1;
       //isNode= false;
     }
     public:

@@ -34,6 +34,7 @@
 #include "SetTrie.h"
 #include "Graph.h"
 #include "xbitset.h"
+#include "system_state.h"
 
 using namespace std;
 namespace POWEROPT {
@@ -112,32 +113,38 @@ class PowerOpt {
     void print_dmem_contents(int cycle_num);
     void topoSort();
     void simulate();
+    void simulate2();
     bool check_peripherals();
     bool check_sim_end(int& i, bool wavefront);
     void readPmemFile();
     string getPmemAddr();
+    int getEState();
+    int getInstType();
     string getDmemAddr();
     string getDmemDin();
     string getDmemLow();
     string getDmemHigh();
-    void handleDmem(int cycle_num, bool wavefront);
+    void handleDmem(int cycle_num);
     bool sendInputs();
     bool readHandShake();
     void recvInputs1(int cycle_num, bool wavefront);
     void recvInputs2(int cycle_num, bool wavefront);
     void debug_per_din(int cycle_num);
     void readMem(int cycle_num, bool wavefront);
+    void handleCondJumps();
+    void checkCorruption(int i);
     void sendInstr(string instr_str);
     void sendData (string data_str);
     void sendPerDout (string data_str);
     void testReadAddr();
     void initialRun();
     void initialize_sim_wf();
-    void runSimulation(bool wavefront);
+    void runSimulation(bool wavefront, int cycle_num, bool pos_edge);
     void clearSimVisited();
     void readSimInitFile();
     void readDmemInitFile();
     void updateRegOutputs();
+    bool probeRegisters(int cycle_num);
     void updateFromMem();
     void printRegValues();
     void printSelectGateValues();
@@ -628,6 +635,7 @@ class PowerOpt {
     list<GNode*> nodes_topo;
     priority_queue<GNode*, vector<GNode*>, sim_wf_compare> sim_wf; 
     stack<GNode*> sim_visited;
+    queue<system_state*> sys_state_queue;
     //priority_queue<GNode*> sim_wf; 
     list<Gate*> m_muxes;
     list<Gate*> m_regs;
@@ -848,6 +856,7 @@ class PowerOpt {
     bool is_dump_units;
     bool is_dead_end_check;
     int num_sim_cycles;
+    string design;
     int vStart;
     int vEnd;
     int vStep;
@@ -880,7 +889,7 @@ class PowerOpt {
     string untDumpFile;
     string utDumpFile;
     vector<int> PMemory;
-    map<int, bitset<16> > DMemory;
+    map<int, xbitset> DMemory;
 
 
     
@@ -950,6 +959,9 @@ class PowerOpt {
 
     string dmem_data;
     string pmem_instr;
+    string instr_name;
+    int jump_cycle;
+    bool jump_detected;
     bool recv_inputs;
     bool send_data;
     bool send_instr;

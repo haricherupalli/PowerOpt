@@ -5,7 +5,8 @@
 
 using namespace std;
 ////class xbitset;
-xbitset operator & (xbitset a, xbitset b)
+
+/*xbitset operator & (xbitset a, xbitset b)
 {
   bitset<NUM_BITS> bs_x = (a.get_bs_x() & b.get_bs_val()) | (a.get_bs_val() & b.get_bs_x()) | (a.get_bs_x() & b.get_bs_x());
   bitset<NUM_BITS> bs_val = a.get_bs_val() & b.get_bs_val();
@@ -17,7 +18,7 @@ xbitset operator | (xbitset a, xbitset b)
   bitset<NUM_BITS> bs_x = (a.get_bs_x() | b.get_bs_x()) & (~a.get_bs_val()) & (~b.get_bs_val()) ;
   bitset<NUM_BITS> bs_val = a.get_bs_val() | b.get_bs_val();
   return xbitset(bs_x, bs_val);
-}
+}*/
 
 
 xbitset::xbitset(string input_str)

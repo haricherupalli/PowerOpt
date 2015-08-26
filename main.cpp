@@ -620,12 +620,13 @@ int main(int argc, char *argv[])
     if (po.getExeOp() == 21) // NETLIST SIMULATION
     {
       po.readSelectGatesFile();
-      //po.readConstantTerminals();// my_handler(0);
+      po.readConstantTerminals();// my_handler(0);
       po.topoSort(); 
       //po.print_pads(); return 0;
       po.readPmemFile();
       po.simulate();
-      po.dump_Dmemory();
+      po.simulate2();
+      //po.dump_Dmemory();
     }
     if (po.getExeOp() == 22) //  SIMPLE VCD ANALYSIS
     {

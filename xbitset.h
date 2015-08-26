@@ -15,12 +15,18 @@ class xbitset
 {
 
   public:
+  xbitset() { }
   xbitset(string input_str);
 
   xbitset (bitset<NUM_BITS> x, bitset<NUM_BITS> val)
   {
     bs_x   = x;
     bs_val = val;
+  }
+  
+  xbitset (int input)
+  {
+      bs_val = bitset<NUM_BITS> (input);
   }
 
   string to_string();

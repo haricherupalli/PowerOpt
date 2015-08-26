@@ -1717,7 +1717,7 @@ int Gate::max_toggle_profile_size = 0;
     }
    
     string Gate::getSimValue() 
-    { 
+    {
         if (fanoutTerms.size() == 0) return "No Fanout Terms for Gate "+name;
         return fanoutTerms[0]->getSimValue();
     }
@@ -2087,7 +2087,9 @@ int Gate::max_toggle_profile_size = 0;
             Gate* gate = net->getDriverGate();
             int id;
             if (gate != NULL) id = gate->getTopoId();
+            else if (net->getPadNum() == 0) { assert (net->getName() == net->getTerminal(0)->getFullName()); id = -1; }
             else {id = net->getPad(0)->getTopoId(); }
+
             topo_ids.push_back(id);
         }
     }
