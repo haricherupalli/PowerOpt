@@ -696,7 +696,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::printToggleProfile(ofstream& file)
     {
 
-        file << name << " --> ";
+        file << name << ",";
         for (int i = 0; i < toggle_profile.size(); i++)
         {
           file << toggle_profile[i].to_string() << ",";
@@ -1722,12 +1722,13 @@ int Gate::max_toggle_profile_size = 0;
         return fanoutTerms[0]->getSimValue();
     }
      
-    void Gate::transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(FFFlag);
+        bool toggled = false;
         if (func == DFF)
         {
-          string Dval,SetVal, ClrVal;
+          string Dval,SetVal, ClrVal, Qval;
           for(int i = 0; i < faninTerms.size(); i++)
           {
             Terminal* term = faninTerms[i];
@@ -1738,22 +1739,26 @@ int Gate::max_toggle_profile_size = 0;
           }
           Terminal* fo_term = fanoutTerms[0];
           assert(fo_term->getName() == "Q");
+          Qval = fo_term->getSimValue(); 
           if (ClrVal == "0") 
           { 
+            if (Dval != "0") toggled = true;
             fo_term->setSimValue("0", sim_wf);
           }
           else if (SetVal == "0")
           {
+            if (Dval != "1") toggled = true;
             fo_term->setSimValue("1", sim_wf);
           }
           else
           {
+            if (Dval != Qval) toggled = true;
             fo_term->setSimValue(Dval, sim_wf);
           }
         }
         if (func == LH)
         {
-          string Dval,EnVal;
+          string Dval,EnVal,Qval;
           for(int i = 0; i < faninTerms.size(); i++)
           {
             Terminal* term = faninTerms[i];
@@ -1763,69 +1768,78 @@ int Gate::max_toggle_profile_size = 0;
           }
           Terminal* fo_term = fanoutTerms[0];
           assert(fo_term->getName() == "Q");
+          Qval = fo_term->getSimValue(); 
           if (EnVal == "0") 
           {
+            if (Dval != "0") toggled = true;
             fo_term->setSimValue("0", sim_wf);
           }
           else 
           {
+            if (Dval != Qval) toggled = true;
             fo_term->setSimValue(Dval, sim_wf);
           }
         }
+        return toggled;
     }
 
-    void Gate::computeVal(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeVal(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
+      bool toggled;
       switch (func)
       {
-        case AND  :  computeANDVal ( sim_wf ) ; break ; 
-        case AOI  :  computeAOIVal ( sim_wf ) ; break ; 
-        case BUFF :  computeBUFFVal( sim_wf ) ; break ; 
-        case DFF  :  computeDFFVal ( sim_wf ) ; break ; 
-        case INV  :  computeINVVal ( sim_wf ) ; break ; 
-        case LH   :  computeLHVal  ( sim_wf ) ; break ; 
-        case MUX  :  computeMUXVal ( sim_wf ) ; break ; 
-        case NAND :  computeNANDVal( sim_wf ) ; break ; 
-        case NOR  :  computeNORVal ( sim_wf ) ; break ; 
-        case OAI  :  computeOAIVal ( sim_wf ) ; break ; 
-        case OR   :  computeORVal  ( sim_wf ) ; break ; 
-        case XNOR :  computeXNORVal( sim_wf ) ; break ; 
-        case XOR  :  computeXORVal ( sim_wf ) ; break ; 
+        case AND  : toggled =  computeANDVal ( sim_wf ) ; break ; 
+        case AOI  : toggled =  computeAOIVal ( sim_wf ) ; break ; 
+        case BUFF : toggled =  computeBUFFVal( sim_wf ) ; break ; 
+        case DFF  : toggled =  computeDFFVal ( sim_wf ) ; break ; 
+        case INV  : toggled =  computeINVVal ( sim_wf ) ; break ; 
+        case LH   : toggled =  computeLHVal  ( sim_wf ) ; break ; 
+        case MUX  : toggled =  computeMUXVal ( sim_wf ) ; break ; 
+        case NAND : toggled =  computeNANDVal( sim_wf ) ; break ; 
+        case NOR  : toggled =  computeNORVal ( sim_wf ) ; break ; 
+        case OAI  : toggled =  computeOAIVal ( sim_wf ) ; break ; 
+        case OR   : toggled =  computeORVal  ( sim_wf ) ; break ; 
+        case XNOR : toggled =  computeXNORVal( sim_wf ) ; break ; 
+        case XOR  : toggled =  computeXORVal ( sim_wf ) ; break ; 
         default   :  assert(0);
       }
+      return toggled;
 
     }
 
-    void Gate::computeANDVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeANDVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
         Terminal* fo_term = fanoutTerms[0]; 
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
+        bool toggled;
         if (fi_0_val == "0")
         {
-            fo_term->setSimValue("0", sim_wf);
+            toggled = fo_term->setSimValue("0", sim_wf);
         }
         if (fi_0_val == "1")
         {
             //fo_term->setSimValue(fi_1_val, sim_wf); // simpler version
-            if (fi_1_val == "0") fo_term->setSimValue("0", sim_wf);
-            else if (fi_1_val == "1") fo_term->setSimValue("1", sim_wf);
-            else if (fi_1_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (fi_1_val == "1") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (fi_1_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (fi_0_val == "X")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("0", sim_wf);
-            else fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("0", sim_wf);
+            else toggled = fo_term->setSimValue("X", sim_wf);
         }
+        return toggled;
     } 
-    void Gate::computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
       Terminal* fo_term = fanoutTerms[0]; 
       list <pair<Terminal*, double> > term_slack_list;
       string B_val, A1_val, A2_val;
+      bool toggled;
       for (int i = 0; i < faninTerms.size(); i++)
       {
          Terminal* term = faninTerms[i];
@@ -1841,51 +1855,53 @@ int Gate::max_toggle_profile_size = 0;
       {
         if (A1_val == "0")
         {
-            fo_term->setSimValue("1", sim_wf);
+            toggled = fo_term->setSimValue("1", sim_wf);
         }
         if (A1_val == "1")
         {
-            if (A2_val == "0") fo_term->setSimValue("1", sim_wf);
-            else if (A2_val == "1") fo_term->setSimValue("0", sim_wf);
-            else if (A2_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (A2_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (A2_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (A2_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (A1_val == "X")
         {
-            if (A2_val == "0") fo_term->setSimValue("1", sim_wf);
-            else fo_term->setSimValue("X", sim_wf);
+            if (A2_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+            else toggled = fo_term->setSimValue("X", sim_wf);
         }
       }
       else if (B_val == "1")
       {
-        fo_term->setSimValue("0", sim_wf);
+        toggled = fo_term->setSimValue("0", sim_wf);
       }
       else if (B_val == "X")
       {
-        if(A1_val == "1" && A2_val == "1") fo_term->setSimValue("0", sim_wf);
-        else fo_term->setSimValue("X", sim_wf);
+        if(A1_val == "1" && A2_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+        else toggled = fo_term->setSimValue("X", sim_wf);
       }
+      return toggled;
     } 
-    void Gate::computeBUFFVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeBUFFVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 1);
+        bool toggled;
         Terminal* fo_term = fanoutTerms[0]; 
         Terminal* fi_term = faninTerms[0]; 
-        fo_term->setSimValue(fi_term->getSimValue(), sim_wf);
+        toggled = fo_term->setSimValue(fi_term->getSimValue(), sim_wf);
     } 
-    void Gate::computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf){ } 
-    void Gate::computeINVVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf){ return true; } // since if a ff is required to be evaluated from the sim_wf it must have toggled. 
+    bool Gate::computeINVVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 1);
         Terminal* fo_term = fanoutTerms[0]; 
         string fi_val = faninTerms[0]->getSimValue(); 
-        if (fi_val == "0") fo_term->setSimValue("1", sim_wf);
-        else if (fi_val == "1") fo_term->setSimValue("0", sim_wf);
-        else if (fi_val == "X") fo_term->setSimValue("X", sim_wf);
+        if (fi_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+        else if (fi_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+        else if (fi_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
     } 
-    void Gate::computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf){ } 
-    void Gate::computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf){ return true; } 
+    bool Gate::computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
       Terminal* fo_term = fanoutTerms[0]; 
@@ -1900,57 +1916,63 @@ int Gate::max_toggle_profile_size = 0;
          else if (term->getName() == "I0")
             I0_val = term->getSimValue();
       }
-      if (S_val == "0") fo_term->setSimValue(I0_val, sim_wf);
-      else if (S_val == "1") fo_term->setSimValue(I1_val, sim_wf);
-      else if (S_val == "X") fo_term->setSimValue("X", sim_wf);
+      bool toggled;
+      if (S_val == "0") toggled = fo_term->setSimValue(I0_val, sim_wf);
+      else if (S_val == "1") toggled = fo_term->setSimValue(I1_val, sim_wf);
+      else if (S_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
+      return toggled;
     } 
-    void Gate::computeNANDVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeNANDVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
         Terminal* fo_term = fanoutTerms[0]; 
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
+        bool toggled;
         if (fi_0_val == "0")
         {
-            fo_term->setSimValue("1", sim_wf);
+            toggled = fo_term->setSimValue("1", sim_wf);
         }
         if (fi_0_val == "1")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("1", sim_wf);
-            else if (fi_1_val == "1") fo_term->setSimValue("0", sim_wf);
-            else if (fi_1_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (fi_1_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (fi_1_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (fi_0_val == "X")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("1", sim_wf);
-            else fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+            else toggled = fo_term->setSimValue("X", sim_wf);
         }
+        return toggled;
     } 
-    void Gate::computeNORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeNORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
         Terminal* fo_term = fanoutTerms[0]; 
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
+        bool toggled;
         if (fi_0_val == "1")
         {
-            fo_term->setSimValue("0", sim_wf);
+            toggled = fo_term->setSimValue("0", sim_wf);
         }
         if (fi_0_val == "0")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("1", sim_wf);
-            else if (fi_1_val == "1") fo_term->setSimValue("0", sim_wf);
-            else if (fi_1_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (fi_1_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (fi_1_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (fi_0_val == "X")
         {
-            if (fi_1_val == "1") fo_term->setSimValue("0", sim_wf);
-            else fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+            else toggled = fo_term->setSimValue("X", sim_wf);
         }
+        return toggled;
     } 
-    void Gate::computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
       Terminal* fo_term = fanoutTerms[0]; 
@@ -1967,104 +1989,111 @@ int Gate::max_toggle_profile_size = 0;
             A2_val = term->getSimValue();
       }
 
+      bool toggled;
       if (B_val == "1")
       {
         if (A1_val == "1")
         {
-            fo_term->setSimValue("0", sim_wf);
+            toggled = fo_term->setSimValue("0", sim_wf);
         }
         if (A1_val == "0")
         {
-            if (A2_val == "0") fo_term->setSimValue("1", sim_wf);
-            else if (A2_val == "1") fo_term->setSimValue("0", sim_wf);
-            else if (A2_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (A2_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (A2_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (A2_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (A1_val == "X")
         {
-            if (A2_val == "1") fo_term->setSimValue("0", sim_wf);
-            else fo_term->setSimValue("X", sim_wf);
+            if (A2_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+            else toggled = fo_term->setSimValue("X", sim_wf);
         }
       }
       else if (B_val == "0")
       {
-        fo_term->setSimValue("1", sim_wf);
+        toggled = fo_term->setSimValue("1", sim_wf);
       }
       else if (B_val == "X")
       {
-        if(A1_val == "0" && A2_val == "0") fo_term->setSimValue("0", sim_wf);
-        else fo_term->setSimValue("X", sim_wf);
+        if(A1_val == "0" && A2_val == "0") toggled = fo_term->setSimValue("0", sim_wf);
+        else toggled = fo_term->setSimValue("X", sim_wf);
       }
+      return toggled;
     } 
-    void Gate::computeORVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeORVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
         Terminal* fo_term = fanoutTerms[0]; 
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
+        bool toggled;
         if (fi_0_val == "1")
         {
-            fo_term->setSimValue("1", sim_wf);
+            toggled = fo_term->setSimValue("1", sim_wf);
         }
         if (fi_0_val == "0")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("0", sim_wf);
-            else if (fi_1_val == "1") fo_term->setSimValue("1", sim_wf);
-            else if (fi_1_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (fi_1_val == "1") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (fi_1_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (fi_0_val == "X")
         {
-            if (fi_1_val == "1") fo_term->setSimValue("1", sim_wf);
-            else fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "1") toggled = fo_term->setSimValue("1", sim_wf);
+            else toggled = fo_term->setSimValue("X", sim_wf);
         }
+        return toggled;
     } 
-    void Gate::computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
         Terminal* fo_term = fanoutTerms[0]; 
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
+        bool toggled;
         if (fi_0_val == "0")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("1", sim_wf);
-            else if (fi_1_val == "1") fo_term->setSimValue("0", sim_wf);
-            else if (fi_1_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (fi_1_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (fi_1_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (fi_0_val == "1")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("0", sim_wf);
-            else if (fi_1_val == "1") fo_term->setSimValue("1", sim_wf);
-            else if (fi_1_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (fi_1_val == "1") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (fi_1_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (fi_0_val == "X")
         {
-            fo_term->setSimValue("X", sim_wf);
+            toggled = fo_term->setSimValue("X", sim_wf);
         }
     } 
-    void Gate::computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
+    bool Gate::computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
         Terminal* fo_term = fanoutTerms[0]; 
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
+        bool toggled;
         if (fi_0_val == "0")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("0", sim_wf);
-            else if (fi_1_val == "1") fo_term->setSimValue("1", sim_wf);
-            else if (fi_1_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (fi_1_val == "1") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (fi_1_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (fi_0_val == "1")
         {
-            if (fi_1_val == "0") fo_term->setSimValue("1", sim_wf);
-            else if (fi_1_val == "1") fo_term->setSimValue("0", sim_wf);
-            else if (fi_1_val == "X") fo_term->setSimValue("X", sim_wf);
+            if (fi_1_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
+            else if (fi_1_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
+            else if (fi_1_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
         }
         if (fi_0_val == "X")
         {
-            fo_term->setSimValue("X", sim_wf);
+            toggled = fo_term->setSimValue("X", sim_wf);
         }
+        return toggled;
     } 
 
     bool Gate::allInpNetsVisited()

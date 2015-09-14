@@ -400,6 +400,8 @@ void PowerOpt::readEnvFile(string envFileStr)
 
         if (line.find("-lef ") != string::npos)
             lefFiles.push_back(getTokenS(line, "-lef "));
+        if (line.find("-clusterNamesFile") != string::npos)
+            clusterNamesFile = getTokenS(line, "-clusterNamesFile");
         if (line.find("-capw ") != string::npos)
             soceCapTableWorst = getTokenS(line, "-capw ");
         if (line.find("-capb ") != string::npos)
@@ -552,12 +554,14 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             untDumpFile = getTokenS(line,"-untDumpFile");
         if (line.find("-utDumpFile") != string::npos)
             utDumpFile = getTokenS(line,"-utDumpFile");
-        if (line.find("-clusterNamesFile") != string::npos)
-            clusterNamesFile = getTokenS(line, "-clusterNamesFile");
+//        if (line.find("-clusterNamesFile") != string::npos)
+//            clusterNamesFile = getTokenS(line, "-clusterNamesFile");
         if (line.find("-simInitFile ") != string::npos)
             simInitFile = getTokenS(line, "-simInitFile ");
         if (line.find("-dmemInitFile ") != string::npos)
             dmemInitFile = getTokenS(line, "-dmemInitFile ");
+        if (line.find("-staticPGInfoFile ") != string::npos)
+            staticPGInfoFile = getTokenS(line, "-staticPGInfoFile ");
         if (line.find("-dbgSelectGates ") != string::npos)
             dbgSelectGatesFile = getTokenS(line, "-dbgSelectGates ");
         if (line.find("-pmemFile ") != string::npos)
@@ -683,6 +687,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             num_sim_cycles = getTokenI(line,"-num_sim_cycles ");
         if (line.find("-design ") != string::npos)
             design = getTokenS(line,"-design ");
+        if (line.find("-inputValueFile ") != string::npos)
+            inputValueFile = getTokenS(line,"-inputValueFile ");
     }
 
     if (swapstep == 0) swapstep = 10000;
@@ -732,15 +738,16 @@ void PowerOpt::openFiles()
     net_pin_maps.open                 ( "PowerOpt/net_pin_maps" );
     toggle_counts_file.open           ( "PowerOpt/toggle_counts");
     histogram_toggle_counts_file.open ( "PowerOpt/histogram_toggle_counts_file");
-    toggle_profile_file.open          ( "PowerOpt/toggle_profile_file");
     missed_nets.open                  ( "PowerOpt/Missed_nets", fstream::app);
   }
+  toggle_profile_file.open          ( "PowerOpt/toggle_profile_file");
   debug_file.open("PowerOpt/debug_file");
   pmem_request_file.open("PowerOpt/pmem_request_file");
   dmem_request_file.open("PowerOpt/dmem_request_file");
   fanins_file.open("PowerOpt/fanins_file");
   processor_state_profile_file.open("PowerOpt/processor_state_profile");
   dmem_contents_file.open("PowerOpt/dmem_contents_file");
+  pmem_contents_file.open("PowerOpt/pmem_contents_file");
 }
 
 void PowerOpt::closeFiles()
@@ -757,14 +764,15 @@ void PowerOpt::closeFiles()
     net_pin_maps.close();
     toggle_counts_file.close();
     histogram_toggle_counts_file.close();
-    toggle_profile_file.close();
   }
+  toggle_profile_file.close();
   debug_file.close();
   pmem_request_file.close();
   dmem_request_file.close();
   fanins_file.close();
   processor_state_profile_file.close();
   dmem_contents_file.close();
+  pmem_contents_file.close();
 }
 
 
@@ -5531,6 +5539,25 @@ void PowerOpt::readDmemInitFile()
 
 }
 
+void PowerOpt::readInputValueFile()
+{
+  ifstream input_value_file;
+  input_value_file.open(inputValueFile.c_str());
+  cout << "Reading input_value_file" << endl;
+  if (input_value_file.is_open())
+  {
+    string line;
+    getline(input_value_file, line);
+    trim(line);
+    num_inputs = atoi(line.c_str());
+    while (getline(input_value_file, line))
+    {
+      trim(line);
+      inputs.push_back(line);
+    }
+  }
+}
+
 void PowerOpt::readSimInitFile()
 {
   ifstream sim_init_file;
@@ -5605,6 +5632,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
   if(wavefront)
   {
     int gate_count = 0;
+    debug_file << "Cycle : " << cycle_num << endl;
     while (!sim_wf.empty())
     {
       GNode* node = sim_wf.top(); sim_wf.pop();
@@ -5617,15 +5645,24 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
         // Deadcode
         sim_visited.push(node);
         Gate* gate = node->getGate();
-        gate->computeVal(sim_wf); // here we push gates into sim_wf
-
+        bool toggled = gate->computeVal(sim_wf); // here we push gates into sim_wf
+        if (toggled && !gate->getIsClkTree())
+        {
+          gate->updateToggleProfile(cycle_num);
+          int cluster_id = gate->getClusterId();
+          //if (cluster_id != 0) {
+            Cluster * cluster = clusters[cluster_id];
+            cluster->setActive(true);
+            //debug_file << gate->getName() << " : " << cluster_id << endl;
+          //}
+        }
       }
 //      else
 //      {
 //        debug_file << "Missed" << node->getName() << endl;
 //      }
     }
-    debug_file << "In cycle " << cycle_num << " " << gate_count << " gates were simulated." << endl;
+    //debug_file << "In cycle " << cycle_num << " " << gate_count << " gates were simulated." << endl;
   }
   else
   {
@@ -5640,7 +5677,32 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
       }
     }
   }
+  if (!pos_edge)
+  {
+    map<int, Cluster* >::iterator it;
+    debug_file << "At Time " << cycle_num  << " Clusters that are ON : ";
+    for (it = clusters.begin(); it != clusters.end(); it++)
+    {
+      if (it->second->getActive() && pmem_addr < 12288)
+      {
+        int id = it->second->getId();
+        debug_file << id << ", ";
+        PMemory[pmem_addr]->domain_activity[id] = true;
+        PMemory[pmem_addr]->executed = true;
+      }
+    }
+    debug_file << endl;
+    resetClustersActive();
+  }
+}
 
+void PowerOpt::resetClustersActive()
+{
+  map<int, Cluster* >::iterator it;
+  for (it = clusters.begin(); it != clusters.end(); it++)
+  {
+    it->second->setActive(false);
+  }
 }
 
 void PowerOpt::printRegValues()
@@ -5758,7 +5820,7 @@ void PowerOpt::printSelectGateValues()
     debug_file << endl;
 }
 
-void PowerOpt::updateRegOutputs()
+void PowerOpt::updateRegOutputs(int cycle_num)
 {
   Pad* dco_clk_pad = m_pads[padNameIdMap["dco_clk"]];
   string dco_clk_value = dco_clk_pad->getSimValue();
@@ -5768,8 +5830,9 @@ void PowerOpt::updateRegOutputs()
   for(it = m_regs.begin(); it != m_regs.end(); it++)
   {
     Gate* ff_gate = *it;
-    ff_gate->transferDtoQ(sim_wf);
-
+    bool toggled =  ff_gate->transferDtoQ(sim_wf);
+    if (toggled)
+      ff_gate->updateToggleProfile(cycle_num);
 //    string name = ff_gate->getName();
 //    if ( name == "execution_unit_0_register_file_0_r2_reg_8_" )
 //    {
@@ -5792,10 +5855,45 @@ void PowerOpt::readPmemFile()
      string line;
      unsigned int hex;
      cout << "Reading PMEM ..." ;
+     int addr = 0;
      while ((fscanf(pmem_file, "%x", &hex) != EOF)) {
-       PMemory.push_back(hex);
+       vector<bool> power_domain_activity_annotation (cluster_id, false);
+       //const vector<bool>& reference = power_domain_activity_annotation;
+       Instr* instr = new Instr(hex);
+       //instr->domain_activity.resize(4, false);
+       PMemory.insert(make_pair(addr, instr));
+       addr++;
      }
      cout << " done" << endl;
+  }
+}
+
+void PowerOpt::readStaticPGInfo()
+{
+  ifstream static_pg_info_file;
+  static_pg_info_file.open(staticPGInfoFile.c_str());
+  cout << "Reading Static PG Info" << endl;
+
+  if (static_pg_info_file.is_open())
+  {
+    string line;
+    while (getline(static_pg_info_file, line))
+    {
+      trim(line);
+      vector<string> tokens;
+      tokenize(line, ':', tokens);
+      int addr = atoi(tokens[0].c_str());
+      Instr* instr = PMemory[addr];
+      for (int i = 1; i < 5; i++)
+      {
+        if (tokens[i].find("ON") != string::npos)
+          instr->domain_activity[i-1] = true; // i-1 is offset from the file
+        else if (tokens[i].find("OFF") != string::npos)
+          instr->domain_activity[i-1] = false; // i-1 is offset from the file
+        else assert(0);
+      }
+      if (tokens.size() == 6) instr->executed = true;
+    }
   }
 }
 
@@ -5891,7 +5989,7 @@ string PowerOpt::getDmemAddr()
 
 string PowerOpt::getDmemDin()
 {
-  string dmem_din_15_val , dmem_din_14_val , dmem_din_13_val , dmem_din_12_val , dmem_din_11_val , dmem_din_10_val , dmem_din_9_val  , dmem_din_8_val  , dmem_din_7_val  , dmem_din_6_val  , dmem_din_5_val  , dmem_din_4_val  , dmem_din_3_val  , dmem_din_2_val  , dmem_din_1_val  , dmem_din_0_val; 
+  string dmem_din_15_val , dmem_din_14_val , dmem_din_13_val , dmem_din_12_val , dmem_din_11_val , dmem_din_10_val , dmem_din_9_val  , dmem_din_8_val  , dmem_din_7_val  , dmem_din_6_val  , dmem_din_5_val  , dmem_din_4_val  , dmem_din_3_val  , dmem_din_2_val  , dmem_din_1_val  , dmem_din_0_val;
   if (design == "flat_no_clk_gt")
   {
     dmem_din_15_val = m_pads[padNameIdMap["dmem_din\\[15\\]"]]->getSimValue();
@@ -5930,7 +6028,7 @@ string PowerOpt::getDmemDin()
     dmem_din_1_val  = m_pads[padNameIdMap["dmem_din[1]"]]->getSimValue();
     dmem_din_0_val  = m_pads[padNameIdMap["dmem_din[0]"]]->getSimValue();
   }
-  else 
+  else
   {
     assert(0);
   }
@@ -6126,9 +6224,12 @@ bool PowerOpt::sendInputs()
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
   if (per_addr_str != "00000000010000") return false; // per_addrs is 0010
   string data_str;
-  //cout << " Sending Inputs for i " << i << endl;
+  cout << " Sending Inputs for i " << i << endl;
   //pmem_request_file << " Sending Inputs for i " << i << endl;
-  switch (i)
+  data_str = inputs[i];
+  sendPerDout(data_str);
+  pmem_request_file << " In Case " << i << endl;
+/*  switch (i)
   {
     case 0:
             //data_str = "0000000001001101";
@@ -6156,9 +6257,9 @@ bool PowerOpt::sendInputs()
             pmem_request_file << "In Case 3 " << endl;
             break;
     default : break;
-  }
+  }*/
   i++;
-  if (i == 4) return true;
+  if (i == num_inputs) return true;
   return false;
 }
 
@@ -6166,7 +6267,7 @@ void PowerOpt::recvInputs1(int cycle_num, bool wavefront)
 {
 	string per_enable_val  = m_pads[padNameIdMap["per_en"]]->getSimValue();
   if (per_enable_val != "1") return ;
-  
+
   string per_we_0_val, per_we_1_val;
   if (design == "flat_no_clk_gt")
   {
@@ -6301,12 +6402,32 @@ void PowerOpt::handleCondJumps()
   }
 }
 
+void PowerOpt::compute_leakage_energy()
+{
+  Instr* instr = PMemory[pmem_addr] ;
+  assert(instr->executed == true);
+  vector<bool> domain_activity = instr->domain_activity;
+  float time_period = 1e-8;
+  for (int i = 0; i < domain_activity.size(); i++)
+  {
+    Cluster* cluster = clusters[i];
+    float cluster_leakage_energy = cluster->getLeakageEnergy();
+    if (domain_activity[i] == true)
+    {
+      total_leakage_energy += cluster_leakage_energy;
+    }
+    baseline_leakage_energy += cluster_leakage_energy;
+  }
+}
+
 void PowerOpt::readMem(int cycle_num, bool wavefront)
 {
     string pmem_addr_str = getPmemAddr();
-    unsigned int pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
+    pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
     static string  last_addr_string;
-    unsigned int instr = PMemory[pmem_addr];
+    unsigned int instr ;
+    if (pmem_addr > 12288) instr = 0;
+    else instr = PMemory[pmem_addr]->instr;
 /*    if (instr == 25) {
       cout << "Writing P3Dout " << endl;
       print_processor_state_profile(cycle_num);
@@ -6314,6 +6435,7 @@ void PowerOpt::readMem(int cycle_num, bool wavefront)
       Net::flip_check_toggles();
     }*/
     pmem_instr = binary(instr);
+    //compute_leakage_energy();
     handleCondJumps();
     send_instr = true;
     pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) instruction is " << hex << instr << dec << " -> " << pmem_instr << " and cycle is " << cycle_num << endl;
@@ -6624,8 +6746,12 @@ bool PowerOpt::check_sim_end(int& i, bool wavefront)
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
   if (per_addr_str != "00000000001100") return false;
 
-  //string per_din_0_val = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimValue();
-  string per_din_0_val = m_pads[padNameIdMap["per_din[0]"]]->getSimValue();
+  string per_din_0_val;
+  if (design == "flat_no_clk_gt")
+     per_din_0_val = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimValue();
+  else if (design == "modified_9_hier")
+    per_din_0_val = m_pads[padNameIdMap["per_din[0]"]]->getSimValue();
+  else assert(0);
   //ToggleType per_din_0_tog_type = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimToggType(); // checking for FALL might be hard when starting simulation from a saved state.
   if (per_din_0_val != "0") return false;
   return true;
@@ -6694,20 +6820,23 @@ void PowerOpt::simulate()
    // Read file for initial values of reg-Q pins and input ports
   readSimInitFile();
   readDmemInitFile();
+  readInputValueFile();
   bool wavefront = true;
   bool done_inputs = false;
   jump_cycle = 0;
-  for (int i = 0; i < num_sim_cycles; i++)
+  int i = 0;
+  //for (i = 0; i < num_sim_cycles; i++)
+  while(true)
   {
+    i++;
     if (check_peripherals() == true) {
-      cout << " STARTING SIMULATION NOW !! " << endl;
+      cout << " STARTING SIMULATION NOW !! at cycle " << i << endl;
       print_dmem_contents(i);
       print_processor_state_profile(i);
     }
     readMem(i, wavefront);// -->  handleCondJumps()
     runSimulation(wavefront, i, false); // simulates the negative edge
 
-    print_processor_state_profile(i);
     if (!done_inputs)
     {
       done_inputs = sendInputs();
@@ -6719,7 +6848,7 @@ void PowerOpt::simulate()
     recvInputs2(i, wavefront);
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
-    updateRegOutputs();
+    updateRegOutputs(i);
     if (probeRegisters(i) == true)
     {
       print_processor_state_profile(i);
@@ -6734,6 +6863,8 @@ void PowerOpt::simulate()
     }
   }
   print_dmem_contents(num_sim_cycles-1);
+  cout << "Total Leakage Energy is " << total_leakage_energy*1e-9 << endl;
+  cout << "Baseline Leakage Energy is " << baseline_leakage_energy*1e-9 << endl;
 }
 
 
@@ -6780,7 +6911,7 @@ void PowerOpt::simulate2()
       recvInputs2(i, wavefront);
 
       runSimulation(wavefront, i, true); // simulates  the positive edge
-      updateRegOutputs();
+      updateRegOutputs(i);
       if (probeRegisters(i) == true)
       {
         print_processor_state_profile(i);
@@ -6848,7 +6979,9 @@ bool PowerOpt::probeRegisters(int cycle_num)
        if (Z == "X")
        {
          pmem_request_file << "Z is corrupt\n" ;
+         state_corrupted = true;
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("0", sim_wf);
+         cout << "SAVING STATE 1" << endl;
          system_state* sys_state_1 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
@@ -6859,6 +6992,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          }
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("1", sim_wf);
+         cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
@@ -6875,7 +7009,9 @@ bool PowerOpt::probeRegisters(int cycle_num)
        if (C == "X")
        {
          pmem_request_file << "C is corrupt\n" ;
+         state_corrupted = true;
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("0", sim_wf);
+         cout << "SAVING STATE 1" << endl;
          system_state* sys_state_1 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
@@ -6886,6 +7022,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          }
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("1", sim_wf);
+         cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
@@ -6902,7 +7039,9 @@ bool PowerOpt::probeRegisters(int cycle_num)
        if (N == "X")
        {
          pmem_request_file << "N is corrupt\n" ;
+         state_corrupted = true;
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
+         cout << "SAVING STATE 1" << endl;
          system_state* sys_state_1 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
@@ -6913,6 +7052,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          }
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
+         cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
@@ -6968,6 +7108,23 @@ void PowerOpt::updateFromMem()
 {
   sendData(dmem_data);
   sendInstr(pmem_instr);
+}
+
+void PowerOpt::dumpPmem()
+{
+  pmem_contents_file << "PMEM Contents " << endl;
+  for (int i = 0; i < PMemory.size(); i++)
+  {
+    pmem_contents_file << i << " : " << hex << PMemory[i]->instr << dec << " : ";
+    vector<bool>& domain_activity = PMemory[i]->domain_activity;
+    for (int j = 0; j < cluster_id; j++)
+    {
+      if (domain_activity[j] == true) pmem_contents_file << " ON : ";
+      else pmem_contents_file << " OFF : ";
+    }
+    if (PMemory[i]->executed == true) pmem_contents_file << " Executed ";
+    pmem_contents_file << endl;
+  }
 }
 
 void PowerOpt::dump_Dmemory()
@@ -7362,25 +7519,31 @@ void PowerOpt::readClusters()
 {
    ifstream cluster_file_names;
    cluster_file_names.open(clusterNamesFile.c_str());
+   cluster_id = 0;
+   float time_period = 1e-8;
    if (cluster_file_names.is_open()){
      string cluster_file_name;
-     int cluster_id = 0;
      while ( getline(cluster_file_names, cluster_file_name))
      {
        ifstream cluster_file;
        cluster_file.open(cluster_file_name.c_str());
-       vector<Gate*> cluster;
+       Cluster* cluster = new Cluster;
+       cluster->setId(cluster_id);
+       float cluster_leakage_energy = 0.0;
        if(cluster_file.is_open())
        {
          string gate_name;
          while (getline(cluster_file, gate_name))
          {
            Gate* gate = m_gates[gateNameIdMap[gate_name]];
+           cluster_leakage_energy += libLeakageMap[gate->getCellName()]*time_period;
            gate->setClusterId(cluster_id);
-           cluster.push_back(gate);
+           cluster->push_back(gate);
          }
+         cluster_leakage_energy = cluster_leakage_energy*1e-9;
+         cluster->setLeakageEnergy(cluster_leakage_energy);
        }
-       clusters.insert(make_pair(cluster_file_name, cluster)); // bad coding. Might copy the entire vector into the map;
+       clusters.insert(make_pair(cluster_id, cluster)); // bad coding. Might copy the entire vector into the map;
        cluster_id++;
      }
    }
@@ -7393,11 +7556,11 @@ void PowerOpt::countClusterCuts()
     // For each clusterfile create a vector of gates with names 1, 2, 3 ......  . ALSO maintain a cluster id for each gate
     readClusters();
     // Iterate over each cluster and get the number of cuts. Add them all and divide by 2 since each cut is counted twice.
-    map<string, vector<Gate*> > :: iterator it;
+    map<int, Cluster* > :: iterator it;
     int total_cut_count = 0;
     for (it = clusters.begin(); it != clusters.end(); it++)
     {
-        vector<Gate*> cluster = it->second;
+        vector<Gate*> cluster = it->second->getMembers();;
         int cluster_cut_count = 0;
         for (int i = 0; i < cluster.size(); i++)
         {
@@ -7970,7 +8133,7 @@ void PowerOpt::handle_toggled_nets_newer(vector< pair<string, string> > & toggle
 }
 
 void PowerOpt::handle_toggled_nets_new(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time)
-{
+{// PIN BASED DTA ANALYSIS
   if (toggled_nets.size() == 0) return;
    if (exeOp == 22) { handle_toggled_nets_newer(toggled_nets, T, cycle_num,  cycle_time); return ;}
    cout << "Handling Toggled Nets for cycle " << cycle_num << " " << cycle_time  << endl;
@@ -8064,7 +8227,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
   if (exeOp == 22) return;
   if (toggled_nets.size())
   {
-    cout << "Handling Toggled Nets"  << endl;
+    //cout << "Handling Toggled Nets"  << endl;
       for (int i = 0 ; i < toggled_nets.size() ; i++)
       {
           string cellstr;
@@ -8080,7 +8243,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
             cellstr = (*gate_lookup).second;
           }
           //cout << toggled_nets[i] << " --> " << cellstr << endl;
-          net_gate_maps << toggled_nets[i].first  << " --> " << cellstr << endl;
+          //net_gate_maps << toggled_nets[i].first  << " --> " << cellstr << endl;
           if ( cellstr != "NULL_CELL" ) {
             if ( cellstr == "MULTI_DRIVEN_NET" ) {
               cout << "[ERROR] This net " << net_name << " is driven by multiple cells" << endl;
@@ -8094,7 +8257,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
       }
       //check_for_flop_toggles_fast(cycle_num, cycle_time, T);
       //extractPaths(cycle_num, pathID);
-      if (exeOp == 15)
+/*      if (exeOp == 15)
         check_for_flop_toggles(cycle_num, cycle_time, T);
       else if (exeOp == 16)
         check_for_flop_toggles_fast(cycle_num, cycle_time, T);
@@ -8103,7 +8266,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
       else {
         cout << "Wrong ExeOp given " << endl;
         exit(0);
-      }
+      }*/
     //cout << "Exiting "  << endl;
     //exit(0);
   }
@@ -8535,7 +8698,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
             string net_name = net_dictionary[abbrev];
             vector<string> tokens;
             tokenize(net_name, '/', tokens);
-            net_name = tokens[1];
+            if (tokens.size() == 2) net_name = tokens[1];
             Net * net = nets[netNameIdMap[net_name]];
             if(exeOp == 22)
             {
@@ -9305,6 +9468,7 @@ void PowerOpt::print_toggle_profiles()
   cout << "[PowerOpt] Printing toggle profiles" << endl;
   for (int i = 0; i < getGateNum(); i++)
   {
+    if (m_gates[i]->getIsClkTree() == true) continue;
     m_gates[i]->printToggleProfile(toggle_profile_file);
   }
 }

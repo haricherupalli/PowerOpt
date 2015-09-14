@@ -47,6 +47,50 @@ namespace POWEROPT {
   		}
   };*/
 
+class Instr {
+  
+  public :
+  Instr(int val) 
+  {
+    instr = val;
+    domain_activity.resize(4, false);
+    executed = false;
+  }
+  unsigned int instr;
+  vector<bool> domain_activity;
+  bool executed;
+};
+
+class Cluster  {
+
+  public:
+  Cluster() 
+  {
+    active = false;
+  }
+  void setActive(bool act) { active = act;}  
+  bool getActive() { return active; }
+  void push_back(Gate* gate) { members.push_back(gate); }
+  vector<Gate*> & getMembers() { return members; }
+  void setId(int val) { id = val;}
+  int getId() {return id;}
+  void setLeakageEnergy(float val) { leakage_energy = val; }
+  float getLeakageEnergy() {return leakage_energy;}
+
+  private:
+  bool active ;
+  int id;
+  vector<Gate*> members;
+  float leakage_energy;
+};
+
+/*struct sys_state_comp() {
+  bool operator() (const system_state* lhs, const system_state* rhs) const
+  {
+    if (lhs->
+
+  }*/
+
 class PowerOpt {
     public:
     //constructors
@@ -117,7 +161,10 @@ class PowerOpt {
     bool check_peripherals();
     bool check_sim_end(int& i, bool wavefront);
     void readPmemFile();
+    void readStaticPGInfo();
+    void compute_leakage_energy();
     string getPmemAddr();
+    void dumpPmem();
     int getEState();
     int getInstType();
     string getDmemAddr();
@@ -142,8 +189,10 @@ class PowerOpt {
     void runSimulation(bool wavefront, int cycle_num, bool pos_edge);
     void clearSimVisited();
     void readSimInitFile();
+    void readInputValueFile();
+    void resetClustersActive();
     void readDmemInitFile();
-    void updateRegOutputs();
+    void updateRegOutputs(int cycle_num);
     bool probeRegisters(int cycle_num);
     void updateFromMem();
     void printRegValues();
@@ -790,6 +839,7 @@ class PowerOpt {
     ofstream fanins_file;
     ofstream processor_state_profile_file;
     ofstream dmem_contents_file;
+    ofstream pmem_contents_file;
     ofstream missed_nets;
     bool keepLog;
     int iter;
@@ -880,7 +930,9 @@ class PowerOpt {
     string moduleNamesFile;
     string clusterNamesFile;
     string simInitFile;
+    string inputValueFile;
     string dmemInitFile;
+    string staticPGInfoFile;
     string dbgSelectGatesFile;
     string pmem_file_name;
     string worstSlacksFile;
@@ -888,7 +940,8 @@ class PowerOpt {
     string reportFile;
     string untDumpFile;
     string utDumpFile;
-    vector<int> PMemory;
+    //vector<pair<int, vector<bool>* > > PMemory;
+    map <int, Instr* > PMemory;
     map<int, xbitset> DMemory;
 
 
@@ -951,12 +1004,14 @@ class PowerOpt {
     map<string, pair< int, pair <int, float > > > toggled_sets_counts; // name, number of occurances, slack
     map<string,  pair<int, pair< int, float> > > toggled_terms_counts; // terminalname, number of occurances, slack
     map<int, list <pair<Gate*, Gate*> > > corr_map; // correlation map
-    map<string, vector<Gate*> > clusters; // Power Domains
+    map<int, Cluster* > clusters; // Power Domains
     SetTrie* tree;
     Graph * graph;
     //vector< vector <gate*> > Power_domains;
 
 
+    int num_inputs;
+    vector<string> inputs;
     string dmem_data;
     string pmem_instr;
     string instr_name;
@@ -965,6 +1020,10 @@ class PowerOpt {
     bool recv_inputs;
     bool send_data;
     bool send_instr;
+    unsigned int pmem_addr;
+    int cluster_id;
+    double total_leakage_energy;
+    double baseline_leakage_energy;
 };
 
 }

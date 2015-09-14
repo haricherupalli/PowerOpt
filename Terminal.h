@@ -77,7 +77,7 @@ namespace POWEROPT {
     string getExpr() ;
     void setExpr(string Expr);
     string getNetName(); 
-    void setSimValue(string value, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+    bool setSimValue(string value, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
     void setSimValue(string value);
     string getSimValue() ;
     ToggleType getSimToggType() ;

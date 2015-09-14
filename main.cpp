@@ -49,6 +49,8 @@ void my_handler (int s) {
   po.dump_slack_profile();
   po.dump_toggle_counts();
   po.dump_Dmemory();
+  po.update_profile_sizes();
+  po.print_toggle_profiles();
   //po.print_nets();
   //po.print_term_exprs();
   po.exitPT();
@@ -206,7 +208,7 @@ int main(int argc, char *argv[])
 
     po.setDontTouch();
     t2  = time(NULL);
-    //po.mark_clock_tree_cells(&T);
+    po.mark_clock_tree_cells(&T);
     //po.print_pads();
     //po.print_gate_leakage_vals();
     //po.print_gates(); my_handler(0);
@@ -622,11 +624,16 @@ int main(int argc, char *argv[])
       po.readSelectGatesFile();
       po.readConstantTerminals();// my_handler(0);
       po.topoSort(); 
+      po.readClusters();
       //po.print_pads(); return 0;
       po.readPmemFile();
+      po.readStaticPGInfo();
       po.simulate();
       po.simulate2();
       //po.dump_Dmemory();
+      po.dumpPmem();
+      po.update_profile_sizes();
+      po.print_toggle_profiles();
     }
     if (po.getExeOp() == 22) //  SIMPLE VCD ANALYSIS
     {

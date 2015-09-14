@@ -68,21 +68,17 @@ std::ofstream net_debug_file ("PowerOpt/net_debug_file", std::ofstream::out);
      //if (value.empty()) assert(0);
      if (sim_val != value)
      {
-       net_debug_file << name << " : " <<  sim_val << " --> " << value << endl;
-       if ((sim_ignore_once == true) && sim_val == "X")
+       if ((sim_ignore_once == true) && (sim_val == "X" || sim_val == "Xb") )
        {
          sim_ignore_once = false; 
-         //cout << " IGNORED " << endl;
        }
        else 
        {
-         //net_debug_file << name << " : " <<  sim_val << " --> " << value << endl;
          if (check_toggles == true){
             toggled = true; // whether the toggle needs to be registered or not.
-            //net_debug_file << "Setting toggled to true" << endl;
          }
-         //cout << " TOGGLED " << endl;
        }
+      // handle Xbs here
        if ( sim_val == "X" || value == "X") sim_toggle_type = UNKN;
        else if (sim_val == "0" && value == "1") sim_toggle_type = FALL;
        else if (sim_val == "1" && value == "0") sim_toggle_type = RISE;
@@ -94,6 +90,7 @@ std::ofstream net_debug_file ("PowerOpt/net_debug_file", std::ofstream::out);
        return true;
      }
     sim_toggle_type = CONSTANT;
+    if (value == "X" || value == "Xb") return true;
      //cout << " NOT " << endl;
     return false;
   }

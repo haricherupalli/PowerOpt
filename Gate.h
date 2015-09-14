@@ -44,6 +44,7 @@ namespace POWEROPT {
       else if (cellName.compare(0,2,"XO") == 0) { func = XOR;   gate_op = "^";}
     
         isClkTree = false;
+      cluster_id = -1;
     }
     // a public structure that holds power info for each possible master cell this cell instance can have
     vector<double> cellPowerLookup;
@@ -374,21 +375,21 @@ namespace POWEROPT {
                 void handleORExpr   ( );
                 void handleXNORExpr ( );
                 void handleXORExpr  ( );
-                void computeANDVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeBUFFVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeINVVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeNANDVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeNORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeORVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                void computeVal(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
-                void transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeANDVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeBUFFVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeINVVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeNANDVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeNORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeORVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeVal(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 string getSimValue();
 
     //assume gate delay is computed as the average value of TPLH and TPHL
