@@ -505,7 +505,7 @@ int main(int argc, char *argv[])
         cout<<"[PowerOpt] Print Dynamic Slack Distribution "<<endl;
         //po.parsePtReport();
         t2  = time(NULL);
-        po.readFlopWorstSlacks();
+        //po.readFlopWorstSlacks();
         po.read_modules_of_interest();
         if (po.preprocess()) {
           t3  = time(NULL);
@@ -531,7 +531,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    if ( po.getExeOp() == 16 || po.getExeOp() == 23 ) {      // UNIQUIFICATION OVER MARKED GATESETS
+    if ( po.getExeOp() == 16 || po.getExeOp() == 23 ) {      // UNIQUIFICATION OVER MARKED GATESETS, 23 is for net-based
         cout<<"[PowerOpt] Reading in the gate sets"<<endl;
         t2  = time(NULL);
         //po.readFlopWorstSlacks();
@@ -567,7 +567,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    if ( po.getExeOp() == 17 || po.getExeOp() == 24 ) {      //  SUBSET BASED UNIQUIFICATION OVER MARKED GATESETS
+    if ( po.getExeOp() == 17 || po.getExeOp() == 24 ) {      //  SUBSET BASED UNIQUIFICATION OVER MARKED GATESETS 24 is for net-based
         cout<<"[PowerOpt] Reading in the gate sets"<<endl;
         t2  = time(NULL);
         //po.readFlopWorstSlacks();
@@ -598,8 +598,9 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    if (po.getExeOp() == 18 ) { // Build Toposort of the design
-       
+    if (po.getExeOp() == 18 ) { // Build Toposort of the design and compute net expressions
+      // DEPRECATED MODE DUE TO LARGE SIZE OF THE NET EXPRESSIONS
+
       //po.getClkTree();
       //po.print_fanin_cone();
       po.topoSort();
@@ -608,18 +609,18 @@ int main(int argc, char *argv[])
     
     }
 
-    if (po.getExeOp() == 19)
+    if (po.getExeOp() == 19) // Counts the Cuts between the clusters. TODO translate these to power numbers;
     {
         po.countClusterCuts();
     }
     
-    if (po.getExeOp() == 20)
+    if (po.getExeOp() == 20) // NO IDEA WHAT THIS CODE IS FOR
     {
         po.read_ut_dump_file();
         po.find_dynamic_slack_1(&T);
     }
 
-    if (po.getExeOp() == 21) // NETLIST SIMULATION
+    if (po.getExeOp() == 21) // NETLIST SIMULATION (X_based)
     {
       po.readSelectGatesFile();
       po.readConstantTerminals();// my_handler(0);
@@ -635,7 +636,7 @@ int main(int argc, char *argv[])
       po.update_profile_sizes();
       po.print_toggle_profiles();
     }
-    if (po.getExeOp() == 22) //  SIMPLE VCD ANALYSIS
+    if (po.getExeOp() == 22) //  SIMPLE VCD ANALYSIS TO GET CONSTANT NET CONSTRAINTS (DTS)
     {
        po.read_modules_of_interest();
        t3  = time(NULL);
