@@ -238,6 +238,7 @@ namespace POWEROPT {
         void    incToggleCount() {toggle_count++ ;}
         void    updateToggleProfile(int cycle_num);
         void    printToggleProfile(ofstream& file);
+        void    print_terms(ofstream& file);
         void    resizeToggleProfile(int val);
         int     getToggleCountFromProfile() ;
         int     getToggleCorrelation(Gate* gate);

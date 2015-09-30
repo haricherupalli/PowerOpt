@@ -682,28 +682,51 @@ int Gate::max_toggle_profile_size = 0;
 		nets.push_back(n);
 	}
 
-   void Gate::updateToggleProfile(int cycle_num)
-   {
-      int sz = CHAR_BIT*sizeof(ulong);
-      int rem = cycle_num%sz;
-      int quo = cycle_num/sz;
+  void Gate::updateToggleProfile(int cycle_num)
+  {
+     int sz = CHAR_BIT*sizeof(ulong);
+     int rem = cycle_num%sz;
+     int quo = cycle_num/sz;
 
-      if (quo + 1 > toggle_profile.size()) toggle_profile.resize(quo+1, (long) 0xFFFFFFFFFFFFFFFF);
-      toggle_profile[quo].set(rem,0);
-      if (max_toggle_profile_size < toggle_profile.size()) max_toggle_profile_size = toggle_profile.size();
+     if (quo + 1 > toggle_profile.size()) toggle_profile.resize(quo+1, (long) 0xFFFFFFFFFFFFFFFF);
+     toggle_profile[quo].set(rem,0);
+     if (max_toggle_profile_size < toggle_profile.size()) max_toggle_profile_size = toggle_profile.size();
+  }
+
+   void Gate::printToggleProfile(ofstream& file)
+   {
+
+       file << name << ",";
+       for (int i = 0; i < toggle_profile.size(); i++)
+       {
+         file << toggle_profile[i].to_string() << ",";
+       }
+       file << endl;
    }
 
-    void Gate::printToggleProfile(ofstream& file)
-    {
-
-        file << name << ",";
-        for (int i = 0; i < toggle_profile.size(); i++)
-        {
-          file << toggle_profile[i].to_string() << ",";
-        }
-        file << endl;
-    }
-
+   void Gate::print_terms(ofstream& file)
+   {
+      for (int i = 0; i < faninPads.size(); i ++)
+      {
+        Pad* pad = faninPads[i];
+        file << pad->getName() << " : " << pad->getSimValue() << endl; 
+      } 
+      for (int i = 0; i < faninTerms.size(); i ++)
+      {
+        Terminal* term = faninTerms[i];
+        file << term->getFullName() << " : " << term->getSimValue() << endl; 
+      } 
+      for (int i = 0; i < fanoutTerms.size(); i ++)
+      {
+        Terminal* term = fanoutTerms[i];
+        file << term->getFullName() << " : " << term->getSimValue() << endl; 
+      } 
+      for (int i = 0; i < fanoutPads.size(); i ++)
+      {
+        Pad* pad = fanoutPads[i];
+        file << pad->getName() << " : " << pad->getSimValue() << endl; 
+      } 
+   }
 
    int Gate::getToggleCountFromProfile()
    {
@@ -2116,11 +2139,15 @@ int Gate::max_toggle_profile_size = 0;
             Gate* gate = net->getDriverGate();
             int id;
             if (gate != NULL) id = gate->getTopoId();
-            else if (net->getPadNum() == 0) { assert (net->getName() == net->getTerminal(0)->getFullName()); id = -1; }
-            else {id = net->getPad(0)->getTopoId(); }
+            else if (net->getPadNum() == 0) {// net has no driver (pad or gate) so it must be a forced constant (net_name == terminal_name)
+              assert (net->getName() == net->getTerminal(0)->getFullName());
+              id = -1;
+            } 
+            else {
+              id = net->getPad(0)->getTopoId();
+            }
 
             topo_ids.push_back(id);
         }
     }
-
 }

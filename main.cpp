@@ -169,7 +169,7 @@ int main(int argc, char *argv[])
     po.initSTA(&T);
 
     double worstSlack = po.getInitWNS();
-    double worstSlackMin = po.getInitWNSMin();
+    //double worstSlackMin = po.getInitWNSMin();
     double leakage = po.getPtpxOff() ? po.getLeakPower() : T.getLeakPower();
     double totalPower = po.getPtpxOff() ? 0 : T.getTotalPower();
 
@@ -220,13 +220,12 @@ int main(int argc, char *argv[])
     else cout << "Arrival is " << arrival << endl;
     my_handler(0);*/
     
-    //po.print_nets(); my_handler(0);
+    //po.print_nets();// my_handler(0);
     //po.my_debug(&T); my_handler(0);
     //po.print_terminals();  my_handler(0);
     po.build_net_name_id_map();
 //    po.print_net_name_id_map();
-    po.build_term_name_id_map();
-    po.print_fanin_cone();
+    po.build_term_name_id_map(); //my_handler(0);
 //    po.print_term_name_id_map();
 //      string input = "\"Hello World!\"";
 //      T.test(input);
@@ -622,9 +621,11 @@ int main(int argc, char *argv[])
 
     if (po.getExeOp() == 21) // NETLIST SIMULATION (X_based)
     {
+      po.checkConnectivity(); 
       po.readSelectGatesFile();
       po.readConstantTerminals();// my_handler(0);
       po.topoSort(); 
+      po.print_fanin_cone();
       po.readClusters();
       //po.print_pads(); return 0;
       po.readPmemFile();
@@ -644,7 +645,7 @@ int main(int argc, char *argv[])
        // READ EVERY CYCLE OF THE VCD
        // AT THE CYCLE OF INTEREST, start marking if the net toggled
        // THEN PRINT ALL THE NON-TOGGLED NETS OUT
-       po.print_nets();
+       po.print_const_nets();
        t4 = time(NULL);
        cout << " vcd read time : " << t4 - t3 << endl;
     }

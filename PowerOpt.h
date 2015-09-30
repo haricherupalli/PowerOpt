@@ -155,6 +155,8 @@ class PowerOpt {
     void print_fanin_cone();
     void print_processor_state_profile(int cycle_num);
     void print_dmem_contents(int cycle_num);
+    void checkConnectivity();
+    string printPC();
     void topoSort();
     void simulate();
     void simulate2();
@@ -207,6 +209,7 @@ class PowerOpt {
     void checkTopoOrder(Graph* graph);
     void printTopoOrder();
     void print_nets();
+    void print_const_nets();
     void print_pads();
     void print_terminals();
     void print_gates();

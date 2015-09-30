@@ -401,14 +401,14 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     if (useGT) ptpxOff = true;
     file.close();
 
-  FILE * VCDfile;
-  string VCDfilename = vcdPath + "/" + vcdFile[0];
-  VCDfile = fopen(VCDfilename.c_str(), "r");
-  if(VCDfile == NULL){
-    printf("ERROR, could not open VCD file: %s\n",VCDfilename.c_str());
-    exit(1);
-  }
-  fclose(VCDfile);
+//  FILE * VCDfile;
+//  string VCDfilename = vcdPath + "/" + vcdFile[0];
+//  VCDfile = fopen(VCDfilename.c_str(), "r");
+//  if(VCDfile == NULL){
+//    printf("ERROR, could not open VCD file: %s\n",VCDfilename.c_str());
+//    exit(1);
+//  }
+//  fclose(VCDfile);
 }
 
 void PowerOpt::openFiles()
@@ -468,16 +468,21 @@ void PowerOpt::closeFiles()
 void PowerOpt::print_processor_state_profile(int cycle_num)
 {
   processor_state_profile_file <<  "PRINTING PROFILE FOR CYCLE " << cycle_num << endl;
-  for (int i = 0; i < terms.size(); i++)
+//  for (int i = 0; i < terms.size(); i++)
+//  {
+//    Terminal * term = terms[i];
+//    processor_state_profile_file << term->getFullName() << ":" << term->getSimValue() << endl ;
+//  }
+  for (int i = 0; i < m_gates.size(); i++)
   {
-    Terminal * term = terms[i];
-    processor_state_profile_file << term->getFullName() << ":" << term->getSimValue() << endl ;
+    Gate* gate = m_gates[i];
+    gate->print_terms(processor_state_profile_file);
   }
-  for (int i = 0; i < m_pads.size(); i++)
+/*  for (int i = 0; i < m_pads.size(); i++)
   {
     Pad *pad  = m_pads[i];
     processor_state_profile_file << pad->getName() << ":" << pad->getSimValue() << endl ;
-  }
+  }*/
 //  list<GNode*>::iterator it = nodes_topo.begin();
 //  for (it = nodes_topo.begin(); it != nodes_topo.end(); it ++)
 //  {
@@ -504,69 +509,29 @@ void PowerOpt::print_fanin_cone()
   for (int i = 0; i < getGateNum(); i ++)
   {
     Gate* g = m_gates[i];
-    //cout << i << "(" << g->getName() << ")" << endl;
-    //if (g->getFaninGateNum() < g->getFaninTerminalNum())
+    int parent_topo_id = g->getTopoId();
+    fanins_file << i << "(" << g->getName() << ")  (" << g->getCellName() << ") " <<  " (" << parent_topo_id << ") " << endl;
+    for (int l = 0; l < g->getFaninTerminalNum(); ++l)
     {
-       fanins_file << i << "(" << g->getName() << ")  (" << g->getCellName() << ") " << endl;
-       for (int l = 0; l < g->getInputSubnetNum(); ++l)
-       {
-          Subnet * subnet = g->getInputSubnet(l);
-          Terminal * op_terminal = subnet->getOutputTerminal();
-          if (!subnet->inputIsPad()) {
-             Terminal * inp_terminal = subnet->getInputTerminal();
-             fanins_file << " . \t  Gate is -->" << inp_terminal->getGate()->getName() << " (" << op_terminal->getName()  << ") " <<  endl;
-          }
-          else {
-             fanins_file <<  " . \t  Input Pad is --> " << subnet->getInputPad()->getName() << " (" << op_terminal->getName() << ") " << endl;
-          }
-       }
+      Terminal * terminal = g->getFaninTerminal(l);
+      Net* net = terminal->getNet(0);
+      Gate* gate = net->getDriverGate();
+      if (gate != 0) {
+        int id = gate->getTopoId();
+        if (!g->getFFFlag()) assert(id < parent_topo_id);
+        fanins_file << " . \t  Gate is -->" << gate->getName() << " (" << terminal->getName()  << ") " << " (" << id << ") " <<  endl;
+      }
+      else if (net->getName() != terminal->getFullName()) {
+        Pad* pad = net->getPad(0); 
+        int id = pad->getTopoId();
+        if (!g->getFFFlag()) assert(id < parent_topo_id);
+        fanins_file <<  " . \t  Input Pad is --> " << pad->getName() << " (" << terminal->getName() << ") " <<  " (" << id << ") " << endl;
+      }
+      else { // constant nets
+        fanins_file << " . \t  Constant --> " << terminal->getSimValue() << " (" << terminal->getName() << ") "  << endl;
+      }
     }
-//    for (int l = 0; l < g->getFaninGateNum(); ++l)
-//    {
-//      cout << "\t-->" << g->getFaninGate(l)->getId() << endl;
-//    }
   }
-
-/*  for (int i = 0; i < getTerminalNum(); i ++)
-  {
-     Terminal* term = getTerminal(i);
-     cout << " Terminal :  "   << term->getName() << endl;
-
-  }*/
-
-/*  for(int i =0; i < getPadNum(); i ++)
-  {
-//    if (getPad(i)->getType() == PrimiaryInput)
-//    cout << "Pad: " << getPad(i)->getName() << endl;
-      //if (getPad(i)->getName() == "aclk")
-      {
-        cout << getPad(i)->getName();
-        for(int j =0;  j < getPad(i)->getNetNum(); j++)
-        {
-          cout << " --> " <<  getPad(i)->getNet(j)->getName();
-        }
-        cout << endl;
-      }
-  }*/
-/*  for(int i =0; i < getGateNum(); i ++)
-  {
-//    if (getPad(i)->getType() == PrimiaryInput)
-//    cout << "Pad: " << getPad(i)->getName() << endl;
-      //if (getPad(i)->getName() == "aclk")
-      {
-        cout << getGate(i)->getName() << " ( " << getGate(i)->getFanoutTerminalNum() << " ) ";
-        for(int j =0;  j < getGate(i)->getFanoutTerminalNum(); j++)
-        {
-          Terminal* term = getGate(i)->getFanoutTerminal(j);
-            for (int k = 0 ; k < term->getNetNum(); k++)
-            {
-                cout << " --> " << term->getNet(k)->getName();
-            }
-          //cout << " --> " <<  getGate(i)->getFanoutTerminal(j)->getName();
-        }
-        cout << endl;
-      }
-  }*/
 }
 
 void PowerOpt::populateGraphDatabase(Graph* graph)
@@ -799,7 +764,6 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
   else if (dco_clk_value == "0") dco_clk_pad-> setSimValue("1", sim_wf);
   else { cout << " dco_clk : " <<  dco_clk_value << endl; assert(0); }
   clearSimVisited();
-  bool once = false;
   if(wavefront)
   {
     int gate_count = 0;
@@ -808,13 +772,17 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
     {
       GNode* node = sim_wf.top(); sim_wf.pop();
       gate_count ++;
-      debug_file << node->getName() << endl;
       if ((node->getIsPad() == false) && (node->getIsSink() == false)) // Nothing needed for pads
       {
-        // Deadcode
-        if (node->getVisited() == true) continue;
+        if (node->getVisited() == true) continue; // This code is necessary to not re-evaluate gates that were already evaluated. A node can be pushed multiple times into sim_wf.
         node->setVisited(true);
-        // Deadcode
+
+        debug_file << node->getName() << endl;
+        if (node->getName() == "mem_backbone_0/U49")
+        {
+          debug_file << "At Node : " << node->getName() << endl;
+        }
+
         sim_visited.push(node);
         Gate* gate = node->getGate();
         bool toggled = gate->computeVal(sim_wf); // here we push gates into sim_wf
@@ -1010,17 +978,6 @@ void PowerOpt::updateRegOutputs(int cycle_num)
     bool toggled =  ff_gate->transferDtoQ(sim_wf);
     if (toggled)
       ff_gate->updateToggleProfile(cycle_num);
-//    string name = ff_gate->getName();
-//    if ( name == "execution_unit_0_register_file_0_r2_reg_8_" )
-//    {
-//      Terminal* term = ff_gate->getFanoutTerminal(0);
-//      term->setSimValue("0", sim_wf);
-//    }
-//    else if (name == "execution_unit_0_register_file_0_r2_reg_2_")
-//    {
-//      Terminal* term = ff_gate->getFanoutTerminal(0);
-//      term->setSimValue("0", sim_wf);
-//    }
   }
 }
 
@@ -1299,10 +1256,17 @@ void PowerOpt::handleDmem(int cycle_num)
 {
      string dmem_cen = m_pads[padNameIdMap["dmem_cen"]]->getSimValue();
      if (dmem_cen != "0") return;
-     string dmem_wen_0 = m_pads[padNameIdMap["dmem_wen\\[0\\]"]]->getSimValue();
-     string dmem_wen_1 = m_pads[padNameIdMap["dmem_wen\\[1\\]"]]->getSimValue();
-/*     string dmem_wen_0 = m_pads[padNameIdMap["dmem_wen[0]"]]->getSimValue();
-     string dmem_wen_1 = m_pads[padNameIdMap["dmem_wen[1]"]]->getSimValue();*/
+     string dmem_wen_0, dmem_wen_1;
+     if (design =="flat_no_clk_gt")
+     {
+       dmem_wen_0 = m_pads[padNameIdMap["dmem_wen\\[0\\]"]]->getSimValue();
+       dmem_wen_1 = m_pads[padNameIdMap["dmem_wen\\[1\\]"]]->getSimValue();
+     }
+     else if (design == "modified_9_hier")
+     {
+       dmem_wen_0 = m_pads[padNameIdMap["dmem_wen[0]"]]->getSimValue();
+       dmem_wen_1 = m_pads[padNameIdMap["dmem_wen[1]"]]->getSimValue();
+     }
      string dmem_wen = dmem_wen_1 + dmem_wen_0;
      unsigned int dmem_wen_int = strtoull(dmem_wen.c_str(), NULL, 2);
      string dmem_addr_str = getDmemAddr();
@@ -1584,7 +1548,6 @@ void PowerOpt::compute_leakage_energy()
   Instr* instr = PMemory[pmem_addr] ;
   assert(instr->executed == true);
   vector<bool> domain_activity = instr->domain_activity;
-  float time_period = 1e-8;
   for (int i = 0; i < domain_activity.size(); i++)
   {
     Cluster* cluster = clusters[i];
@@ -1600,22 +1563,22 @@ void PowerOpt::compute_leakage_energy()
 void PowerOpt::readMem(int cycle_num, bool wavefront)
 {
     string pmem_addr_str = getPmemAddr();
+/*    if (cycle_num == 2)
+    {
+     assert(pmem_addr_str[13] == 'X');
+     pmem_addr_str[13] = '1';
+    }*/
+  
     pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
     static string  last_addr_string;
     unsigned int instr ;
     if (pmem_addr > 12288) instr = 0;
     else instr = PMemory[pmem_addr]->instr;
-/*    if (instr == 25) {
-      cout << "Writing P3Dout " << endl;
-      print_processor_state_profile(cycle_num);
-      print_dmem_contents(cycle_num);
-      Net::flip_check_toggles();
-    }*/
     pmem_instr = binary(instr);
-    //compute_leakage_energy();
     handleCondJumps();
     send_instr = true;
-    pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) instruction is " << hex << instr << dec << " -> " << pmem_instr << " and cycle is " << cycle_num << endl;
+    string pc = printPC();
+    pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) and PC " << pc << " instruction is " << hex << instr << dec << " -> " << pmem_instr << " and cycle is " << cycle_num << endl;
     handleDmem(cycle_num);
 }
 
@@ -1992,6 +1955,101 @@ bool PowerOpt::readHandShake()
 
 }
 
+void PowerOpt::checkConnectivity()
+{
+/*  for (int i =0 ; i < nets.size(); i++)
+  {
+    Net * net = getNet(i);
+    Terminal* inp_term = net->getInputTerminal();
+    if (inp_term != 0)
+    {
+      Net* inp_term_net = inp_term->getNet(0);
+      debug_file << net->getName() << " : " << inp_term->getFullName() << " : " << inp_term_net->getName() << endl; 
+      if (inp_term_net != net) assert(0);
+    }
+    else
+    {
+      debug_file << net->getName() << " : " << endl; 
+    }
+    
+  }*/
+  for (int i = 0; i < m_pads.size(); i++)
+  {
+    Pad* pad = m_pads[i];
+    if (pad->getType() == PrimiaryOutput) continue;
+    if(pad->getNetNum() == 0) // some input pads are just floating
+    {
+      continue;
+    }
+    assert(pad->getNetNum() == 1); 
+    Net* net = pad->getNet(0);
+    assert(net->getPadNum() == 1);
+    Pad* net_pad = net->getPad(0);
+    assert(net_pad == pad);
+    debug_file << pad->getName() << endl;
+
+  }
+  for (int i =0 ; i < nets.size(); i++)
+  {
+    Net * net = getNet(i);
+    int terms_size = net->getTerminalNum();
+    for (int j =0; j < terms_size; j++)
+    {
+      Terminal* term = net->getTerminal(j);
+      Net* term_net = term->getNet(0);
+
+      if (term_net != net) assert(0);
+    }
+  }
+  cout << " ALL FINE"  << endl; 
+}
+
+string PowerOpt::printPC()
+{
+  string pc_15_val , pc_14_val , pc_13_val , pc_12_val , pc_11_val , pc_10_val , pc_9_val  , pc_8_val  , pc_7_val  , pc_6_val  , pc_5_val  , pc_4_val  , pc_3_val  , pc_2_val  , pc_1_val  , pc_0_val;
+  if (design == "flat_no_clk_gt")
+  {
+    pc_15_val = terms[terminalNameIdMap["frontend_0_pc_reg_15_/Q"]]->getSimValue();
+    pc_14_val = terms[terminalNameIdMap["frontend_0_pc_reg_14_/Q"]]->getSimValue();
+    pc_13_val = terms[terminalNameIdMap["frontend_0_pc_reg_13_/Q"]]->getSimValue();
+    pc_12_val = terms[terminalNameIdMap["frontend_0_pc_reg_12_/Q"]]->getSimValue();
+    pc_11_val = terms[terminalNameIdMap["frontend_0_pc_reg_11_/Q"]]->getSimValue();
+    pc_10_val = terms[terminalNameIdMap["frontend_0_pc_reg_10_/Q"]]->getSimValue();
+    pc_9_val = terms[terminalNameIdMap["frontend_0_pc_reg_9_/Q"]]->getSimValue();
+    pc_8_val = terms[terminalNameIdMap["frontend_0_pc_reg_8_/Q"]]->getSimValue();
+    pc_7_val = terms[terminalNameIdMap["frontend_0_pc_reg_7_/Q"]]->getSimValue();
+    pc_6_val = terms[terminalNameIdMap["frontend_0_pc_reg_6_/Q"]]->getSimValue();
+    pc_5_val = terms[terminalNameIdMap["frontend_0_pc_reg_5_/Q"]]->getSimValue();
+    pc_4_val = terms[terminalNameIdMap["frontend_0_pc_reg_4_/Q"]]->getSimValue();
+    pc_3_val = terms[terminalNameIdMap["frontend_0_pc_reg_3_/Q"]]->getSimValue();
+    pc_2_val = terms[terminalNameIdMap["frontend_0_pc_reg_2_/Q"]]->getSimValue();
+    pc_1_val = terms[terminalNameIdMap["frontend_0_pc_reg_1_/Q"]]->getSimValue();
+    pc_0_val = terms[terminalNameIdMap["frontend_0_pc_reg_0_/Q"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    pc_15_val = terms[terminalNameIdMap["frontend_0/pc_reg_15_/Q"]]->getSimValue();
+    pc_14_val = terms[terminalNameIdMap["frontend_0/pc_reg_14_/Q"]]->getSimValue();
+    pc_13_val = terms[terminalNameIdMap["frontend_0/pc_reg_13_/Q"]]->getSimValue();
+    pc_12_val = terms[terminalNameIdMap["frontend_0/pc_reg_12_/Q"]]->getSimValue();
+    pc_11_val = terms[terminalNameIdMap["frontend_0/pc_reg_11_/Q"]]->getSimValue();
+    pc_10_val = terms[terminalNameIdMap["frontend_0/pc_reg_10_/Q"]]->getSimValue();
+    pc_9_val = terms[terminalNameIdMap["frontend_0/pc_reg_9_/Q"]]->getSimValue();
+    pc_8_val = terms[terminalNameIdMap["frontend_0/pc_reg_8_/Q"]]->getSimValue();
+    pc_7_val = terms[terminalNameIdMap["frontend_0/pc_reg_7_/Q"]]->getSimValue();
+    pc_6_val = terms[terminalNameIdMap["frontend_0/pc_reg_6_/Q"]]->getSimValue();
+    pc_5_val = terms[terminalNameIdMap["frontend_0/pc_reg_5_/Q"]]->getSimValue();
+    pc_4_val = terms[terminalNameIdMap["frontend_0/pc_reg_4_/Q"]]->getSimValue();
+    pc_3_val = terms[terminalNameIdMap["frontend_0/pc_reg_3_/Q"]]->getSimValue();
+    pc_2_val = terms[terminalNameIdMap["frontend_0/pc_reg_2_/Q"]]->getSimValue();
+    pc_1_val = terms[terminalNameIdMap["frontend_0/pc_reg_1_/Q"]]->getSimValue();
+    pc_0_val = terms[terminalNameIdMap["frontend_0/pc_reg_0_/Q"]]->getSimValue();
+  }
+
+  string pc_str = pc_15_val + pc_14_val + pc_13_val+ pc_12_val+ pc_11_val+ pc_10_val+ pc_9_val + pc_8_val + pc_7_val + pc_6_val + pc_5_val + pc_4_val + pc_3_val + pc_2_val + pc_1_val + pc_0_val ;
+  return pc_str;
+}
+
 void PowerOpt::simulate()
 {
    // Read file for initial values of reg-Q pins and input ports
@@ -2002,6 +2060,7 @@ void PowerOpt::simulate()
   bool done_inputs = false;
   jump_cycle = 0;
   int i = 0;
+  print_processor_state_profile(0);
   //for (i = 0; i < num_sim_cycles; i++)
   while(true)
   {
@@ -2026,6 +2085,7 @@ void PowerOpt::simulate()
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
     updateRegOutputs(i);
+    print_processor_state_profile(i);
     if (probeRegisters(i) == true)
     {
       print_processor_state_profile(i);
@@ -2034,7 +2094,7 @@ void PowerOpt::simulate()
       break;
     }
 
-    if (check_sim_end(i, wavefront) == true ) {
+    if (check_sim_end(i, wavefront) == true || i == 100) {
       cout << "ENDING SIMULATION" << endl;
       break ;
     }
@@ -2449,8 +2509,10 @@ void PowerOpt::computeTopoSort_new(Graph* graph)
   while (graph->getWfSize() != 0)
   {
     GNode* node = graph->getWfNode();
-    //debug_file << "Removing : " << node->getName() << endl;
+    debug_file << "Removing : " << node->getName() << endl;
     graph->popWfNode();
+    if (node->getVisited() == true)
+      continue;
     nodes_topo.push_back(node);
     node->setTopoId(count++);
     node->setVisited(true);
@@ -2480,105 +2542,12 @@ void PowerOpt::computeTopoSort_new(Graph* graph)
       GNode* node_nxt = gate_nxt->getGNode();
       if (gate_nxt->allInpNetsVisited() == true && node_nxt->getVisited() == false)
       {
-        //debug_file << "Adding : " << node_nxt->getName() << endl;
+        debug_file << "Adding : " << node_nxt->getName() << " from terminal : " << term->getFullName() << " and Net : " << net->getName() << endl;
         graph->addWfNode(node_nxt);// add to queue
       }
     }
   }
 }
-/*     while (graph->getWfSize() != 0)
-     {
-        GNode* node = graph->getWfNode();
-        cout << "Removing : " << node->getName() << endl;
-        graph->popWfNode();
-        if (node->getVisited() == true)
-          continue;
-        node->setVisited(true);
-        if (node->getIsSource() == true)
-        {
-            if (node->getIsPad() == true)
-            {
-              Pad* pad = node->getPad();
-              assert(!node->getIsGate());
-              if (pad->getNetNum() == 0) continue;
-              Net* net = pad->getNet(0);
-              for (int i = 0; i < net->getTerminalNum(); i++)
-              {
-                Terminal * term = net->getTerminal(i);
-                if (term->getPinType() == OUTPUT)
-                  continue;
-                Gate* gate_prev = term->getGate(); // THIS IS AN OUTPUT TERMINAL
-                // NEED TO CREATE GATE TO GNODE and PAD TO GNODE MAP;
-                GNode* node_prev = gate_prev->getGNode();
-                if ((node_prev->getVisited() == false) && (node_prev->getIsSource() == false) && (node_prev->isInWf() == false))// && (node_next->allInputsReady() == true))
-                {
-                  cout << "Adding : " << node_prev->getName() << endl;
-                  graph->addWfNode(node_prev);// add to queue
-                }
-              }
-            }
-            else
-            {
-              Gate* gate = node->getGate();
-              count--;
-              //m_gates_topo[count] = gate;
-              gate->setTopoId(count);
-              assert(!node->getIsPad());
-              assert(gate->getFanoutTerminalNum() == 1); // gates have only one fanout terminal
-              for (int i = 0; i < gate->getFaninTerminalNum(); i++)
-              {
-                Terminal* fanin_term = gate->getFaninTerminal(i);
-                //if ((fanin_term->getName() == "CP" )|| (fanin_term->getName() == "Q")) continue;
-                //if (fanin_term->getName() == "D") continue;
-                Net* net = fanin_term->getNet(0);
-                for (int i = 0; i < net->getTerminalNum(); i++)
-                {
-                  Terminal * term = net->getTerminal(i);
-                  if (term->getPinType() == INPUT)
-                    continue;
-                  Gate* gate_prev = term->getGate();
-                  // NEED TO CREATE GATE TO GNODE and PAD TO GNODE MAP;
-                  GNode* node_prev = gate_prev->getGNode();
-                  if ((node_prev->getVisited() == false) && (node_prev->getIsSource() == false) && (node_prev->isInWf() == false))// && (node_next->allInputsReady() == true))
-                  {
-                    cout << "Adding : " << node_prev->getName() << endl;
-                    graph->addWfNode(node_prev);// add to queue
-                  }
-                }
-              }
-              //cout << "Gate : " << gate->getName() << " : " << node->getVisited()  << endl;
-            }
-        }
-        else if (node->getIsSink() == false)
-        {
-            Gate* gate = node->getGate();
-            count--;
-            //m_gates_topo[count] = gate;
-            gate->setTopoId(count);
-            assert(!node->getIsPad());
-            for (int i = 0; i < gate->getFaninTerminalNum(); i++)
-            {
-              Terminal* fanin_term = gate->getFaninTerminal(i);
-              Net* net = fanin_term->getNet(0);
-
-              for (int i = 0; i < net->getTerminalNum(); i++)
-              {
-                Terminal * term = net->getTerminal(i);
-                if (term->getPinType() == INPUT)
-                  continue;
-                Gate* gate_prev = term->getGate();
-                // NEED TO CREATE GATE TO GNODE and PAD TO GNODE MAP;
-                GNode* node_prev = gate_prev->getGNode();
-                if (!(node_prev->getVisited()) && !(node_prev->getIsSource()) && !(node_prev->isInWf()))// && (node_prev->allInputsReady() == true))
-                {
-                  cout << "Adding : " << node_prev->getName() << endl;
-                  graph->addWfNode(node_prev);// add to queue
-                }
-              }
-            }
-        }
-        else {assert(0); }
-     }*/
 
 void PowerOpt::computeTopoSort(Graph* graph)
 {
@@ -2764,21 +2733,59 @@ void PowerOpt::print_pads()
 
 }
 
+void PowerOpt::print_const_nets()
+{
+    ofstream const_nets_file;
+    const_nets_file.open("PowerOpt/const_nets_file");
+    const_nets_file << " suppress_message PTE-018 " << endl;
+    const_nets_file << " suppress_message PTE-003 " << endl;
+    const_nets_file << " suppress_message PTE-060 " << endl;
+    const_nets_file << " suppress_message PTE-017 " << endl;
+    for (int i = 0; i < getNetNum(); i++)
+    {
+      Net * net = getNet(i);
+      if (net->getToggled() == false && net->getSimValue() != "X") const_nets_file << " set_case_analysis " << net->getSimValue() << "  [ get_pins -of_objects [ get_net  " << net->getName() << " ]]" << endl;
+    }
+    const_nets_file.close();
+}
+
 void PowerOpt::print_nets()
 {
   debug_file << "FINAL " << endl;
   for (int i = 0; i < getNetNum(); i++)
   {
     Net * net = getNet(i);
-    //cout << "net : " << net->getName() << endl;
+    //debug_file << "net : " << net->getName() << endl;
     if (net->getToggled() == false && net->getSimValue() != "X") debug_file << " NOT TOGGLED " << net->getName() << " val : " << net->getSimValue() << endl;
-    else if (net->getSimValue() == "X") debug_file << " IS X " << net->getName() << endl;
-    //Gate* gate = net->getDriverGate();
+    //else if (net->getSimValue() == "X") debug_file << " IS X " << net->getName() << endl;
+//    Gate* gate = net->getDriverGate();
 //    if (net->getToggled() == true)
 //      debug_file << "TOGGLED " <<  net->getName() << endl;
 //    else
 //      debug_file << "NOT TOGGLED " << net->getName() << endl;
   }
+/*  Gate* gate = m_gates[gateNameIdMap["execution_unit_0/register_file_0/U372"]];
+  debug_file << "Gate is " << gate->getName() << endl;
+  for (int i = 0; i < gate->getFaninTerminalNum(); i ++)
+  {
+    Terminal * term = gate->getFaninTerminal(i);
+    debug_file << term->getName() << " : " << term->getNetName() << endl;
+  }*/
+/*      for (int i = 0; i < faninTerms.size(); i++)
+      {
+         Terminal* term = faninTerms[i];
+         if (term->getName() == "S")
+            S_val = term->getSimValue();
+         else if (term->getName() == "I1")
+            I1_val = term->getSimValue();
+         else if (term->getName() == "I0")
+            I0_val = term->getSimValue();
+      }*/
+   
+  //Terminal* term = terms[terminalNameIdMap["execution_unit_0/register_file_0/U372/S"]]; 
+/*  debug_file << " Term is " << term->getFullName() << endl;
+  debug_file << term->getNetName() << endl;*/
+ 
 }
 
 void PowerOpt::print_regs()
@@ -3263,7 +3270,6 @@ void PowerOpt::read_modules_of_interest()
       {
         trim(module);
         modules_of_interest.insert(module);
-        debug_file << "Inserting module of interest " << module << endl;
       }
     }
     else {
@@ -3352,7 +3358,6 @@ void PowerOpt::handle_toggled_nets_new(vector< pair<string, string> > & toggled_
 
 
        int index = term->getId();
-       ToggleType toggl_type = term->getToggType();
        index = index*3 + togg_type;
        toggled_indices.push_back(index);
        //toggle_info_file << term->getFullName() << " " << term->getToggledTo() << endl;
@@ -3727,14 +3732,14 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
             {
               true_net_name.append(line_contents[4]);
               net_dictionary.insert(pair<string, string> (abbrev, true_net_name));
-              debug_file << true_net_name << endl;
+              //debug_file << true_net_name << endl;
             }
             else if (lc_size == 7)
             {
               true_net_name.append(line_contents[4]);
               true_net_name.append(line_contents[5]);
               net_dictionary.insert(pair<string, string> (abbrev, true_net_name));
-              debug_file << true_net_name << endl;
+              //debug_file << true_net_name << endl;
             }
             else
             {
@@ -3781,7 +3786,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
         }
         time = strtoull(line.substr(1).c_str(), NULL, 10);
         //if (time <= max_time && time >= min_time && (time %5000 == 0) )
-        //if (time == vcdCheckStartCycle)  { Net::flip_check_toggles(); cout << " CHECKING TOGGLES" << endl; }
+        if (time == vcdCheckStartCycle)  { Net::flip_check_toggles(); cout << " CHECKING TOGGLES" << endl; }
 //        //if (time == 333885000)  { Net::flip_check_toggles(); cout << " CHECKING TOGGLES" << endl; }// mult
 //        //if (time == 315740000 )  Net::flip_check_toggles(); // intFilt
 //        //if (time == 282650000 )  Net::flip_check_toggles(); // tea8
@@ -3796,18 +3801,12 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
 //           //if (time == 282550000 )  Net::flip_check_toggles();
          if (time <= max_time && time >= min_time )
          {
-           //cout << "TIME IS " << time << endl;
-//         missed_nets << "TIME IS " << time << endl;
            cycle_num++;
            valid_time_instant = true;
-           debug_file << "TIME IS " << time << endl;
-           //cout << "TIME IS " << time << endl;
-           //toggled_nets_file << "TIME IS " << time << endl;
          }
          else
          {
             valid_time_instant = false;
-            //cout << " Skipping cycle " << time << endl;
             if (time > max_time)
               break;
          }
@@ -4549,7 +4548,6 @@ void PowerOpt::read_ut_dump_file()
       vector<string> tokens;
       tokenize(line, ':', tokens);
       assert(tokens.size() == 2);
-      int id = atoi(tokens[0].c_str());
       stringstream ssl(tokens[1]);
       string gate;
       vector<string> toggled_gates;
@@ -4800,7 +4798,7 @@ void PowerOpt::print_indexed_toggled_set(vector<int> & unit, float worst_slack)
   if(once == false)
   {
      toggle_info_file << "THESE ARE UNITS THAT ARE CLOSE TO DYNAMIC SLACK" << endl;
-     once == true;
+     once = true;
   }
   toggle_info_file << worst_slack << " --> ";
   for (int i = 0; i < unit.size(); i++)
@@ -4858,7 +4856,6 @@ void PowerOpt::find_dynamic_slack_pins_fast(designTiming *T)
   T->suppressMessage("UITE-216");
   float dynamic_slack = 10000.0;
   map<string, pair<int, pair<int, float > > > :: iterator it;
-  int skip = 0;
   for (it = toggled_terms_counts.begin(); it != toggled_terms_counts.end(); it++)
   {
     string toggled_terms_str = it->first;
@@ -5252,7 +5249,6 @@ void PowerOpt::find_dynamic_slack_1(designTiming *T)
   for (int i = 0; i < toggled_gate_vector.size() ; i++)
   {
     vector<string> toggled_gates = toggled_gate_vector[i];
-    double t0 = 0.0;
     //double reset_time = 0.0, set_fp_time = 0.0 , timing_time = 0.0;
     cout << "Setting False Paths" << endl;
     T->setFalsePathsThroughAllCells();
@@ -5403,7 +5399,6 @@ void PowerOpt::check_for_flop_toggles_fast_subset( int cycle_num, int cycle_time
 void PowerOpt::check_for_flop_toggles_fast(int cycle_num, int cycle_time, designTiming * T)
 {
     cout << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
-    int count_not_toggled = 0;
     int count_toggled = 0;
     string toggled_gates_str;
     static int unique_toggled_set_id = 0;
@@ -6108,355 +6103,6 @@ void PowerOpt::readFlopWorstSlacks()
   }
   cout << "DONE READING PROPERLY " << endl;
   cout << "No of endpoints : " << endpoint_worst_slacks.size() << endl;
-}
-
-void PowerOpt::findToggledPaths(Gate *g, Gate *faninD, vector<GateVector> &paths)
-{
-  // start by pushing the faninD gate onto the stack
-  // pop the top and push all toggled fanins as (current path + fanin)
-  // when the source FF is reached, add the path to the paths vector
-  // alernatively, if there is no toggled fanin and one of the input subnets is a PI, then add the path to the paths vector
-
-  GateVector path;
-  int i;
-  Gate *fanin;
-  Gate *gate;
-  int num_toggled_fanins;  // number of toggled fanins (if 0, check for PI)
-
-  stack<GateVector> path_stack;
-
-  // start the first path
-  // @NOTE: gates are added to the vector from end to beginning, so they are processed in reverse order later (outside this fn)
-  path.push_back(g);
-  path.push_back(faninD);
-  path_stack.push(path);
-  int path_count = 0;
-
-  //static int j = 0;
-  while( !path_stack.empty() ){
-    // get the top element and check if the last gate is a FF
-    path.assign( (path_stack.top()).begin(), (path_stack.top()).end() );
-    path_stack.pop();
-    //int size = path_stack.size();
-    // if the last gate is a FF, then add the path to the vector of extracted paths
-    gate = path.back();
-    if( gate->getFFFlag() ){
-        paths.push_back(path);
-        //path_count++;
-    }else{
-      // find all the toggled fanins of gate and push their paths onto the stack
-      num_toggled_fanins = 0;
-      for (i = 0; i < gate->getFaninGateNum(); i++){
-        fanin = gate->getFaninGate(i);
-        if ( fanin->isToggled() ){
-          num_toggled_fanins++;
-          path_stack.push(path);
-          (path_stack.top()).push_back(fanin);
-
-//          j++;
-////          if (j == 10000)
-////            j = 0;
-//          if (j%10000 == 0)
-//          {
-//            size = path_stack.size();
-//            printf(" HERE path stack size : %d \n", size);
-//          }
-//            //printf(" size of path stack is %d\n", size);
-
-        }
-      }
-      // now, check if there were no toggled fanins, indicating that a PI caused this gate to toggle
-      if(num_toggled_fanins == 0){
-        // @NOTE: We check here whether an input net is connected to a PI, but it may not be necessary to check
-        //        We could just assume and add the path to the paths vector
-        // What if more than 1 PI is connected? We would need to know which one toggled. We can find out in extractPaths.
-
-        paths.push_back(path);
-        path_count++;
-
-        /* not checking if connected to a PI, because it must be the case
-        for(i = 0; i < gate->getInputSubnetNum(); i++){
-          if( (gate->getInputSubnet(i))->inputIsPad() ){
-            paths.push_back(path);
-            break;
-          }
-        }
-        */
-      }
-    }
-  }
-  //printf("path count here is : %d \n", path_count);
-}
-
-string PowerOpt::getPathString (GateVector paths)
-{ string out_pin;
-    string PathString = "\\\"";
-    int GateNum = paths.size();
-    // This loop used to go from 0 to GateNum,
-    // but that requires us to insert gates at the beginning of a vector, which is inefficient
-    // I reversed the order of the loop so push_back can be used instead (constant time vs linear time)
-    for (int k=GateNum-1; k >= 0; k--) {
-      Gate *g_tmp = paths[k];
-      outpin_lookup = gate_outpin_dictionary.find(g_tmp->getName());
-      out_pin = (*outpin_lookup).second;
-      if ( k == (GateNum-1) && g_tmp->getFFFlag()){
-        PathString.append(" -from ");
-        PathString.append(g_tmp->getName());
-        PathString.append("/CP");
-        if (GateNum == 1)
-          PathString.append("\\\"");
-      }
-      else if ( k == (GateNum-1) ){
-        // This is the case for a path that begins at a PI
-        PathString.append(" -from ");
-        int isNum = g_tmp->getInputSubnetNum();
-        Subnet *s;
-        for (int kk = 0; kk < isNum; kk++) {
-          s = g_tmp->getInputSubnet(kk);
-          if( s->inputIsPad() ){
-            break;  // This grabs the first input encountered, technically, there could be more than one and this might not have been the one that toggled
-          }
-        }
-        // extract the PI name from the subnet name and append to the PathString
-        string subnet_name = s->getName();
-        string pi_name;
-        size_t location;
-
-        // extract the part before the last hyphen
-        location = subnet_name.rfind("-");
-        pi_name = subnet_name.substr(0,location);
-        // put escape characters before the brackets if they exist
-        location = pi_name.rfind("[");
-        if(location != string::npos){
-          pi_name.replace(location, 1, "\\[");
-          pi_name.replace(pi_name.length()-1, 1, "\\]");
-        }
-
-        PathString.append(pi_name);
-        PathString.append(" -through ");
-        PathString.append(out_pin);
-        if (GateNum == 1)
-          PathString.append("\\\"");
-      }
-      //else if (k == GateNum-1 && g_tmp->getFFFlag()) {
-      else if (k == 0 && g_tmp->getFFFlag()) {
-        PathString.append(" -to ");
-        PathString.append(g_tmp->getName());
-        PathString.append("/D");
-        PathString.append("\\\"");
-      }
-      //else if (k == GateNum-1) {
-      else if (k == 0) {
-        PathString.append(" -through ");
-        PathString.append(out_pin);
-        PathString.append("\\\"");
-      }
-      else {
-        PathString.append(" -through ");
-        PathString.append(out_pin);
-      }
-    }
-    return PathString;
-}
-
-void PowerOpt::initSTA(designTiming *T) {
-    T_main = T;
-    initWNS = T->getWorstSlack(clockName);
-    initWNSMin = T->getWorstSlackMin(clockName);
-    //cout << "initial_WNS: " << initWNS << endl;
-    //cout << "initlal_WNS(min): " << initWNSMin << endl;
-    if (mmmcOn) {
-        for (int i = 0; i < mmmcFile.size(); i++) {
-            initWNS_mmmc.push_back(T_mmmc[i]->getWorstSlack(clockName));
-            initWNSMin_mmmc.push_back(T_mmmc[i]->getWorstSlackMin(clockName));
-            cout << "init_WNS_for_mmmc" << i << ": "
-                 << initWNS_mmmc[i] << endl;
-            cout << "init_WNS_for_mmmc(min)" << i << ": "
-                 << initWNSMin_mmmc[i] << endl;
-        }
-    }
-    char Commands[250];
-    if (!ptLogSave) {
-        sprintf(Commands, "\\rm pt*.log");
-        system(Commands);
-    }
-}
-
-void PowerOpt::exitPT() {
-    T_main->Exit();
-    for (int i = 0; i < mmmcFile.size(); i++) {
-        if (mmmcOn) T_mmmc[i]->Exit();
-    }
-    char Commands[250];
-    if (!ptLogSave) {
-        sprintf(Commands, "\\rm %s*", ptClientTcl.c_str());
-        system(Commands);
-        sprintf(Commands, "\\rm %s*", ptServerTcl.c_str());
-        system(Commands);
-        sprintf(Commands, "\\rm server.slog");
-        system(Commands);
-    }
-}
-
-bool PowerOpt::checkViolation(string cellInst, designTiming *T) {
-    if (checkViolationPT(cellInst,T)) return true;
-    if (!mmmcOn) return false;
-    for (int i = 0; i < mmmcFile.size(); i++) {
-        if (checkViolationMMMC(cellInst, i)) return true;
-    }
-    return false;
-}
-
-bool PowerOpt::checkViolationPT(string cellInst, designTiming *T) {
-
-    double worstSlackMin = 1000;
-
-    // setup check
-    if (chkWNSFlag) {
-        curWNS = T->getWorstSlack(clockName);
-        if ( curWNS < getTargWNS() + (double)getGuardBand() ) return true;
-    } else {
-        double cellSlack = T->getCellSlack(cellInst);
-        if ( cellSlack < (getTargWNS() + (double)getGuardBand())  ) {
-            //cout << "SETUP" << endl;
-            return true;
-        }
-    }
-    if ( getHoldCheck()==1 ) {
-        worstSlackMin = T->getWorstSlackMin(getClockName());
-        if (worstSlackMin < getTargWNSMin()) {
-            //cout << "HOLD" << endl;
-            return true;
-        }
-    }
-    if ( getMaxTrCheck()==1 ) {
-        if (!T->checkMaxTran(cellInst)) {
-            //cout << "MaxTr" << endl;
-            return true;
-        }
-    }
-    return false;
-}
-
-bool PowerOpt::checkViolationMMMC(string cellInst, int mmmc_num) {
-
-    double cellSlack = T_mmmc[mmmc_num]->getCellSlack(cellInst);
-    double worstSlackMin = 1000;
-
-    if (chkWNSFlag) {
-        curWNS = T_mmmc[mmmc_num]->getWorstSlack(clockName);
-        if ( curWNS < getTargWNS_mmmc(mmmc_num) ) return true;
-    }
-    // setup check
-    if ( cellSlack < (getTargWNS_mmmc(mmmc_num) + (double)getGuardBand())  ) {
-        //cout << "SETUP" << endl;
-        return true;
-    }
-    if ( getHoldCheck()==1 ) {
-        worstSlackMin = T_mmmc[mmmc_num]->getWorstSlackMin(getClockName());
-        if (worstSlackMin < getTargWNSMin_mmmc(mmmc_num)) {
-            //cout << "HOLD" << endl;
-            return true;
-        }
-    }
-    if ( getMaxTrCheck()==1 ) {
-        if (!T_mmmc[mmmc_num]->checkMaxTran(cellInst)) {
-            //cout << "MaxTr" << endl;
-            return true;
-        }
-    }
-    return false;
-}
-
-void PowerOpt::clearHolded() {
-    for (int i = 0; i < getGateNum(); i++)
-        m_gates[i]->setHolded(false);
-}
-
-float PowerOpt::getTokenF(string line, string option)
-{
-    float token;
-    size_t sizeStr, startPos, endPos;
-    string arg;
-    sizeStr = option.size();
-    startPos = line.find_first_not_of(" ", line.find(option)+sizeStr);
-    endPos = line.find_first_of(" ", startPos);
-    arg = line.substr(startPos, endPos - startPos);
-    sscanf(arg.c_str(), "%f", &token);
-    return token;
-
-}
-
-string PowerOpt::getTokenS(string line, string option)
-{
-    size_t sizeStr, startPos, endPos;
-    string arg;
-    sizeStr = option.size();
-    startPos = line.find_first_not_of(" ", line.find(option)+sizeStr);
-    endPos = line.find_first_of(" ", startPos);
-    arg = line.substr(startPos, endPos - startPos);
-    return arg;
-}
-
-char* PowerOpt::getTokenC(string line, string option)
-{
-    char token[1000];
-    size_t sizeStr, startPos, endPos;
-    string arg;
-    sizeStr = option.size();
-    startPos = line.find_first_not_of(" ", line.find(option)+sizeStr);
-    endPos = line.find_first_of(" ", startPos);
-    arg = line.substr(startPos, endPos - startPos);
-    sscanf(arg.c_str(), "%s", &token);
-    return token;
-}
-
-// wildcard string compare
-int PowerOpt::cmpString(string wild, string pattern)
-{
-    const char *cp = NULL, *mp = NULL;
-    const char *wd, *pt;
-
-    wd = wild.c_str();
-    //strcpy (wd, wild.c_str());
-    //pt = new char [pattern.size()+1];
-    pt = pattern.c_str();
-    //strcpy (pt, pattern.c_str());
-
-    while ((*pt) && (*wd != '*')) {
-        if ((*wd != *pt) && (*wd != '?')) {
-            //delete[] wd;
-            //delete[] pt;
-            return 0;
-        }
-        wd++;
-        pt++;
-    }
-
-    while (*pt) {
-        if (*wd == '*') {
-            if (!*++wd) {
-                //delete[] wd;
-                //delete[] pt;
-                return 1;
-            }
-            mp = wd;
-            cp = pt+1;
-        } else if ((*wd == *pt) || (*wd == '?')) {
-            wd++;
-            pt++;
-        } else {
-            wd = mp;
-            pt = cp++;
-        }
-    }
-
-    while (*wd == '*') {
-        wd++;
-    }
-    //delete[] wd;
-    //delete[] pt;
-    return !*wd;
 }
 
 }   //namespace POWEROPT
