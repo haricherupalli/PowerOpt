@@ -2094,7 +2094,7 @@ void PowerOpt::simulate()
       break;
     }
 
-    if (check_sim_end(i, wavefront) == true || i == 100) {
+    if (check_sim_end(i, wavefront) == true) {
       cout << "ENDING SIMULATION" << endl;
       break ;
     }
