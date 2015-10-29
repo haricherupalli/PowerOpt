@@ -21,6 +21,7 @@ namespace POWEROPT {
         sim_ignore_once = true;
         toggled = false;
         topo_sort_marked = false;
+        vcdAbbrev = "";
       }
       Net(int nId, string nName):id(nId), name(nName)
       {
@@ -31,6 +32,7 @@ namespace POWEROPT {
         sim_ignore_once = true;
         toggled  = false;
         topo_sort_marked = false;
+        vcdAbbrev = "";
       }
       ~Net() {}
       //modifiers
@@ -72,6 +74,8 @@ namespace POWEROPT {
       bool getTopoSortMarked() { return topo_sort_marked; }
       bool setSimValue(string value); 
       string getSimValue() { return sim_val; }
+      string getVCDAbbrev() { return vcdAbbrev; }
+      void setVCDAbbrev(string new_abbrev) { vcdAbbrev = new_abbrev; }
       ToggleType getSimToggType() { return sim_toggle_type;}
 
     private:
@@ -88,6 +92,7 @@ namespace POWEROPT {
       string Expr;
       bool toggled;
       string prev_val;
+      string vcdAbbrev;
       string new_val;// these values are used for reading vcd;
       ToggleType toggle_type;
       string sim_val;// value used for simulation (exe_op = 20)

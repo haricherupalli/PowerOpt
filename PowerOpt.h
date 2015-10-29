@@ -9,6 +9,7 @@
 #include <inttypes.h>
 //#include <unordered_map>
 
+#include <time.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -232,6 +233,9 @@ class PowerOpt {
     void check_for_flop_paths(int cycle_num, int cycle_time);
     void trace_toggled_path(int cycle_num, int cycle_time);
     void parseVCDALL(designTiming *T);
+    string getVCDAbbrev(int id);
+    void writeVCDBegin();
+    void writeVCDNet(Net *n);
     void parseVCDALL_mode_15(designTiming *T);
     int parseVCD_mode_15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
     int parseVCDMode15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
@@ -777,6 +781,7 @@ class PowerOpt {
     string vcdPath;
     string ptReport;
     vector<string> vcdFile;
+    string vcdOutFile;
     string saifPath;
     vector<string> saifFile;
     string initSwapFile;
@@ -844,6 +849,7 @@ class PowerOpt {
     ofstream dmem_contents_file;
     ofstream pmem_contents_file;
     ofstream missed_nets;
+    ofstream vcd_file;
     bool keepLog;
     int iter;
     int L, U;

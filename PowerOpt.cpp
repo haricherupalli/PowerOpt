@@ -332,6 +332,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             initSwapFile = getTokenS(line, "-initSwap ");
         if (line.find("-vcd ") != string::npos)
             vcdFile.push_back(getTokenS(line, "-vcd "));
+        if (line.find("-vcdo ") != string::npos)
+            vcdOutFile = getTokenS(line, "-vcdo ");
         if (line.find("-saifpath ") != string::npos)
             saifPath = getTokenS(line, "-saifpath ");
         if (line.find("-saif ") != string::npos)
@@ -800,6 +802,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
               cluster->setActive(true);
             }
           }
+          writeVCDNet(gate->getFanoutTerminal(0)->getNet(0));
         }
       }
 //      else
@@ -881,7 +884,7 @@ void PowerOpt::readSelectGatesFile()
 void PowerOpt::readConstantTerminals() // These are gate pins that are constant in the design. Like logic 1 and logic 0.
 {
   ifstream one_pins_file, zero_pins_file;
-  one_pins_file.open("one_pins");
+  one_pins_file.open("one_pins"); // full path or include in cmd file.
   zero_pins_file.open("zero_pins");
   string line;
   if (one_pins_file.is_open())
@@ -999,6 +1002,8 @@ void PowerOpt::readPmemFile()
        addr++;
      }
      cout << " done" << endl;
+  } else {
+    cout << "ERROR: Cannot open pmem file!" << endl;
   }
 }
 
@@ -2062,6 +2067,7 @@ void PowerOpt::simulate()
   int i = 0;
   print_processor_state_profile(0);
   //for (i = 0; i < num_sim_cycles; i++)
+  writeVCDBegin();
   while(true)
   {
     i++;
@@ -2099,6 +2105,7 @@ void PowerOpt::simulate()
       break ;
     }
   }
+  vcd_file.close();
   print_dmem_contents(num_sim_cycles-1);
   cout << "Total Leakage Energy is " << total_leakage_energy*1e-9 << endl;
   cout << "Baseline Leakage Energy is " << baseline_leakage_energy*1e-9 << endl;
@@ -3106,6 +3113,89 @@ void PowerOpt::reportToggleFF(designTiming *T) {
 
     fout.close();
 }
+
+string PowerOpt::getVCDAbbrev(int id)
+{
+    char first_val = 33;
+    char last_val = 126;
+    int num_chars = last_val-first_val+1;
+    int size = ((int) (log2(id)/log2(num_chars)))+1; // indicates length of this id's abbreviation
+    string abbrev("");
+    //#abbrev.reserve(size);
+
+    int modSize = 1;
+    for (int i = 0; i < size; ++i) {
+        modSize *= num_chars;
+        char c = id % modSize;
+        abbrev += c;
+    }
+
+    //return string(abbrev.rbegin(),abbrev.rend());
+    return abbrev;
+}
+
+void PowerOpt::writeVCDBegin()
+{
+    // Open output VCD File
+    vcd_file.open(vcdOutFile.c_str());
+    if (!vcd_file.is_open()) {
+        cout << "WARNING: VCD Output file Cannot be opened!" << endl;
+	return;
+    }
+    
+    // Write date stection
+    vcd_file << "$date" << endl;
+    time_t t = time(0);
+    struct tm * now = localtime(&t);
+    string date_time_str = asctime(now);
+    vcd_file << date_time_str << endl;
+    vcd_file << "$end" << endl;
+
+    // Write version section
+    vcd_file << "$version" << endl;
+    vcd_file << "PowerOpt version `\\_(o_O)_/`¯" <<endl;
+    vcd_file << "$end" << endl;
+
+    // Write comment section
+    vcd_file << "$comment" << endl;
+    vcd_file << "" << endl;
+    vcd_file << "$end" << endl;
+
+    // Write timescale
+    vcd_file << "$timescale 1ps $end" << endl;
+
+    // Generate and write VCD abbreviations for each net in design
+    vcd_file << "$scope module dut $end" << endl;
+    for (int i = 0; i<nets.size(); ++i) {
+	Net *n =getNet(i);
+        string abbrev = getVCDAbbrev(i);
+        vcd_file << "$var wire 1 " << abbrev << " " << n->getName() << " $end" << endl;
+        n->setVCDAbbrev(abbrev);
+    }
+    // FIXME: Write any module definitions which matter mainly for hierarchical designs
+    vcd_file << "$upscope $end" << endl;
+    vcd_file << "$enddefinitions $end" << endl;
+
+ 
+    // Write initial dump section
+    vcd_file << "#0" << endl;
+    vcd_file << "$dumpvars" << endl;
+    for (int i = 0; i<nets.size(); ++i) {
+	Net *n =getNet(i);
+        vcd_file << n->getSimValue() << n->getVCDAbbrev() << endl;
+    }    
+    vcd_file << "$end" << endl;
+    
+}
+
+// Adds the current simulated value of Net n to the VCD file. Assumes that a toggle has just taken place.
+void PowerOpt::writeVCDNet(Net *n)
+{
+    if (vcd_file.is_open()) {
+        vcd_file << n->getSimValue() << n->getVCDAbbrev() << endl;
+    }
+}
+
 
 // parseCycle is the number of cycles to parse in each VCD file
 // if parseCycle == NEGATIVE, parse the entire VCD
