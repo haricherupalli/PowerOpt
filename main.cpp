@@ -534,6 +534,7 @@ int main(int argc, char *argv[])
         cout<<"[PowerOpt] Reading in the gate sets"<<endl;
         t2  = time(NULL);
         //po.readFlopWorstSlacks();
+        po.readConstantTerminals();// my_handler(0);
         po.createSetTrie();
         po.read_modules_of_interest(); // VCD has many unnecessary modules (like library gates)
         po.topoSort();
@@ -621,11 +622,17 @@ int main(int argc, char *argv[])
 
     if (po.getExeOp() == 21) // NETLIST SIMULATION (X_based)
     {
-      po.checkConnectivity(); 
+      po.checkConnectivity(&T); 
       po.readSelectGatesFile();
       po.readConstantTerminals();// my_handler(0);
       po.topoSort(); 
-      po.print_fanin_cone();
+      po.print_fanin_cone(&T);
+      cout << "[UPDATED] Gate Count : " << po.getGateNum() << endl;
+      cout << "[UPDATED] Reg Count : " << po.getRegNum() << endl;
+      cout << "[UPDATED] Net Count : " << po.getNetNum() << endl;
+      cout << "[UPDATED] Terminal Count : " << po.getTerminalNum() << endl;
+      po.print_nets();
+      po.print_terminals();
       po.readClusters();
       //po.print_pads(); return 0;
       po.readPmemFile();

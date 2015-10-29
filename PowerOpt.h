@@ -135,6 +135,10 @@ class PowerOpt {
     void topo_search_gates();
     void set_mux_false_paths();
     void check_for_dead_ends(designTiming* T);
+    void check_for_dead_ends(int cycle_num, string toggled_gates_str);
+    void print_dead_end_gates(int cycle_num);
+    void resetAllVisitedForGates();
+    void resetAllDeadToggles();
     void dump_toggled_sets();
     void dump_units();
     void dump_slack_profile();
@@ -152,11 +156,11 @@ class PowerOpt {
     void update_profile_sizes();
     void my_debug(designTiming * T);
     void print_indexed_toggled_set(vector<int> & unit, float worst_slack);
-    void print_fanin_cone();
-    void print_processor_state_profile(int cycle_num);
+    void print_fanin_cone(designTiming* T);
+    void print_processor_state_profile(int cycle_num, bool reg);
     void print_dmem_contents(int cycle_num);
-    void checkConnectivity();
-    string printPC();
+    void checkConnectivity(designTiming* T);
+    string getPC();
     void topoSort();
     void simulate();
     void simulate2();
@@ -168,6 +172,7 @@ class PowerOpt {
     string getPmemAddr();
     void dumpPmem();
     int getEState();
+    int getIState();
     int getInstType();
     string getDmemAddr();
     string getDmemDin();
@@ -237,6 +242,7 @@ class PowerOpt {
     int parseVCDMode15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
     int parseVCD_mode_15_new(string vcdfilename, designTiming  *T, int parse_cyc, int cycle_offset);
     void handle_toggled_nets(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
+    void handle_toggled_nets_to_get_processor_state(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
     void handle_toggled_nets_new(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
     void handle_toggled_nets_newer(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
     void handle_toggled_nets_to_pins(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time);
@@ -490,6 +496,7 @@ class PowerOpt {
     int getGridNum() { return grids.size(); }
     Grid *getGrid(int i) { assert(0 <= i && i < grids.size()); return grids[i]; }
     int getGateNum() { return m_gates.size(); }
+    int getRegNum() { return m_regs.size(); }
     Gate *getGate(int i) { assert(0 <= i && i < m_gates.size()); return m_gates[i]; }
     Libcell* getLibCell (int i) { assert (0 <= i && i < m_libCells.size()); return m_libCells[i]; }
     int getTerminalNum() { return terms.size(); }
@@ -837,6 +844,7 @@ class PowerOpt {
     ofstream histogram_toggle_counts_file;
     ofstream toggle_profile_file;
     ofstream debug_file;
+    ofstream dead_end_info_file;
     ofstream pmem_request_file;
     ofstream dmem_request_file;
     ofstream fanins_file;

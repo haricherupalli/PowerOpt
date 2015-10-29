@@ -1779,7 +1779,7 @@ int Gate::max_toggle_profile_size = 0;
             fo_term->setSimValue(Dval, sim_wf);
           }
         }
-        if (func == LH)
+        else if (func == LH)
         {
           string Dval,EnVal,Qval;
           for(int i = 0; i < faninTerms.size(); i++)
@@ -1803,6 +1803,7 @@ int Gate::max_toggle_profile_size = 0;
             fo_term->setSimValue(Dval, sim_wf);
           }
         }
+        else assert(0);
         return toggled;
     }
 
@@ -1859,6 +1860,7 @@ int Gate::max_toggle_profile_size = 0;
     bool Gate::computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
+      assert(faninTerms.size() == 3);
       Terminal* fo_term = fanoutTerms[0]; 
       list <pair<Terminal*, double> > term_slack_list;
       string B_val, A1_val, A2_val;
@@ -1927,6 +1929,7 @@ int Gate::max_toggle_profile_size = 0;
     bool Gate::computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
+      assert(faninTerms.size() == 3);
       Terminal* fo_term = fanoutTerms[0]; 
       string S_val, I1_val, I0_val;
       for (int i = 0; i < faninTerms.size(); i++)
@@ -1998,6 +2001,7 @@ int Gate::max_toggle_profile_size = 0;
     bool Gate::computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
+      assert(faninTerms.size() == 3);
       Terminal* fo_term = fanoutTerms[0]; 
       list <pair<Terminal*, double> > term_slack_list;
       string B_val, A1_val, A2_val;
@@ -2150,4 +2154,45 @@ int Gate::max_toggle_profile_size = 0;
             topo_ids.push_back(id);
         }
     }
+
+    bool Gate::check_for_dead_toggle(int cycle_num)
+    {
+      //cout << "Checking for dead toggle for gate " << name << endl;
+      if (!toggled) return false;
+      if (visited && dead_toggle) return false; // returning false will ensure that we won't trace back this gate again.
+      bool all_fanout_dead = true;
+      for(int i = 0; i < fanout.size(); i++)
+      {
+        Gate* fanout_gate = fanout[i];
+        if (fanout_gate->isToggled() && !(fanout_gate->isDeadToggle())) // toggled and is not a dead toggle
+          all_fanout_dead = false;
+        if (fanout_gate->getFFFlag()) all_fanout_dead = false;
+      } 
+      if (all_fanout_dead && !isClkTree) 
+        gate_debug_file << " Gate " << name << " is dead_ended in cycle " << cycle_num << endl; 
+      return all_fanout_dead;
+    }
+
+
+    void Gate::trace_back_dead_gate(int& dead_gates_count, int cycle_num)
+    {
+      assert(dead_toggle);
+      if (visited) return; // returning false will ensure that we won't trace back this gate again.
+      visited = true;
+      if (isClkTree == true) return;
+      dead_gates_count ++;
+      //cout << "Tracing back dead gate " << name << endl;
+      for (int i = 0; i < fanin.size(); i++)
+      {
+        Gate* fanin_gate = fanin[i];
+        if (fanin_gate->getFFFlag()) continue;
+        bool dead_gate = fanin_gate->check_for_dead_toggle(cycle_num);
+        if (dead_gate)  
+        {
+          fanin_gate->setDeadToggle(true);  
+          fanin_gate->trace_back_dead_gate(dead_gates_count, cycle_num);
+        }
+      } 
+    }
+
 }

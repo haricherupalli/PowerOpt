@@ -244,7 +244,7 @@ proc PtGetClkTreeCells {} {
     echo "Getting Clk Tree Cells"
     set clk_nwrk [get_clock_network_objects -type cell]
     set ret_val ""
-    echo "Got cells"
+    echo "Got Cells"
     foreach obj $clk_nwrk {
         set ret_val [append $ret_val [get_attribute $obj full_name] ] 
     }
@@ -1020,12 +1020,25 @@ proc PtGetTermsFromNet { NetName } {
     #echo "net name is $NetName"
     set term_list ""
     set net [get_net $NetName]
-    set pins [all_connected $net -leaf]
+    set pins [get_pins -of_objects $net -leaf]
     foreach_in_collection pin $pins {
         set term_list [concat $term_list [get_attribute $pin full_name]]
     }
     #echo "term_list is $term_list"
     return $term_list
+}
+
+proc PtGetPortsFromNet { NetName } {
+
+    set port_list ""
+    set net [get_net $NetName]
+    set ports [get_ports -of_objects $net]
+    foreach_in_collection port $ports {
+        set port_list [concat $port_list [get_attribute $port full_name]]
+    }
+    return $port_list
+
+
 }
 
 proc PtGetFanoutCells { CellName } {
@@ -1049,6 +1062,51 @@ proc PtGetFanoutCells { CellName } {
       }  
     }
    return $return_list
+}
+
+proc PtGetTopNetName { NetName } {
+  
+    set my_net [get_net $NetName]
+    set my_pin ""
+    if { [sizeof_collection $my_net] == 1 } {
+      set top_net [get_nets -segments -top_net_of_hierarchical_group $my_net]
+      set top_net_name [get_attribute $top_net full_name]
+    } else  {
+      set my_pin [get_pin $NetName]
+      set top_net [get_nets -segments -top_net_of_hierarchical_group -of_objects $my_pin]
+      set top_net_name [get_attribute $top_net full_name]
+    }
+   return $top_net_name 
+
+}
+
+proc PtGetFaninGateAtTerm { TermName } {
+
+  set fanin_gate "NULL_GATE"
+  set my_term [get_pin $TermName]
+  set driver_term [get_pins -leaf -of_objects [get_nets -of_objects $my_term] -filter "direction==out"]
+  set fanin_gate [get_attribute [get_cell -of_objects $driver_term] full_name ]
+  set driver_term_name [get_attribute $driver_term full_name]
+  #echo " TermName is $TermName driver_term_name is $driver_term_name and the gate is $fanin_gate "
+  
+  return $fanin_gate
+}
+
+proc PtGetFaninPortAtTerm { TermName } {
+  set fanin_port "NULL_PORT"
+  set my_term [get_pin $TermName]
+ #port name is the same as net name
+  set fanin_port [get_attribute [get_nets -top_net_of_hierarchical_group -segments -of_objects $my_term] full_name] 
+  return $fanin_port
+}
+
+proc PtGetTermConstValue { TermName } {
+
+  set value [get_attribute [get_pins $TermName] constant_value]
+  if { $value == "" } { set value "NON_CONSTANT" }
+
+  return $value;
+
 }
 
 proc PtGetInst { PinName } {

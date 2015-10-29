@@ -791,11 +791,82 @@ namespace POWEROPT {
     return(_answerStr);
   }
 
+
+  string
+  designTiming::getPortsFromNet(string NetName)
+  {
+    if (NetName == "") return "NULL_CELL";
+    _tclInputString = "DoOnePtCommand \"PtGetPortsFromNet " + NetName + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return(_answerStr);
+  }
+
   string 
   designTiming::getFanoutCellsFromCell (string CellName)
   {
     if (CellName == "") return "EMPTY_CELL_GIVEN";
     _tclInputString = "DoOnePtCommand \"PtGetFanoutCells " + CellName + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return(_answerStr);
+  }
+
+  string
+  designTiming::getFaninGateAtTerm (string TermName)
+  {
+    if (TermName == "") return "EMPTY_TERM_GIVEN";
+    _tclInputString = "DoOnePtCommand \"PtGetFaninGateAtTerm " + TermName + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return(_answerStr);
+  }
+
+  string
+  designTiming::getFaninPortAtTerm (string TermName)
+  {
+    if (TermName == "") return "EMPTY_TERM_GIVEN";
+    _tclInputString = "DoOnePtCommand \"PtGetFaninPortAtTerm " + TermName + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return(_answerStr);
+  }
+
+  string
+  designTiming::getTerminalConstValue (string TermName)
+  {
+    if (TermName == "") return "EMPTY_TERM_GIVEN";
+    _tclInputString = "DoOnePtCommand \"PtGetTermConstValue " + TermName + "\"";
+    incPtcnt();
+    _tclExpression = (char*)_tclInputString.c_str();
+    Tcl_Eval(_interpreter, _tclExpression);
+
+    _tclAnswer = _interpreter->result;
+    string _answerStr(_tclAnswer);
+    return(_answerStr);
+  }
+
+  string
+  designTiming::getTopNetName (string NetName)
+  {
+    if (NetName == "") return "EMPTY_TERM_GIVEN";
+    _tclInputString = "DoOnePtCommand \"PtGetTopNetName " + NetName + "\"";
     incPtcnt();
     _tclExpression = (char*)_tclInputString.c_str();
     Tcl_Eval(_interpreter, _tclExpression);

@@ -90,7 +90,7 @@ std::ofstream net_debug_file ("PowerOpt/net_debug_file", std::ofstream::out);
        return true;
      }
     sim_toggle_type = CONSTANT;
-    if (value == "X" || value == "Xb") return true;
+    if (value == "X") return true; // This should only be used when simulation uses the wavefront
      //cout << " NOT " << endl;
     return false;
   }
