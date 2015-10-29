@@ -622,20 +622,23 @@ int main(int argc, char *argv[])
     if (po.getExeOp() == 21) // NETLIST SIMULATION (X_based)
     {
       po.checkConnectivity(); 
-      po.readSelectGatesFile();
-      po.readConstantTerminals();// my_handler(0);
+      po.readSelectGatesFile(); // written for debugging, currently deprecated
+      // Some terminals (inputs to gates) in the design are driven by constant values (pulled up to vdd or pulled down to gnd).
+      // These are missed by OA while reading the design. 
+      // So we generate a file that contains the constant terminals (zeros and ones) from primetime (not the child process) and read the file here
+      po.readConstantTerminals();
       po.topoSort(); 
-      po.print_fanin_cone();
-      po.readClusters();
+      po.print_fanin_cone(); // debug thing -> into PowerOpt/fanin_cone_file
+      po.readClusters(); // Reads Clusters, Purpose currently handled in CroMoC
       //po.print_pads(); return 0;
-      po.readPmemFile();
-      po.readStaticPGInfo();
+      po.readPmemFile();// Generating the pmem file in the right format is a bit of a work. But for our benchmarks they are in flat_no_clk_gt/run_10.0/results_10.0/INPUT_DEPENDENT_RUNS/pmem_files
+      po.readStaticPGInfo(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
       po.simulate();
       po.simulate2();
       //po.dump_Dmemory();
-      po.dumpPmem();
-      po.update_profile_sizes();
-      po.print_toggle_profiles();
+      po.dumpPmem(); // debug stuff for capturing PG info. Purpose in CroMoC
+      po.update_profile_sizes(); // ensures that all the gates have the same toggle_profile length
+      po.print_toggle_profiles(); // Write the toggle profiles to be used for clustering in CroMoC
     }
     if (po.getExeOp() == 22) //  SIMPLE VCD ANALYSIS TO GET CONSTANT NET CONSTRAINTS (DTS)
     {
