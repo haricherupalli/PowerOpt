@@ -15,6 +15,7 @@ using namespace oa;
 
 namespace POWEROPT {
 
+
 void OAReader::fill_reg_cells_list(PowerOpt *po)
 {
   ifstream reg_list_file;
@@ -528,7 +529,6 @@ bool OAReader::readDesign(PowerOpt *po)
 //					cout << "index: " << netIndex << endl;
 //					cout<<"number of term instances: "<<net->getInstTerms().getCount()<<endl;
 //					cout<<"number of terms: "<<net->getTerms().getCount()<<endl;
-
       Net *n = new Net(netIndex++, (const oaChar*)(netName));
 
       //here are the gates connected to the net
