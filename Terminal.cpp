@@ -115,6 +115,7 @@ std::ofstream term_debug_file ("PowerOpt/term_debug_file", std::ofstream::out);
 
   bool Terminal::setSimValue(string value,  priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
   {
+    assert(nets.size() == 1);
     if (nets.size() == 0) return false; // if floating/constant terminal
     Net* net = nets[0];
     bool toggled = net->setSimValue(value);

@@ -45,6 +45,8 @@ namespace POWEROPT {
     
         isClkTree = false;
       cluster_id = -1;
+      dead_toggle = false;
+      visited = false;
     }
     // a public structure that holds power info for each possible master cell this cell instance can have
     vector<double> cellPowerLookup;
@@ -234,6 +236,12 @@ namespace POWEROPT {
 	bool    isCheckDes() { return checkDes; }
 	void    setToggled(bool b, string val) { toggled = b; toggledTo = val; }
 	bool    isToggled() { return toggled; }
+  bool check_for_dead_toggle(int cycle_num);
+  void setDeadToggle(bool val) { dead_toggle = val; }
+  bool isDeadToggle() { return dead_toggle; } 
+  void setVisited(bool val) { visited = val; }
+  bool isVisited() { return visited; } 
+  void trace_back_dead_gate(int& dead_gates_count, int cycle_num);
         string  getToggledTo() {return toggledTo; }
         void    incToggleCount() {toggle_count++ ;}
         void    updateToggleProfile(int cycle_num);
@@ -393,6 +401,7 @@ namespace POWEROPT {
                 bool transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 string getSimValue();
 
+
     //assume gate delay is computed as the average value of TPLH and TPHL
     void clearMem();
     void setSortIndex(double val) { sortIndex = val; }
@@ -509,7 +518,9 @@ namespace POWEROPT {
     bool checkSrc;
     bool checkDes;
     bool toggled;
+    bool visited;
     string toggledTo;
+    bool dead_toggle;
     bool holded;
     bool fixed;
     Divnet* div;

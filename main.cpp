@@ -534,6 +534,7 @@ int main(int argc, char *argv[])
         cout<<"[PowerOpt] Reading in the gate sets"<<endl;
         t2  = time(NULL);
         //po.readFlopWorstSlacks();
+        po.readConstantTerminals();// my_handler(0);
         po.createSetTrie();
         po.read_modules_of_interest(); // VCD has many unnecessary modules (like library gates)
         po.topoSort();
@@ -621,15 +622,18 @@ int main(int argc, char *argv[])
 
     if (po.getExeOp() == 21) // NETLIST SIMULATION (X_based)
     {
-      po.checkConnectivity(); 
-      po.readSelectGatesFile(); // written for debugging, currently deprecated
-      // Some terminals (inputs to gates) in the design are driven by constant values (pulled up to vdd or pulled down to gnd).
-      // These are missed by OA while reading the design. 
-      // So we generate a file that contains the constant terminals (zeros and ones) from primetime (not the child process) and read the file here
-      po.readConstantTerminals();
+      po.checkConnectivity(&T); 
+      po.readSelectGatesFile();
+      po.readConstantTerminals();// my_handler(0);
       po.topoSort(); 
-      po.print_fanin_cone(); // debug thing -> into PowerOpt/fanin_cone_file
-      po.readClusters(); // Reads Clusters, Purpose currently handled in CroMoC
+      po.print_fanin_cone(&T);
+      cout << "[UPDATED] Gate Count : " << po.getGateNum() << endl;
+      cout << "[UPDATED] Reg Count : " << po.getRegNum() << endl;
+      cout << "[UPDATED] Net Count : " << po.getNetNum() << endl;
+      cout << "[UPDATED] Terminal Count : " << po.getTerminalNum() << endl;
+      po.print_nets();
+      po.print_terminals();
+      po.readClusters();
       //po.print_pads(); return 0;
       po.readPmemFile();// Generating the pmem file in the right format is a bit of a work. But for our benchmarks they are in flat_no_clk_gt/run_10.0/results_10.0/INPUT_DEPENDENT_RUNS/pmem_files
       po.readStaticPGInfo(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)

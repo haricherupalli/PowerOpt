@@ -35,7 +35,12 @@ namespace POWEROPT {
       string getOutPin(string CellName);
       string getCellFromNet(string PinName);
       string getTermsFromNet(string PinName);
+      string getPortsFromNet(string PinName);
       string getFanoutCellsFromCell (string CellName);
+      string getFaninGateAtTerm (string TermName);
+      string getFaninPortAtTerm (string TermName);
+      string getTerminalConstValue (string TermName);
+      string getTopNetName (string NetName);
       string getInst(string PinName);
       void removeFFDelay (string CellName);
       bool sizeCell(string cellInstance, string cellMaster);
