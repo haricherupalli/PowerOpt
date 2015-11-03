@@ -10,6 +10,30 @@
 using namespace std;
 
 namespace POWEROPT {
+
+static bool replace_substr (std::string& str,const std::string& from, const std::string& to)
+{
+  size_t start_pos = str.find(from);
+  bool found = false;
+  size_t from_length = from.length();
+  size_t to_length = to.length();
+  while (start_pos != string::npos)
+  {
+    str.replace(start_pos, from.length(), to);
+    size_t adjustment =  (to_length>from_length)?(to_length - from_length):0;
+    start_pos = str.find(from, start_pos+ adjustment +1);
+    found = true;
+  }
+  return found;
+/*  size_t start_pos = str.find(from);
+  if (start_pos == std::string::npos)
+    return false;
+  str.replace(start_pos, from.length(), to);
+  return true;*/
+
+}
+
+
   class Net
     {
     public:
@@ -25,6 +49,7 @@ namespace POWEROPT {
       }
       Net(int nId, string nName):id(nId), name(nName)
       {
+        replace_substr(name, "\[", "_");
         driver_gate = NULL;
         prev_val = "x";
         new_val = "x";

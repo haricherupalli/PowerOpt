@@ -31,27 +31,27 @@ static string binary (unsigned int x)
   return s;
 }
 
-static bool replace_substr (std::string& str,const std::string& from, const std::string& to)
-{
-  size_t start_pos = str.find(from);
-  bool found = false;
-  size_t from_length = from.length();
-  size_t to_length = to.length();
-  while (start_pos != string::npos)
-  {
-    str.replace(start_pos, from.length(), to);
-    size_t adjustment =  (to_length>from_length)?(to_length - from_length):0;
-    start_pos = str.find(from, start_pos+ adjustment +1);
-    found = true;
-  }
-  return found;
-/*  size_t start_pos = str.find(from);
-  if (start_pos == std::string::npos)
-    return false;
-  str.replace(start_pos, from.length(), to);
-  return true;*/
-
-}
+//static bool replace_substr (std::string& str,const std::string& from, const std::string& to)
+//{
+//  size_t start_pos = str.find(from);
+//  bool found = false;
+//  size_t from_length = from.length();
+//  size_t to_length = to.length();
+//  while (start_pos != string::npos)
+//  {
+//    str.replace(start_pos, from.length(), to);
+//    size_t adjustment =  (to_length>from_length)?(to_length - from_length):0;
+//    start_pos = str.find(from, start_pos+ adjustment +1);
+//    found = true;
+//  }
+//  return found;
+///*  size_t start_pos = str.find(from);
+//  if (start_pos == std::string::npos)
+//    return false;
+//  str.replace(start_pos, from.length(), to);
+//  return true;*/
+//
+//}
 
 void PowerOpt::readEnvFile(string envFileStr)
 {
@@ -2095,14 +2095,20 @@ void PowerOpt::checkConnectivity(designTiming* T)
 
     // check that the terms connected to the net are same as those in pt
     string net_name = net->getName();
-    replace_substr(net_name, "[", "\\[" ); // FOR PT SOCKET
+    if (design == "modified_9_hier")
+      replace_substr(net_name, "[", "\\[" ); // FOR PT SOCKET
+    else if (design == "flat_no_clk_gt")
+    {
+      replace_substr(net_name, "\[", "_" ); // FOR COMPARISON
+      replace_substr(net_name, "\]", "_" ); // FOR COMPARISON
+    }
     string terms_from_pt_str = T->getTermsFromNet(net_name);
+    cout <<  " Net is " << net->getName() << " Terms_from_pt is " << terms_from_pt_str ; 
     vector<string> terms_from_pt;
     tokenize(terms_from_pt_str, ' ', terms_from_pt);
     sort(terms_from_pt.begin(), terms_from_pt.end());
     sort(terms_from_PowerOpt.begin(), terms_from_PowerOpt.end());
     assert(terms_from_pt.size() == terms_from_PowerOpt.size());
-    cout <<  " Net is " << net->getName() ; 
     for(int j = 0 ; j < terms_from_pt.size(); j++)
     {
       assert(terms_from_pt[j] == terms_from_PowerOpt[j]);
@@ -2118,7 +2124,17 @@ void PowerOpt::checkConnectivity(designTiming* T)
     cout <<  "  Net is " << net->getName() << endl; 
     for(int j = 0 ; j < ports_from_pt.size(); j++)
     {
-      assert(ports_from_pt[j] == ports_from_PowerOpt[j]);
+      string port_from_PwrOpt = ports_from_PowerOpt[j];
+      if (design == "modified_9_hier")
+      {
+        replace_substr(port_from_PwrOpt, "\\", "" ); // FOR COMPARISON
+      }
+      else if (design == "flat_no_clk_gt")
+      {
+        replace_substr(port_from_PwrOpt, "\\[", "_" ); // FOR COMPARISON
+        replace_substr(port_from_PwrOpt, "\\]", "_" ); // FOR COMPARISON
+      }
+      assert(ports_from_pt[j] == port_from_PwrOpt);
     }
 
   }
@@ -3627,7 +3643,11 @@ void PowerOpt::handle_toggled_nets_to_get_processor_state( vector < pair < strin
     string value = toggled_nets[i].second;
     replace_substr(net_name, "[", "\\[" ); // FOR PT SOCKET
     string top_net_name = T->getTopNetName(net_name);  
-    if (top_net_name == "") continue;
+    if (top_net_name == "") 
+    {
+      cout << "Net Name is " << net_name << endl; 
+      continue;
+    }
     if (netNameIdMap.find(top_net_name) != netNameIdMap.end())
     {
       Net* net = nets[netNameIdMap.at(top_net_name)];
@@ -3637,6 +3657,11 @@ void PowerOpt::handle_toggled_nets_to_get_processor_state( vector < pair < strin
     {
       Terminal * term = terms[terminalNameIdMap.at(top_net_name)];
       term->setSimValue(value);
+    }
+    else 
+    { 
+      cout << " Top net Name is " << top_net_name << endl; 
+      assert(0);
     }
   } 
   
