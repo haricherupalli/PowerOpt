@@ -1022,6 +1022,7 @@ class PowerOpt {
     map<string,  pair<int, pair< int, float> > > toggled_terms_counts; // terminalname, number of occurances, slack
     map<int, list <pair<Gate*, Gate*> > > corr_map; // correlation map
     map<int, Cluster* > clusters; // Power Domains
+    map<string, pair< bool, bool > > PC_taken_nottaken;;
     SetTrie* tree;
     Graph * graph;
     //vector< vector <gate*> > Power_domains;
@@ -1041,6 +1042,7 @@ class PowerOpt {
     int cluster_id;
     double total_leakage_energy;
     double baseline_leakage_energy;
+    string outDir;
 };
 
 }

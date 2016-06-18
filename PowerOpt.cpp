@@ -403,6 +403,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             design = getTokenS(line,"-design ");
         if (line.find("-inputValueFile ") != string::npos)
             inputValueFile = getTokenS(line,"-inputValueFile ");
+        if (line.find("-outDir ") != string::npos)
+            outDir = getTokenS(line,"-outDir ");
     }
 
     if (swapstep == 0) swapstep = 10000;
@@ -437,32 +439,36 @@ void PowerOpt::readCmdFile(string cmdFileStr)
 
 void PowerOpt::openFiles()
 {
-  DIR* dir = opendir("./PowerOpt");
+  if (outDir.empty()) outDir = ".";
+  string dir_name = outDir+"/PowerOpt/";
+  DIR* dir = opendir(dir_name.c_str());
+  string system_cmd = "mkdir -p "+dir_name;
   if (dir) closedir(dir);
-  else system("mkdir PowerOpt");
+  else system(system_cmd.c_str());
+  cout << " OPENING FILES and DIRECTORY IS " << dir_name << endl;
   if (exeOp == 15 || exeOp == 16 || exeOp == 17)
   {
-    toggle_info_file.open             ( "PowerOpt/toggle_info");
-    toggled_nets_file.open            ( "PowerOpt/toggled_nets");
-    unique_not_toggle_gate_sets.open  ( "PowerOpt/unique_not_toggle_gate_sets");
-    unique_toggle_gate_sets.open      ( "PowerOpt/unique_toggle_gate_sets");
-    units_file.open                   ( "PowerOpt/UNITS_INFO");
-    slack_profile_file.open           ( "PowerOpt/slack_profile");
-    net_gate_maps.open                ( "PowerOpt/net_gate_maps");
-    net_pin_maps.open                 ( "PowerOpt/net_pin_maps" );
-    toggle_counts_file.open           ( "PowerOpt/toggle_counts");
-    histogram_toggle_counts_file.open ( "PowerOpt/histogram_toggle_counts_file");
-    dead_end_info_file.open           ( "PowerOpt/dead_end_info_file", fstream::app);
+    toggle_info_file.open             ( (outDir+string("/PowerOpt/toggle_info"                  )).c_str()                ) ;
+    toggled_nets_file.open            ( (outDir+string("/PowerOpt/toggled_nets"                 )).c_str()                ) ;
+    unique_not_toggle_gate_sets.open  ( (outDir+string("/PowerOpt/unique_not_toggle_gate_sets"  )).c_str()                ) ;
+    unique_toggle_gate_sets.open      ( (outDir+string("/PowerOpt/unique_toggle_gate_sets"      )).c_str()                ) ;
+    units_file.open                   ( (outDir+string("/PowerOpt/UNITS_INFO"                   )).c_str()                ) ;
+    slack_profile_file.open           ( (outDir+string("/PowerOpt/slack_profile"                )).c_str()                ) ;
+    net_gate_maps.open                ( (outDir+string("/PowerOpt/net_gate_maps"                )).c_str()                ) ;
+    net_pin_maps.open                 ( (outDir+string("/PowerOpt/net_pin_maps"                 )).c_str()                ) ;
+    toggle_counts_file.open           ( (outDir+string("/PowerOpt/toggle_counts"                )).c_str()                ) ;
+    histogram_toggle_counts_file.open ( (outDir+string("/PowerOpt/histogram_toggle_counts_file" )).c_str()                ) ;
+    dead_end_info_file.open           ( (outDir+string("/PowerOpt/dead_end_info_file"           )).c_str() , fstream::app ) ;
   }
-  missed_nets.open                  ( "PowerOpt/Missed_nets", fstream::app);
-  toggle_profile_file.open          ( "PowerOpt/toggle_profile_file");
-  debug_file.open("PowerOpt/debug_file");
-  pmem_request_file.open("PowerOpt/pmem_request_file");
-  dmem_request_file.open("PowerOpt/dmem_request_file");
-  fanins_file.open("PowerOpt/fanins_file");
-  processor_state_profile_file.open("PowerOpt/processor_state_profile");
-  dmem_contents_file.open("PowerOpt/dmem_contents_file");
-  pmem_contents_file.open("PowerOpt/pmem_contents_file");
+  missed_nets.open                  ( (outDir+string("/PowerOpt/Missed_nets")).c_str(), fstream::app ) ;
+  toggle_profile_file.open          ( (outDir+string("/PowerOpt/toggle_profile_file"    )).c_str()   ) ;
+  debug_file.open                   ( (outDir+string("/PowerOpt/debug_file"             )).c_str()   ) ;
+  pmem_request_file.open            ( (outDir+string("/PowerOpt/pmem_request_file"      )).c_str()   ) ;
+  dmem_request_file.open            ( (outDir+string("/PowerOpt/dmem_request_file"      )).c_str()   ) ;
+  fanins_file.open                  ( (outDir+string("/PowerOpt/fanins_file"            )).c_str()   ) ;
+  processor_state_profile_file.open ( (outDir+string("/PowerOpt/processor_state_profile")).c_str()   ) ;
+  dmem_contents_file.open           ( (outDir+string("/PowerOpt/dmem_contents_file"     )).c_str()   ) ;
+  pmem_contents_file.open           ( (outDir+string("/PowerOpt/pmem_contents_file"     )).c_str()   ) ;
 }
 
 void PowerOpt::closeFiles()
@@ -2103,7 +2109,7 @@ void PowerOpt::checkConnectivity(designTiming* T)
       replace_substr(net_name, "\]", "_" ); // FOR COMPARISON
     }
     string terms_from_pt_str = T->getTermsFromNet(net_name);
-    cout <<  " Net is " << net->getName() << " Terms_from_pt is " << terms_from_pt_str ; 
+    //cout <<  " Net is " << net->getName() << " Terms_from_pt is " << terms_from_pt_str ; 
     vector<string> terms_from_pt;
     tokenize(terms_from_pt_str, ' ', terms_from_pt);
     sort(terms_from_pt.begin(), terms_from_pt.end());
@@ -2121,7 +2127,7 @@ void PowerOpt::checkConnectivity(designTiming* T)
     sort(ports_from_pt.begin(), ports_from_pt.end());
     sort(ports_from_PowerOpt.begin(), ports_from_PowerOpt.end());
     assert(ports_from_pt.size() == ports_from_PowerOpt.size());
-    cout <<  "  Net is " << net->getName() << endl; 
+    //cout <<  "  Net is " << net->getName() << endl; 
     for(int j = 0 ; j < ports_from_pt.size(); j++)
     {
       string port_from_PwrOpt = ports_from_PowerOpt[j];
@@ -2264,7 +2270,28 @@ void PowerOpt::simulate2()
     sim_wf = sys_state->sim_wf;
     DMemory = sys_state->DMemory;
     int start_cycle = sys_state->cycle_num;
+    string PC = getPC();
+    bool taken = sys_state->taken;
+    bool not_taken = sys_state->not_taken;
+    cout << "CHECKING " << start_cycle << endl;
+    if (taken == true )
+    {
+      if (PC_taken_nottaken[PC].first == true)
+      {
+        continue;
+      }
+      PC_taken_nottaken[PC].first = true;
+    }
+    if (not_taken == true)
+    {
+      if (PC_taken_nottaken[PC].second == true)
+      {
+        //continue;
+      }
+      PC_taken_nottaken[PC].second = true;
+    }
 
+    cout << "RESUMING at " << start_cycle << endl;
     pmem_request_file << "------------------------------ RE-RUNNING FROM SAVED POINT ----------------" << endl;
     for (int i = start_cycle; i < num_sim_cycles; i++)
     {
@@ -2394,22 +2421,24 @@ bool PowerOpt::probeRegisters(int cycle_num)
          system_state* sys_state_1 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
-           sys_state_1->cycle_num = cycle_num;
            sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-           sys_state_1->sim_wf = sim_wf; // copy all contents!
-           sys_state_1->DMemory = DMemory; // copy all contents!
          }
+         sys_state_1->cycle_num = cycle_num;
+         sys_state_1->sim_wf = sim_wf; // copy all contents!
+         sys_state_1->DMemory = DMemory; // copy all contents!
+         sys_state_1->not_taken = true;
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
-           sys_state_2->cycle_num = cycle_num;
            sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-           sys_state_2->sim_wf = sim_wf; // copy all contents!
-           sys_state_2->DMemory = DMemory; // copy all contents!
          }
+         sys_state_2->cycle_num = cycle_num;
+         sys_state_2->sim_wf = sim_wf; // copy all contents!
+         sys_state_2->DMemory = DMemory; // copy all contents!
+         sys_state_2->taken = true;
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2424,22 +2453,24 @@ bool PowerOpt::probeRegisters(int cycle_num)
          system_state* sys_state_1 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
-           sys_state_1->cycle_num = cycle_num;
            sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-           sys_state_1->sim_wf = sim_wf; // copy all contents!
-           sys_state_1->DMemory = DMemory; // copy all contents!
          }
+         sys_state_1->cycle_num = cycle_num;
+         sys_state_1->sim_wf = sim_wf; // copy all contents!
+         sys_state_1->DMemory = DMemory; // copy all contents!
+         sys_state_1->not_taken = true;
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
-           sys_state_2->cycle_num = cycle_num;
            sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-           sys_state_2->sim_wf = sim_wf; // copy all contents!
-           sys_state_2->DMemory = DMemory; // copy all contents!
          }
+         sys_state_2->cycle_num = cycle_num;
+         sys_state_2->sim_wf = sim_wf; // copy all contents!
+         sys_state_2->DMemory = DMemory; // copy all contents!
+         sys_state_2->taken = true;
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2454,22 +2485,24 @@ bool PowerOpt::probeRegisters(int cycle_num)
          system_state* sys_state_1 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
-           sys_state_1->cycle_num = cycle_num;
            sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-           sys_state_1->sim_wf = sim_wf; // copy all contents!
-           sys_state_1->DMemory = DMemory; // copy all contents!
          }
+         sys_state_1->cycle_num = cycle_num;
+         sys_state_1->sim_wf = sim_wf; // copy all contents!
+         sys_state_1->DMemory = DMemory; // copy all contents!
+         sys_state_1->not_taken = true;
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
-           sys_state_2->cycle_num = cycle_num;
            sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-           sys_state_2->sim_wf = sim_wf; // copy all contents!
-           sys_state_2->DMemory = DMemory; // copy all contents!
          }
+         sys_state_2->cycle_num = cycle_num;
+         sys_state_2->sim_wf = sim_wf; // copy all contents!
+         sys_state_2->DMemory = DMemory; // copy all contents!
+         sys_state_2->taken = true;
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2485,11 +2518,12 @@ bool PowerOpt::probeRegisters(int cycle_num)
          system_state* sys_state_1 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
-           sys_state_1->cycle_num = cycle_num;
            sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-           sys_state_1->sim_wf = sim_wf; // copy all contents!
-           sys_state_1->DMemory = DMemory; // copy all contents!
          }
+         sys_state_1->cycle_num = cycle_num;
+         sys_state_1->sim_wf = sim_wf; // copy all contents!
+         sys_state_1->DMemory = DMemory; // copy all contents!
+         sys_state_1->not_taken = true;
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
@@ -2497,11 +2531,12 @@ bool PowerOpt::probeRegisters(int cycle_num)
          system_state* sys_state_2 = new system_state;
          for (int i = 0; i < nets.size(); i++)
          {
-           sys_state_2->cycle_num = cycle_num;
            sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-           sys_state_2->sim_wf = sim_wf; // copy all contents!
-           sys_state_2->DMemory = DMemory; // copy all contents!
          }
+         sys_state_2->cycle_num = cycle_num;
+         sys_state_2->sim_wf = sim_wf; // copy all contents!
+         sys_state_2->DMemory = DMemory; // copy all contents!
+         sys_state_2->taken = true;
          sys_state_queue.push(sys_state_2);
        }
      }
