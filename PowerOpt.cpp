@@ -2212,7 +2212,8 @@ void PowerOpt::simulate()
     if (check_peripherals() == true) {
       cout << " STARTING SIMULATION NOW !! at cycle " << i << endl;
       print_dmem_contents(i);
-      print_processor_state_profile(i, true);
+      print_processor_state_profile(i, false);
+      //return;
     }
     readMem(i, wavefront);// -->  handleCondJumps()
     runSimulation(wavefront, i, false); // simulates the negative edge
@@ -2229,7 +2230,7 @@ void PowerOpt::simulate()
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
     updateRegOutputs(i);
-    print_processor_state_profile(i, false);
+    //print_processor_state_profile(i, false);
     if (probeRegisters(i) == true)
     {
       print_processor_state_profile(i, true);
@@ -2261,6 +2262,17 @@ void PowerOpt::simulate2()
   while(!sys_state_queue.empty())
   {
     system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
+    string PC = sys_state->PC;
+/*    map<string, system_state>::iterator sit = PC_worst_system_state.find(PC);
+    if (sit == PC_worst_system_state.end())
+    {
+      PC_worst_system_state[PC] = *sys_state; 
+    }
+    else
+    {
+
+
+    }*/
     map<int, string>::iterator it;
     for (it = sys_state->net_sim_value_map.begin(); it != sys_state->net_sim_value_map.end(); it++)
     {
@@ -2270,7 +2282,6 @@ void PowerOpt::simulate2()
     sim_wf = sys_state->sim_wf;
     DMemory = sys_state->DMemory;
     int start_cycle = sys_state->cycle_num;
-    string PC = getPC();
     bool taken = sys_state->taken;
     bool not_taken = sys_state->not_taken;
     cout << "CHECKING " << start_cycle << endl;
@@ -2427,6 +2438,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_1->sim_wf = sim_wf; // copy all contents!
          sys_state_1->DMemory = DMemory; // copy all contents!
          sys_state_1->not_taken = true;
+         sys_state_1->PC = getPC();
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
@@ -2439,6 +2451,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_2->sim_wf = sim_wf; // copy all contents!
          sys_state_2->DMemory = DMemory; // copy all contents!
          sys_state_2->taken = true;
+         sys_state_2->PC = getPC();
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2459,6 +2472,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_1->sim_wf = sim_wf; // copy all contents!
          sys_state_1->DMemory = DMemory; // copy all contents!
          sys_state_1->not_taken = true;
+         sys_state_1->PC = getPC();
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
@@ -2471,6 +2485,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_2->sim_wf = sim_wf; // copy all contents!
          sys_state_2->DMemory = DMemory; // copy all contents!
          sys_state_2->taken = true;
+         sys_state_2->PC = getPC();
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2491,6 +2506,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_1->sim_wf = sim_wf; // copy all contents!
          sys_state_1->DMemory = DMemory; // copy all contents!
          sys_state_1->not_taken = true;
+         sys_state_1->PC = getPC();
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
@@ -2503,6 +2519,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_2->sim_wf = sim_wf; // copy all contents!
          sys_state_2->DMemory = DMemory; // copy all contents!
          sys_state_2->taken = true;
+         sys_state_2->PC = getPC();
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2524,6 +2541,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_1->sim_wf = sim_wf; // copy all contents!
          sys_state_1->DMemory = DMemory; // copy all contents!
          sys_state_1->not_taken = true;
+         sys_state_1->PC = getPC();
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
@@ -2537,6 +2555,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_2->sim_wf = sim_wf; // copy all contents!
          sys_state_2->DMemory = DMemory; // copy all contents!
          sys_state_2->taken = true;
+         sys_state_2->PC = getPC();
          sys_state_queue.push(sys_state_2);
        }
      }

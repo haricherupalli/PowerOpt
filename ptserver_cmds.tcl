@@ -19,7 +19,7 @@ proc testPrintList { var } {
 #  foreach item $cellList {
 ##    if { [llength $item ] > 1 } {
 ##      testPrintList $item
-##    } else 
+##    } else
 #      puts $item
 #  }
    puts $var
@@ -69,7 +69,7 @@ proc PtResetPathFrom {cell} {
   return status
 }
 
-#PtResetRisePathforTerm {pin} 
+#PtResetRisePathforTerm {pin}
 proc PtRRPT {pin} {
 
   #echo "reset_path -rise_through $pin"
@@ -90,7 +90,7 @@ proc PtRPT {pin} {
 
   #echo "reset_path -rise_through $pin"
   #echo "reset_path -fall_through $pin"
-  
+
   reset_path -rise_through $pin
   reset_path -fall_through $pin
   ##echo "Done"
@@ -98,12 +98,12 @@ proc PtRPT {pin} {
 
 #PtSetFalsePathForTerm
 proc PtSFPT { pin } {
-  # Just through should be enough 
+  # Just through should be enough
 
   #echo "set_false_path -rise_through $pin"
   #echo "set_false_path -fall_through $pin"
 
-  set_false_path -rise_through $pin 
+  set_false_path -rise_through $pin
   set_false_path -fall_through $pin
   update_timing
   flush
@@ -130,13 +130,13 @@ proc PtGetMaxFallArrival { pin_name } {
 
   #echo "get_attribute \[get_pin $pin_name\] max_fall_slack"
   set arrival  "ARRIVAL"
-  set path [get_timing_path -pba exhaustive -fall_through $pin_name]  
+  set path [get_timing_path -pba exhaustive -fall_through $pin_name]
   set size [sizeof_collection $path]
   if { $size == 0 } { return $arrival }
   set pts [get_attribute $path points]
   foreach_in_collection pt $pts {
-    set pt_name [get_object_name [get_attribute $pt object ] ] 
-    if { $pt_name == $pin_name } { 
+    set pt_name [get_object_name [get_attribute $pt object ] ]
+    if { $pt_name == $pin_name } {
         set arrival [get_attribute $pt arrival]
     }
   }
@@ -149,13 +149,13 @@ proc PtGetMaxFallArrival { pin_name } {
 proc PtGetMaxRiseArrival { pin_name } {
   #echo "get_attribute \[get_pin $pin_name\] max_rise_slack"
   set arrival  "ARRIVAL"
-  set path [get_timing_path -pba exhaustive -rise_through $pin_name]  
+  set path [get_timing_path -pba exhaustive -rise_through $pin_name]
   set size [sizeof_collection $path]
   if { $size == 0 } { return $arrival }
   set pts [get_attribute $path points]
   foreach_in_collection pt $pts {
-    set pt_name [get_object_name [get_attribute $pt object ] ] 
-    if { $pt_name == $pin_name } { 
+    set pt_name [get_object_name [get_attribute $pt object ] ]
+    if { $pt_name == $pin_name } {
         set arrival [get_attribute $pt arrival]
     }
   }
@@ -231,10 +231,10 @@ proc PtSetFalsePathsForCells {} {
 }
 
 proc PtSetFalsePathsForPins {} {
-  # Just through should be enough 
+  # Just through should be enough
 #  echo "set_false_path -rise_through [get_pins -of_objects [get_cells -hierarchical -filter \"is_combinational or is_sequential\" ] ]"
 #  echo "set_false_path -fall_through [get_pins -of_objects [get_cells -hierarchical -filter \"is_combinational or is_sequential\" ] ]"
-   echo  " Setting  False Path through all pins " 
+   echo  " Setting  False Path through all pins "
 
   set_false_path -rise_through [get_pins -of_objects [get_cells -hierarchical -filter "is_combinational or is_sequential"] ]
   set_false_path -fall_through [get_pins -of_objects [get_cells -hierarchical -filter "is_combinational or is_sequential"] ]
@@ -246,15 +246,15 @@ proc PtGetClkTreeCells {} {
     set ret_val ""
     echo "Got Cells"
     foreach obj $clk_nwrk {
-        set ret_val [append $ret_val [get_attribute $obj full_name] ] 
+        set ret_val [append $ret_val [get_attribute $obj full_name] ]
     }
     echo "Done with the string. Now returning"
     return $ret_val
 }
 
 
-# The below procedure can get really slow 
-proc PtResetPathsForCells {} { 
+# The below procedure can get really slow
+proc PtResetPathsForCells {} {
   echo "Reseting all paths"
   reset_path -through [get_cells -hierarchical]
   reset_path -from  [get_cells -hierarchical]
@@ -1059,13 +1059,13 @@ proc PtGetFanoutCells { CellName } {
                 }
               }
           }
-      }  
+      }
     }
    return $return_list
 }
 
 proc PtGetTopNetName { NetName } {
-  
+
     set my_net [get_net $NetName]
     set my_pin ""
     if { [sizeof_collection $my_net] == 1 } {
@@ -1076,7 +1076,7 @@ proc PtGetTopNetName { NetName } {
       set top_net [get_nets -segments -top_net_of_hierarchical_group -of_objects $my_pin]
       set top_net_name [get_attribute $top_net full_name]
     }
-   return $top_net_name 
+   return $top_net_name
 
 }
 
@@ -1088,7 +1088,7 @@ proc PtGetFaninGateAtTerm { TermName } {
   set fanin_gate [get_attribute [get_cell -of_objects $driver_term] full_name ]
   set driver_term_name [get_attribute $driver_term full_name]
   #echo " TermName is $TermName driver_term_name is $driver_term_name and the gate is $fanin_gate "
-  
+
   return $fanin_gate
 }
 
@@ -1096,7 +1096,7 @@ proc PtGetFaninPortAtTerm { TermName } {
   set fanin_port "NULL_PORT"
   set my_term [get_pin $TermName]
  #port name is the same as net name
-  set fanin_port [get_attribute [get_nets -top_net_of_hierarchical_group -segments -of_objects $my_term] full_name] 
+  set fanin_port [get_attribute [get_nets -top_net_of_hierarchical_group -segments -of_objects $my_term] full_name]
   return $fanin_port
 }
 

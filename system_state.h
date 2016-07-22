@@ -12,6 +12,7 @@ namespace POWEROPT {
      map<int, string> net_sim_value_map;// <net_id, sim_value>
      priority_queue<GNode*, vector<GNode*>, sim_wf_compare> sim_wf; 
      map<int, xbitset> DMemory;
+     string PC;
      bool taken;
      bool not_taken;
   };

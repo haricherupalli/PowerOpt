@@ -1023,6 +1023,7 @@ class PowerOpt {
     map<int, list <pair<Gate*, Gate*> > > corr_map; // correlation map
     map<int, Cluster* > clusters; // Power Domains
     map<string, pair< bool, bool > > PC_taken_nottaken;;
+    map<string, system_state> PC_worst_system_state;
     SetTrie* tree;
     Graph * graph;
     //vector< vector <gate*> > Power_domains;
