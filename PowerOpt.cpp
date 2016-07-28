@@ -192,6 +192,7 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     varSave = false;
     leakPT = false;     // true: leakage from PT
     exeSOCEFlag = false;
+    vcdCheckStartCycle = -1;
     chkWNSFlag = false;
     totPWRFlag = false;
     mmmcOn = false;
@@ -3726,10 +3727,10 @@ void PowerOpt::handle_toggled_nets_to_get_processor_state( vector < pair < strin
 void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets, designTiming* T, int cycle_num, int cycle_time)
 {
   cout << " At time " << cycle_time << " Toggled Nets size " << toggled_nets.size() << endl;
-  handle_toggled_nets_to_get_processor_state(toggled_nets, T, cycle_num, cycle_time);
-  clearToggled();
-  toggled_nets.clear();
-  return; 
+//  handle_toggled_nets_to_get_processor_state(toggled_nets, T, cycle_num, cycle_time);
+//  clearToggled();
+//  toggled_nets.clear();
+//  return; 
 //  handle_toggled_nets_to_pins(toggled_nets, T, cycle_num, cycle_time);
 //  return ;
   //static int pathID = 0;
@@ -4111,7 +4112,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
 //        //if (time == 282710000 )  Net::flip_check_toggles(); // rle_test
 //        //if (time == 189870000 )  Net::flip_check_toggles(); // RTOS_intAVG
 //           //if (time == 282550000 )  Net::flip_check_toggles();
-         if (time <= max_time && time >= min_time )
+         if (time <= max_time && time >= min_time && (time %5000 == 0) )
          {
            cycle_num++;
            valid_time_instant = true;
@@ -4120,7 +4121,10 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
          {
             valid_time_instant = false;
             if (time > max_time)
+            {
+              cout << "TIME " << time << " EXCEEDED MAX TIME OF " <<  max_time << endl;
               break;
+            }
          }
       }
       else if (valid_time_instant) { // parse for time values of interest
@@ -4151,7 +4155,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
                  sprintf(buffer, "%d", bit_index);
                  net_name.append(buffer);
                  net_name.append("]");
-                 Net * net =  nets[netNameIdMap[net_name]];
+                 Net * net =  nets.at(netNameIdMap.at(net_name));
                  if(exeOp == 22)
                  {
                    net->setSimValue(value);
@@ -4181,17 +4185,20 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
             vector<string> tokens;
             tokenize(net_name, '/', tokens);
             if (tokens.size() == 2) net_name = tokens[1];
-            Net * net = nets[netNameIdMap[net_name]];
-            if(exeOp == 22)
+            if (netNameIdMap.find(net_name) != netNameIdMap.end() && terminalNameIdMap.find(net_name) == terminalNameIdMap.end() )
             {
-              net->setSimValue(value);
+              Net * net = nets.at(netNameIdMap.at(net_name));
+              if(exeOp == 22)
+              {
+                net->setSimValue(value);
+              }
+              else
+              {
+                net->updateValue(value);
+                toggled_nets.push_back(make_pair(net_name, value));
+              }
+              //cout << net_name << " -- > "  << value << endl;
             }
-            else
-            {
-              net->updateValue(value);
-              toggled_nets.push_back(make_pair(net_name, value));
-            }
-            //cout << net_name << " -- > "  << value << endl;
             // cout << " Toggled Net : " << net_name << endl;
           }
 //        IMPORTANT: we miss eseveral nets because they belong to modules that are not of interest.
@@ -4230,7 +4237,6 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
   //print_correlations();
   return cycle_num;
 }
-
 // parse the VCD file and extract toggle information
   int PowerOpt::parseVCD_mode_15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset)
 {
