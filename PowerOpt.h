@@ -849,6 +849,7 @@ class PowerOpt {
     ofstream histogram_toggle_counts_file;
     ofstream toggle_profile_file;
     ofstream debug_file;
+    ofstream debug_file_second;
     ofstream dead_end_info_file;
     ofstream pmem_request_file;
     ofstream dmem_request_file;
@@ -1027,6 +1028,7 @@ class PowerOpt {
     SetTrie* tree;
     Graph * graph;
     //vector< vector <gate*> > Power_domains;
+    set<string> X_valued_gates;
 
 
     int num_inputs;

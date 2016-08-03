@@ -47,9 +47,9 @@ static bool replace_substr (std::string& str,const std::string& from, const std:
         topo_sort_marked = false;
         vcdAbbrev = "";
       }
-      Net(int nId, string nName):id(nId), name(nName)
+      Net(int nId, string nName, bool isConstant = false):id(nId), name(nName), is_constant(isConstant)
       {
-        replace_substr(name, "\[", "_");
+        //replace_substr(name, "\[", "_");
         driver_gate = NULL;
         prev_val = "x";
         new_val = "x";
@@ -71,6 +71,7 @@ static bool replace_substr (std::string& str,const std::string& from, const std:
       Terminal *getTerminal(int index) { assert(0 <= index && index < terms.size()); return terms[index]; }
       Terminal *getInputTerminal();
       Terminal *getOutputTerminal(); 
+      bool getIsConstant() { return is_constant; }
       void makeFalseInputTerminal();
       int getPadNum() { return pads.size(); }
       Pad *getPad(int index) { assert(0 <= index && index < pads.size()); return pads[index]; }
@@ -122,6 +123,7 @@ static bool replace_substr (std::string& str,const std::string& from, const std:
       ToggleType toggle_type;
       string sim_val;// value used for simulation (exe_op = 20)
       ToggleType sim_toggle_type;
+      bool is_constant;
     };
 }
 #endif //__NET_H__

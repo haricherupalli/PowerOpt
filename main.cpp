@@ -535,6 +535,7 @@ int main(int argc, char *argv[])
         t2  = time(NULL);
         //po.readFlopWorstSlacks();
         po.readConstantTerminals();// my_handler(0);
+        po.checkConnectivity(&T); 
         po.createSetTrie();
         po.read_modules_of_interest(); // VCD has many unnecessary modules (like library gates)
         po.topoSort();

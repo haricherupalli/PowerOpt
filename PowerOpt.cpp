@@ -470,6 +470,7 @@ void PowerOpt::openFiles()
   processor_state_profile_file.open ( (outDir+string("/PowerOpt/processor_state_profile")).c_str()   ) ;
   dmem_contents_file.open           ( (outDir+string("/PowerOpt/dmem_contents_file"     )).c_str()   ) ;
   pmem_contents_file.open           ( (outDir+string("/PowerOpt/pmem_contents_file"     )).c_str()   ) ;
+  debug_file_second.open            ( (outDir+string("/PowerOpt/debug_file_second"     )).c_str()   ) ;
 }
 
 void PowerOpt::closeFiles()
@@ -497,6 +498,7 @@ void PowerOpt::closeFiles()
   processor_state_profile_file.close();
   dmem_contents_file.close();
   pmem_contents_file.close();
+  debug_file_second.close();
 }
 
 void PowerOpt::print_processor_state_profile(int cycle_num, bool reg)
@@ -975,7 +977,7 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       term->setGate(gate);
       term->computeFullName();
       term->setPinType(INPUT);
-      Net *n = new Net(nets.size(), term->getFullName()); // set the net name to be same as term name
+      Net *n = new Net(nets.size(), term->getFullName(), true); // set the net name to be same as term name
       //debug_file << "Creating one Net with id " << n->getId() << " and name " << n->getName() << endl;
       n->addInputTerminal(term);
       n->setTopoSortMarked(true);
@@ -1012,7 +1014,7 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       term->setGate(gate);
       term->computeFullName();
       term->setPinType(INPUT);
-      Net *n = new Net(nets.size(), term->getFullName()); // set the net name to be same as term name
+      Net *n = new Net(nets.size(), term->getFullName(), true); // set the net name to be same as term name
       //debug_file << "Creating zero Net with id " << n->getId() << " and name " << n->getName() << endl;
       n->addInputTerminal(term);
       n->setTopoSortMarked(true);
@@ -2080,6 +2082,8 @@ void PowerOpt::checkConnectivity(designTiming* T)
     Net * net = getNet(i);
     int terms_size = net->getTerminalNum();
     vector<string> terms_from_PowerOpt, ports_from_PowerOpt;
+    bool is_constant = net->getIsConstant();
+    if (is_constant == true) continue;
     // check that the term connected to the net is also connected back to the net
     for (int j =0; j < terms_size; j++)
     {
@@ -3739,6 +3743,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
   if (toggled_nets.size())
   {
     cout << "Handling Toggled Nets"  << endl;
+    debug_file << " CYCLE : " << cycle_num << endl;
       for (int i = 0 ; i < toggled_nets.size() ; i++)
       {
           string cellstr;
@@ -3763,7 +3768,29 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
             m_gates[CurInstId]->setToggled ( true, toggled_nets[i].second) ;
             m_gates[CurInstId]->incToggleCount();
             m_gates[CurInstId]->updateToggleProfile(cycle_num);
+            debug_file << cellstr << " : " <<  toggled_nets[i].first << " : " << toggled_nets[i].second << endl;
+            if (toggled_nets[i].second == "x")
+              X_valued_gates.insert(cellstr);
+            else  X_valued_gates.erase(cellstr); // no problem if non-existent
           }
+      }
+      set<string> ::iterator it;
+      for (it = X_valued_gates.begin(); it != X_valued_gates.end(); it ++)
+      {
+        string gate_name =  *it;
+        Gate* gate = m_gates.at(gateNameIdMap.at(gate_name));
+        for (int l = 0; l < gate->getFaninTerminalNum(); ++l)
+        {
+          Terminal * terminal = gate->getFaninTerminal(l);
+          Net* net = terminal->getNet(0);
+          Gate* fanin = net->getDriverGate();
+          if (fanin != 0 && fanin->isToggled() == true)
+          {
+            if (gate->isToggled() == false) gate->incToggleCount();
+            gate->setToggled(true, "x"); 
+            gate->updateToggleProfile(cycle_num);
+          }
+        }
       }
       if (exeOp == 15)
         check_for_flop_toggles(cycle_num, cycle_time, T);
@@ -4115,6 +4142,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
          if (time <= max_time && time >= min_time && (time %5000 == 0) )
          {
            cycle_num++;
+           debug_file_second  << " CYCLE : " << cycle_num  << " TIME : " << time << endl;
            valid_time_instant = true;
          }
          else
@@ -4128,6 +4156,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
          }
       }
       else if (valid_time_instant) { // parse for time values of interest
+        debug_file_second << line  << " :: " ;
         string value = line.substr(0, 1);
         string abbrev;
         if (value == "b") { // bus // This code is deprecated since there were issues with sending '[' over the socket to primetime.
@@ -4178,10 +4207,12 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
         else {
           abbrev = line.substr(1);// first character is the value
           //cout << " At valid time : " << time << endl;
+          debug_file_second << value << " : ";
           map<string, string> :: iterator it = net_dictionary.find(abbrev);
           if (it != net_dictionary.end())
           {
             string net_name = net_dictionary[abbrev];
+            debug_file_second << net_name;
             vector<string> tokens;
             tokenize(net_name, '/', tokens);
             if (tokens.size() == 2) net_name = tokens[1];
@@ -4195,17 +4226,24 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
               else
               {
                 net->updateValue(value);
+                debug_file_second << endl;
                 toggled_nets.push_back(make_pair(net_name, value));
               }
               //cout << net_name << " -- > "  << value << endl;
             }
+            else 
+              debug_file_second << "   SKIPPED" << endl;
             // cout << " Toggled Net : " << net_name << endl;
           }
 //        IMPORTANT: we miss eseveral nets because they belong to modules that are not of interest.
 //        Every gate is a module in the vcd file.
           else
-          missed_nets << "Missed" <<  abbrev << endl;
+          {
+            missed_nets << "Missed" <<  abbrev << endl;
+            debug_file_second << " MISSED " << endl;
+          }
         }
+        debug_file_second << endl;
       }
       line_contents.clear();
     }
