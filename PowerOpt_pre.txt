@@ -506,8 +506,9 @@ void PowerOpt::exePTServerOne(bool isPost)
 
     //ofstream fout;
     fout.open("launch.cmd");
+    string ptlog_file=outDir+string("/PowerOpt/pt.log");
     if (ptLogSave && !isPost)
-        fout << "pt_shell " << ptOption << " -f " << ptServerTcl << " |& tee PowerOpt/pt.log" << endl;
+        fout << "pt_shell " << ptOption << " -f " << ptServerTcl << " |& tee " << ptlog_file << endl;
     else
         fout << "pt_shell " << ptOption << " -f " << ptServerTcl << endl;
     fout.close();
