@@ -42,7 +42,7 @@ OBJECTS = $(SOURCES:%.$(SUFFIX)=$(OBJPATH)/%.o)
 HEADERS = $(wildcard ./*.h)
 CFLAGS = $(IFLAG) -I$(TOOLSDIR)/include/oa \
          -I$(TOOLSDIR)/include \
-         -c -fPIC -Wno-deprecated $(DBG) -Wunused 
+         -c -fPIC -Wno-deprecated $(DBG) 
 
 #-std=c++0x -std=gnu++0x
 

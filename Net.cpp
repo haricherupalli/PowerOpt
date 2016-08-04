@@ -6,9 +6,17 @@ using namespace std;
 
 namespace POWEROPT {
   
-bool check_toggles = false;
-std::ofstream net_debug_file ("PowerOpt/net_debug_file", std::ofstream::out);
+ofstream Net::net_debug_file;
 
+bool check_toggles = false;
+
+
+
+  void Net::openFiles(string outDir)
+  {
+    string net_debug_file_name = outDir+"/PowerOpt/net_debug_file";
+    net_debug_file.open(net_debug_file_name.c_str(), std::ofstream::out);
+  }
   Terminal * Net::getInputTerminal()
   {
     assert(0 < terms.size());
@@ -65,6 +73,7 @@ std::ofstream net_debug_file ("PowerOpt/net_debug_file", std::ofstream::out);
 
   bool Net::setSimValue(string value) // return value is whether the net toggled or not.
   {
+     net_debug_file << " IN SET SIM VALUE " << endl;
      //if (value.empty()) assert(0);
      if (sim_val != value)
      {

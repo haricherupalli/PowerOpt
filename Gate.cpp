@@ -6,6 +6,7 @@
 #include <bitset>
 #include <stdlib.h>
 
+#include "Globals.h"
 #include "Gate.h"
 #include "Terminal.h"
 #include "Path.h"
@@ -33,9 +34,15 @@ static void tokenize (string s, char delim, vector<string> & tokens)
 
 namespace POWEROPT {
 
-std::ofstream gate_debug_file ("PowerOpt/gate_debug_file", std::ofstream::out);
+ofstream Gate::gate_debug_file;
 
 int Gate::max_toggle_profile_size = 0;
+
+  void  Gate::openFiles(string outDir)
+  {
+    string gate_debug_file_name = outDir+"/PowerOpt/gate_debug_file";
+    gate_debug_file.open(gate_debug_file_name.c_str(), std::ofstream::out);
+  }
 
 	bool Gate::hasTerminal(Terminal *t)
 	{
@@ -1833,6 +1840,7 @@ int Gate::max_toggle_profile_size = 0;
 
     bool Gate::computeANDVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
+        gate_debug_file << " IN COMPUTE AND VAL " << endl;
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
         Terminal* fo_term = fanoutTerms[0]; 

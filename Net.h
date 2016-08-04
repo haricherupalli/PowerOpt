@@ -61,6 +61,7 @@ static bool replace_substr (std::string& str,const std::string& from, const std:
       }
       ~Net() {}
       //modifiers
+      void openFiles(string outDir);
       void addInputTerminal(Terminal *t) { terms.insert(terms.begin(), t); inp_terms.push_back(t);}
       void addOutputTerminal(Terminal *t) { terms.push_back(t); out_terms.push_back(t);}
       void addTerminal(Terminal *t) { terms.push_back(t); }
@@ -124,6 +125,7 @@ static bool replace_substr (std::string& str,const std::string& from, const std:
       string sim_val;// value used for simulation (exe_op = 20)
       ToggleType sim_toggle_type;
       bool is_constant;
+      static ofstream net_debug_file;
     };
 }
 #endif //__NET_H__

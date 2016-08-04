@@ -51,6 +51,7 @@ namespace POWEROPT {
     // a public structure that holds power info for each possible master cell this cell instance can have
     vector<double> cellPowerLookup;
     static int max_toggle_profile_size;
+    void openFiles(string outDir);
     //modifiers
     void setVariation(double v) { variation = v; }
     void setDelayVariation(double v) { delayVariation = v; }
@@ -555,6 +556,7 @@ namespace POWEROPT {
     GNode* node;
     string gate_op;
     bool isClkTree;
+    static ofstream gate_debug_file;
   };
 
 

@@ -95,12 +95,16 @@ class Cluster  {
 class PowerOpt {
     public:
     //constructors
-    PowerOpt() // TODO HARI: MAKE THIS A SINGLETON CLASS!!
-    { }
+    static PowerOpt* getInstance()
+    {
+      if (onlyInstance == NULL)
+      {
+        onlyInstance = new PowerOpt;
+      }
+      return onlyInstance;
+    }
 
     // destructor
-    ~PowerOpt()
-    { }
 
 
     //modifiers
@@ -676,6 +680,11 @@ class PowerOpt {
     int cmpString(string wild, string pattern);
 
     private:
+    PowerOpt() // 
+    { }
+    ~PowerOpt()
+    { }
+    static PowerOpt* onlyInstance;
     int varMapWidth;      // width in grids of the variation map (currently width*width grids)
     int varMapSeed;       // random seed for gaussian deviates
     map<string,vector<double> > stdDevMap; // used to lookup the stdDev for a gate

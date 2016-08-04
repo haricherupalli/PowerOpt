@@ -471,6 +471,10 @@ void PowerOpt::openFiles()
   dmem_contents_file.open           ( (outDir+string("/PowerOpt/dmem_contents_file"     )).c_str()   ) ;
   pmem_contents_file.open           ( (outDir+string("/PowerOpt/pmem_contents_file"     )).c_str()   ) ;
   debug_file_second.open            ( (outDir+string("/PowerOpt/debug_file_second"     )).c_str()   ) ;
+  Gate * dummy_g; Net* dummy_n; system_state* dummy_ss;
+  dummy_g->openFiles(outDir);
+  dummy_n->openFiles(outDir);
+  dummy_ss->openFiles(outDir);
 }
 
 void PowerOpt::closeFiles()
@@ -565,16 +569,16 @@ void PowerOpt::print_fanin_cone(designTiming* T)
         }
       }
       else if (net->getName() != terminal->getFullName()) {
-        Pad* pad = net->getPad(0); 
+        Pad* pad = net->getPad(0);
         int id = pad->getTopoId();
         if (!g->getFFFlag()) assert(id < parent_topo_id);
         fanins_file <<  " . \t  Input Pad is --> " << pad->getName() << " (" << terminal->getName() << ") " <<  " (" << id << ") " << endl;
         string pad_name_from_pt = T->getFaninPortAtTerm(terminal->getFullName());
         string pad_name = pad->getName();
-        if (design == "flat_no_clk_gt") 
+        if (design == "flat_no_clk_gt")
         {
-          replace_substr(pad_name, "\\[", "_" ); 
-          replace_substr(pad_name, "\\]", "_" ); 
+          replace_substr(pad_name, "\\[", "_" );
+          replace_substr(pad_name, "\\]", "_" );
         }
         assert(pad_name == pad_name_from_pt);
       }
@@ -591,14 +595,14 @@ void PowerOpt::print_fanin_cone(designTiming* T)
     Pad* pad = m_pads[i];
     int parent_topo_id = pad->getTopoId();
     if (pad->getType() == PrimiaryInput) continue;
-    else 
+    else
     {
       fanins_file << "[PAD] " << i << "(" << pad->getName() << ")  (" << parent_topo_id << ") " << endl;
-      if (pad->getNetNum() != 1) continue; 
-      Net* net = pad->getNet(0);    
+      if (pad->getNetNum() != 1) continue;
+      Net* net = pad->getNet(0);
       Gate* gate = net->getDriverGate();
       fanins_file << " . \t  Gate is -->" << gate->getName() << endl;
-    }  
+    }
 
   }
   cout << " COMPARISON AGAINST PT WORKS " << endl;
@@ -993,7 +997,7 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       if (terminalNameIdMap.find(name) != terminalNameIdMap.end()) assert(0);
       gate->addFaninTerminal(term);
       terminalNameIdMap[name] = term->getId();
-      netNameIdMap[n->getName()] = n->getId();  
+      netNameIdMap[n->getName()] = n->getId();
     }
   }
   if (zero_pins_file.is_open())
@@ -1030,7 +1034,7 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       if (terminalNameIdMap.find(name) != terminalNameIdMap.end()) assert(0);
       gate->addFaninTerminal(term);
       terminalNameIdMap[name] = term->getId();
-      netNameIdMap[n->getName()] = n->getId();  
+      netNameIdMap[n->getName()] = n->getId();
     }
   }
 
@@ -2052,14 +2056,14 @@ void PowerOpt::checkConnectivity(designTiming* T)
     if (inp_term != 0)
     {
       Net* inp_term_net = inp_term->getNet(0);
-      debug_file << net->getName() << " : " << inp_term->getFullName() << " : " << inp_term_net->getName() << endl; 
+      debug_file << net->getName() << " : " << inp_term->getFullName() << " : " << inp_term_net->getName() << endl;
       if (inp_term_net != net) assert(0);
     }
     else
     {
-      debug_file << net->getName() << " : " << endl; 
+      debug_file << net->getName() << " : " << endl;
     }
-    
+
   }*/
   for (int i = 0; i < m_pads.size(); i++)
   {
@@ -2069,7 +2073,7 @@ void PowerOpt::checkConnectivity(designTiming* T)
     {
       continue;
     }
-    assert(pad->getNetNum() == 1); 
+    assert(pad->getNetNum() == 1);
     Net* net = pad->getNet(0);
     assert(net->getPadNum() == 1); // not necessarily true I guess
     Pad* net_pad = net->getPad(0);
@@ -2100,7 +2104,7 @@ void PowerOpt::checkConnectivity(designTiming* T)
       Pad* pad = net->getPad(j);
       Net* pad_net = pad->getNet(0);
       ports_from_PowerOpt.push_back(pad->getName());
-    
+
       assert(pad_net == net);
     }
 
@@ -2114,7 +2118,7 @@ void PowerOpt::checkConnectivity(designTiming* T)
       replace_substr(net_name, "\]", "_" ); // FOR COMPARISON
     }
     string terms_from_pt_str = T->getTermsFromNet(net_name);
-    //cout <<  " Net is " << net->getName() << " Terms_from_pt is " << terms_from_pt_str ; 
+    //cout <<  " Net is " << net->getName() << " Terms_from_pt is " << terms_from_pt_str ;
     vector<string> terms_from_pt;
     tokenize(terms_from_pt_str, ' ', terms_from_pt);
     sort(terms_from_pt.begin(), terms_from_pt.end());
@@ -2132,7 +2136,7 @@ void PowerOpt::checkConnectivity(designTiming* T)
     sort(ports_from_pt.begin(), ports_from_pt.end());
     sort(ports_from_PowerOpt.begin(), ports_from_PowerOpt.end());
     assert(ports_from_pt.size() == ports_from_PowerOpt.size());
-    //cout <<  "  Net is " << net->getName() << endl; 
+    //cout <<  "  Net is " << net->getName() << endl;
     for(int j = 0 ; j < ports_from_pt.size(); j++)
     {
       string port_from_PwrOpt = ports_from_PowerOpt[j];
@@ -2149,7 +2153,7 @@ void PowerOpt::checkConnectivity(designTiming* T)
     }
 
   }
-  cout << " ALL FINE"  << endl; 
+  cout << " ALL FINE"  << endl;
 }
 
 string PowerOpt::getPC()
@@ -2268,13 +2272,19 @@ void PowerOpt::simulate2()
   {
     system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
     string PC = sys_state->PC;
+    // FOR NOW WE ARE NOT GENERATING THE WORST SYSTEM STATE.
 /*    map<string, system_state>::iterator sit = PC_worst_system_state.find(PC);
     if (sit == PC_worst_system_state.end())
     {
-      PC_worst_system_state[PC] = *sys_state; 
+      // NEW PC
+      PC_worst_system_state[PC] = *sys_state;
     }
     else
     {
+      // COMPARE THE SYSTEM STATES
+      system_state & stored_state = sit->second;
+      system_state & this_state = *sys_state;
+      bool can_skip = stored_state.compare_and_update_state(this_state);
 
 
     }*/
@@ -2333,7 +2343,7 @@ void PowerOpt::simulate2()
       updateRegOutputs(i);
       if (probeRegisters(i) == true)
       {
-        print_processor_state_profile(i, true);
+        //print_processor_state_profile(i, true);
         dump_Dmemory();
         cout << "ENDING SIMULATION due to STATE CORRUPTION at " << i << endl;
         break;
@@ -2351,8 +2361,8 @@ void PowerOpt::simulate2()
 int PowerOpt::getIState()
 {
   string  i_state_2,  i_state_1,  i_state_0;
-  if (design == "flat_no_clk_gt") 
-  { 
+  if (design == "flat_no_clk_gt")
+  {
    i_state_2 = m_gates[gateNameIdMap["frontend_0_i_state_reg_2_"]]->getSimValue();
    i_state_1 = m_gates[gateNameIdMap["frontend_0_i_state_reg_1_"]]->getSimValue();
    i_state_0 = m_gates[gateNameIdMap["frontend_0_i_state_reg_0_"]]->getSimValue();
@@ -2373,8 +2383,8 @@ int PowerOpt::getIState()
 int PowerOpt::getEState()
 {
   string e_state_3 , e_state_2,  e_state_1,  e_state_0;
-  if (design == "flat_no_clk_gt") 
-  { 
+  if (design == "flat_no_clk_gt")
+  {
    e_state_3 = m_gates[gateNameIdMap["frontend_0_e_state_reg_3_"]]->getSimValue();
    e_state_2 = m_gates[gateNameIdMap["frontend_0_e_state_reg_2_"]]->getSimValue();
    e_state_1 = m_gates[gateNameIdMap["frontend_0_e_state_reg_1_"]]->getSimValue();
@@ -3013,11 +3023,11 @@ void PowerOpt::print_nets()
          else if (term->getName() == "I0")
             I0_val = term->getSimValue();
       }*/
-   
-  //Terminal* term = terms[terminalNameIdMap["execution_unit_0/register_file_0/U372/S"]]; 
+
+  //Terminal* term = terms[terminalNameIdMap["execution_unit_0/register_file_0/U372/S"]];
 /*  debug_file << " Term is " << term->getFullName() << endl;
   debug_file << term->getNetName() << endl;*/
- 
+
 }
 
 void PowerOpt::print_regs()
@@ -3367,7 +3377,7 @@ void PowerOpt::writeVCDBegin()
         cout << "WARNING: VCD Output file Cannot be opened!" << endl;
 	return;
     }
-    
+
     // Write date stection
     vcd_file << "$date" << endl;
     time_t t = time(0);
@@ -3401,16 +3411,16 @@ void PowerOpt::writeVCDBegin()
     vcd_file << "$upscope $end" << endl;
     vcd_file << "$enddefinitions $end" << endl;
 
- 
+
     // Write initial dump section
     vcd_file << "#0" << endl;
     vcd_file << "$dumpvars" << endl;
     for (int i = 0; i<nets.size(); ++i) {
 	Net *n =getNet(i);
         vcd_file << n->getSimValue() << n->getVCDAbbrev() << endl;
-    }    
+    }
     vcd_file << "$end" << endl;
-    
+
 }
 
 // Adds the current simulated value of Net n to the VCD file. Assumes that a toggle has just taken place.
@@ -3698,13 +3708,13 @@ void PowerOpt::handle_toggled_nets_to_get_processor_state( vector < pair < strin
 {
   for (int i = 0; i < toggled_nets.size(); i++)
   {
-    string net_name = toggled_nets[i].first; 
+    string net_name = toggled_nets[i].first;
     string value = toggled_nets[i].second;
     replace_substr(net_name, "[", "\\[" ); // FOR PT SOCKET
-    string top_net_name = T->getTopNetName(net_name);  
-    if (top_net_name == "") 
+    string top_net_name = T->getTopNetName(net_name);
+    if (top_net_name == "")
     {
-      cout << "Net Name is " << net_name << endl; 
+      cout << "Net Name is " << net_name << endl;
       continue;
     }
     if (netNameIdMap.find(top_net_name) != netNameIdMap.end())
@@ -3717,13 +3727,13 @@ void PowerOpt::handle_toggled_nets_to_get_processor_state( vector < pair < strin
       Terminal * term = terms[terminalNameIdMap.at(top_net_name)];
       term->setSimValue(value);
     }
-    else 
-    { 
-      cout << " Top net Name is " << top_net_name << endl; 
+    else
+    {
+      cout << " Top net Name is " << top_net_name << endl;
       assert(0);
     }
-  } 
-  
+  }
+
   print_processor_state_profile(cycle_time, false);
 
 }
@@ -3734,7 +3744,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
 //  handle_toggled_nets_to_get_processor_state(toggled_nets, T, cycle_num, cycle_time);
 //  clearToggled();
 //  toggled_nets.clear();
-//  return; 
+//  return;
 //  handle_toggled_nets_to_pins(toggled_nets, T, cycle_num, cycle_time);
 //  return ;
   //static int pathID = 0;
@@ -3787,7 +3797,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
           if (fanin != 0 && fanin->isToggled() == true)
           {
             if (gate->isToggled() == false) gate->incToggleCount();
-            gate->setToggled(true, "x"); 
+            gate->setToggled(true, "x");
             gate->updateToggleProfile(cycle_num);
           }
         }
@@ -4231,7 +4241,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
               }
               //cout << net_name << " -- > "  << value << endl;
             }
-            else 
+            else
               debug_file_second << "   SKIPPED" << endl;
             // cout << " Toggled Net : " << net_name << endl;
           }
@@ -5757,7 +5767,7 @@ void PowerOpt::resetAllVisitedForGates()
   {
     Gate* gate = m_gates[i];
     gate->setVisited(false);
-  } 
+  }
 }
 
 
@@ -5767,7 +5777,7 @@ void PowerOpt:: resetAllDeadToggles()
   {
     Gate* gate = m_gates[i];
     gate->setDeadToggle(false);
-  } 
+  }
 }
 
 void PowerOpt::check_for_flop_toggles_fast(int cycle_num, int cycle_time, designTiming * T)
@@ -5805,7 +5815,7 @@ void PowerOpt::check_for_flop_toggles_fast(int cycle_num, int cycle_time, design
     }
     resetAllVisitedForGates();
     resetAllDeadToggles();
-    check_for_dead_ends(cycle_num, toggled_gates_str); 
+    check_for_dead_ends(cycle_num, toggled_gates_str);
     print_dead_end_gates(cycle_num);
     cout << "inserting" << endl;
     map<string, pair<int, pair< int, float > > > :: iterator it = toggled_sets_counts.find(toggled_gates_str);
@@ -5844,7 +5854,7 @@ void PowerOpt::check_for_dead_ends(int cycle_num, string toggled_gates_str)
 
   vector<string> toggled_gates;
   int dead_gates_count = 0;
-  int non_clk_tree_non_ff_toggled_gates_count = 0; 
+  int non_clk_tree_non_ff_toggled_gates_count = 0;
   tokenize(toggled_gates_str, ',', toggled_gates);
   cout << "CHECKING FOR DEAD ENDS and size of toggled set is " << toggled_gates.size() << endl;
   for (int i = 0 ; i < toggled_gates.size(); i++)
@@ -5860,7 +5870,7 @@ void PowerOpt::check_for_dead_ends(int cycle_num, string toggled_gates_str)
       //cout << gate->getName() << " is a dead end gate" << endl;
       gate->trace_back_dead_gate(dead_gates_count, cycle_num);
     }
-  } 
+  }
 
   cout << " Number of dead end gates : " << dead_gates_count << "/" << non_clk_tree_non_ff_toggled_gates_count << endl;
 }

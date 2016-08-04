@@ -25,7 +25,7 @@
 
 #include "PowerOpt.h"
 #include "Path.h"
-#include "Globals.h"
+//#include "Globals.h"
 #include "Timer.h"
 #include "SetTrie.h"
 //#include "xbitset.cpp"
