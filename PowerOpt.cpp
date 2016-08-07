@@ -2273,11 +2273,12 @@ void PowerOpt::simulate2()
     system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
     string PC = sys_state->PC;
     // FOR NOW WE ARE NOT GENERATING THE WORST SYSTEM STATE.
-/*    map<string, system_state>::iterator sit = PC_worst_system_state.find(PC);
+    map<string, system_state>::iterator sit = PC_worst_system_state.find(PC);
     if (sit == PC_worst_system_state.end())
     {
       // NEW PC
       PC_worst_system_state[PC] = *sys_state;
+      cout << " NEW PC " << endl;
     }
     else
     {
@@ -2285,9 +2286,15 @@ void PowerOpt::simulate2()
       system_state & stored_state = sit->second;
       system_state & this_state = *sys_state;
       bool can_skip = stored_state.compare_and_update_state(this_state);
-
-
-    }*/
+      if (can_skip == true)
+      {
+        cout << "SKIPPING ! " << sys_state->cycle_num << endl;
+        pmem_request_file  << "SKIPPING "  << sys_state->cycle_num << endl;
+        sleep(1) ;
+        continue;
+      }
+      cout << " OLD PC NOT SKIPPING " << endl;
+    }
     map<int, string>::iterator it;
     for (it = sys_state->net_sim_value_map.begin(); it != sys_state->net_sim_value_map.end(); it++)
     {
@@ -2299,7 +2306,7 @@ void PowerOpt::simulate2()
     int start_cycle = sys_state->cycle_num;
     bool taken = sys_state->taken;
     bool not_taken = sys_state->not_taken;
-    cout << "CHECKING " << start_cycle << endl;
+/*    cout << "CHECKING " << start_cycle << endl;
     if (taken == true )
     {
       if (PC_taken_nottaken[PC].first == true)
@@ -2315,7 +2322,7 @@ void PowerOpt::simulate2()
         //continue;
       }
       PC_taken_nottaken[PC].second = true;
-    }
+    }*/
 
     cout << "RESUMING at " << start_cycle << endl;
     pmem_request_file << "------------------------------ RE-RUNNING FROM SAVED POINT ----------------" << endl;

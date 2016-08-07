@@ -73,7 +73,6 @@ bool check_toggles = false;
 
   bool Net::setSimValue(string value) // return value is whether the net toggled or not.
   {
-     net_debug_file << " IN SET SIM VALUE " << endl;
      //if (value.empty()) assert(0);
      if (sim_val != value)
      {

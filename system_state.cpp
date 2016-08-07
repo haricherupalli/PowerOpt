@@ -11,19 +11,16 @@
 #include "Path.h"
 #include "Pad.h"
 #include "Gate.h"
+#include "PowerOpt.h"
 #include "system_state.h"
 #include "Globals.h"
 
 using namespace std;
 
 
-//string sys_state_debug_file_name = outDir+"PowerOpt/sys_state_debug_file";
-//std::ofstream sys_state_debug_file (sys_state_debug_file_name.c_str(), std::ofstream::out);
-std::ofstream sys_state_debug_file ( "TEMP", std::ofstream::out);
-
 namespace POWEROPT {
 
-ofstream system_state:: sys_state_debug_file;
+ofstream system_state::sys_state_debug_file;
 
 void system_state::openFiles(string outDir)
 {
@@ -45,13 +42,13 @@ bool system_state::compare_and_update_state(system_state& sys_state)
        string sys_state_sim_val = sys_state.net_sim_value_map[id];  
        if (sys_state_sim_val != sim_val)
        { 
-          can_skip = false; 
-          sys_state_debug_file << "FO";
+          Net * net = PowerOpt::getInstance()->getNet(id);
+          string net_name = net->getName();
+          sys_state_debug_file << "Net : " << net_name  << " ( " << net->getDriverGate()->getName() << " ) "  << sim_val << " : " << sys_state_sim_val << endl ;
+          if (net_name != "n355") // status register
+            can_skip = false; 
        }
-
-
     }
-      
 
     // compare DMemory
 
