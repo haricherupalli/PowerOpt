@@ -166,6 +166,7 @@ class PowerOpt {
     void print_dmem_contents(int cycle_num);
     void checkConnectivity(designTiming* T);
     string getPC();
+    string getGPR(int num);
     void topoSort();
     void simulate();
     void simulate2();
@@ -190,6 +191,7 @@ class PowerOpt {
     void recvInputs2(int cycle_num, bool wavefront);
     void debug_per_din(int cycle_num);
     void readMem(int cycle_num, bool wavefront);
+    bool checkIfHung();
     void handleCondJumps();
     void checkCorruption(int i);
     void sendInstr(string instr_str);
@@ -1043,6 +1045,7 @@ class PowerOpt {
     int num_inputs;
     vector<string> inputs;
     string dmem_data;
+    unsigned int instr;
     string pmem_instr;
     string instr_name;
     int jump_cycle;

@@ -14,7 +14,7 @@ static void tokenize (string s, char delim, vector<string> & tokens)
       tokens.push_back(token);
     }
   }
-  iss.clear();
+  iss.str("");
 }
 
 static string binary (unsigned int x)
@@ -29,6 +29,14 @@ static string binary (unsigned int x)
   int size = s.size();
   if (s.size() != 16) s.append(16-size, '0');
   return s;
+}
+
+static string bin2hex (string binary_str)
+{
+  bitset<16> set(binary_str);
+  stringstream ss;
+  ss << hex << uppercase << set.to_ulong();
+  return ss.str();
 }
 
 //static bool replace_substr (std::string& str,const std::string& from, const std::string& to)
@@ -428,6 +436,7 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     if (useGT) ptpxOff = true;
     file.close();
 
+
 //  FILE * VCDfile;
 //  string VCDfilename = vcdPath + "/" + vcdFile[0];
 //  VCDfile = fopen(VCDfilename.c_str(), "r");
@@ -471,6 +480,8 @@ void PowerOpt::openFiles()
   dmem_contents_file.open           ( (outDir+string("/PowerOpt/dmem_contents_file"     )).c_str()   ) ;
   pmem_contents_file.open           ( (outDir+string("/PowerOpt/pmem_contents_file"     )).c_str()   ) ;
   debug_file_second.open            ( (outDir+string("/PowerOpt/debug_file_second"     )).c_str()   ) ;
+
+  vcdOutFile = outDir+"PowerOpt/"+vcdOutFile;
   Gate * dummy_g; Net* dummy_n; system_state* dummy_ss;
   dummy_g->openFiles(outDir);
   dummy_n->openFiles(outDir);
@@ -846,7 +857,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
     int gate_count = 0;
     int toggled_count = 0;
     debug_file << "Cycle : " << cycle_num << endl;
-    missed_nets << "Cycle : " << cycle_num << endl;
+    //missed_nets << "Cycle : " << cycle_num << endl;
     while (!sim_wf.empty())
     {
       GNode* node = sim_wf.top(); sim_wf.pop();
@@ -880,7 +891,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
         }
         else
         {
-          missed_nets << "Not Toggled : " << node->getName() << endl;
+          //missed_nets << "Not Toggled : " << node->getName() << endl;
         }
       }
     }
@@ -1658,7 +1669,6 @@ void PowerOpt::readMem(int cycle_num, bool wavefront)
     string pmem_addr_str = getPmemAddr();
     pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
     static string  last_addr_string;
-    unsigned int instr ;
     if (pmem_addr > 12287) instr = 0;
     else instr = PMemory[pmem_addr]->instr;
     //if (pmem_addr == 12289) { pmem_addr = 3; instr = PMemory[3]->instr;}
@@ -2202,6 +2212,25 @@ string PowerOpt::getPC()
   return pc_str;
 }
 
+bool PowerOpt::checkIfHung()
+{
+  static unsigned count = 0;
+  static unsigned last_instr;
+  if (instr == last_instr)
+    count ++;
+  else
+  {
+    count = 0;
+    last_instr = instr;
+  }
+
+  if (count > 5) {
+    cout << " System hung" << endl;
+    return true;
+  }
+  return false;
+}
+
 void PowerOpt::simulate()
 {
    // Read file for initial values of reg-Q pins and input ports
@@ -2225,6 +2254,8 @@ void PowerOpt::simulate()
       //return;
     }
     readMem(i, wavefront);// -->  handleCondJumps()
+    bool brk = checkIfHung();
+    if (brk == true) break;
     runSimulation(wavefront, i, false); // simulates the negative edge
 
     if (!done_inputs)
@@ -2239,6 +2270,7 @@ void PowerOpt::simulate()
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
     updateRegOutputs(i);
+    debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
     //print_processor_state_profile(i, false);
     if (probeRegisters(i) == true)
     {
@@ -2272,13 +2304,14 @@ void PowerOpt::simulate2()
   {
     system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
     string PC = sys_state->PC;
+    string PC_hex = bin2hex(PC);
     // FOR NOW WE ARE NOT GENERATING THE WORST SYSTEM STATE.
     map<string, system_state>::iterator sit = PC_worst_system_state.find(PC);
     if (sit == PC_worst_system_state.end())
     {
       // NEW PC
       PC_worst_system_state[PC] = *sys_state;
-      cout << " NEW PC " << endl;
+      cout << " NEW PC " << PC_hex << endl;
     }
     else
     {
@@ -2288,12 +2321,13 @@ void PowerOpt::simulate2()
       bool can_skip = stored_state.compare_and_update_state(this_state);
       if (can_skip == true)
       {
-        cout << "SKIPPING ! " << sys_state->cycle_num << endl;
+        cout << "SKIPPING ! " << PC_hex << " " <<  sys_state->cycle_num << endl;
         pmem_request_file  << "SKIPPING "  << sys_state->cycle_num << endl;
         sleep(1) ;
         continue;
       }
-      cout << " OLD PC NOT SKIPPING " << endl;
+      cout << " OLD PC : " << PC_hex << " NOT SKIPPING " << endl;
+      sys_state = & stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
     }
     map<int, string>::iterator it;
     for (it = sys_state->net_sim_value_map.begin(); it != sys_state->net_sim_value_map.end(); it++)
@@ -2326,6 +2360,7 @@ void PowerOpt::simulate2()
 
     cout << "RESUMING at " << start_cycle << endl;
     pmem_request_file << "------------------------------ RE-RUNNING FROM SAVED POINT ----------------" << endl;
+    debug_file_second << "------------------------------ RE-RUNNING FROM SAVED POINT ---------------- at cycle " << start_cycle << endl;
     for (int i = start_cycle; i < num_sim_cycles; i++)
     {
 /*      if (check_peripherals() == true) {
@@ -2334,6 +2369,8 @@ void PowerOpt::simulate2()
         print_processor_state_profile(i, true);
       }*/
       readMem(i, wavefront);// -->  handleCondJumps()
+      bool brk = checkIfHung();
+      if (brk == true) break;
       runSimulation(wavefront, i, false); // simulates the negative edge
 
       if (!done_inputs)
@@ -2348,6 +2385,7 @@ void PowerOpt::simulate2()
 
       runSimulation(wavefront, i, true); // simulates  the positive edge
       updateRegOutputs(i);
+      debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
       if (probeRegisters(i) == true)
       {
         //print_processor_state_profile(i, true);
@@ -2423,6 +2461,30 @@ int PowerOpt::getInstType()
   return inst_type;
 }
 
+string PowerOpt::getGPR(int num)
+{
+  stringstream ss;
+  if (design == "flat_no_clk_gt")
+  {
+    string gpr_val_string = "";
+    for (int id = 15; id >= 0 ; id--)
+    {
+      ss << "execution_unit_0_register_file_0_r" << num << "_reg_" << id << "_";
+      string gpr_bit_string = ss.str();
+      string val;
+      map<string, int>::iterator it = gateNameIdMap.find(gpr_bit_string);
+      if (it == gateNameIdMap.end())
+        val = "0";
+      else
+        val = m_gates[it->second]->getSimValue();
+      gpr_val_string = gpr_val_string + val;
+      ss.str("");
+    }
+    //int gpr_val_int = strtoull(gpr_val_string.c_str(), NULL, 2);// bin to int
+    return gpr_val_string;
+  }
+}
+
 
 bool PowerOpt::probeRegisters(int cycle_num)
 {
@@ -2435,7 +2497,10 @@ bool PowerOpt::probeRegisters(int cycle_num)
    int inst_type = getInstType();
 
    if (jump_detected == true)
-    jump_cycle ++;
+   {
+      jump_cycle ++;
+      jump_detected = false;
+   }
 
    bool state_corrupted = false;
 
@@ -3395,7 +3460,7 @@ void PowerOpt::writeVCDBegin()
 
     // Write version section
     vcd_file << "$version" << endl;
-    vcd_file << "PowerOpt version `\\_(o_O)_/`?" <<endl;
+    vcd_file << "PowerOpt version unknown?" <<endl;
     vcd_file << "$end" << endl;
 
     // Write comment section
