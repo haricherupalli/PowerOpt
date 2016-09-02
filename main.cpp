@@ -628,6 +628,7 @@ int main(int argc, char *argv[])
       po->checkConnectivity(&T); 
       po->readSelectGatesFile();
       po->readConstantTerminals();// my_handler(0);
+      po->createSetTrie();
       po->topoSort(); 
       po->print_fanin_cone(&T);
       cout << "[UPDATED] Gate Count : " << po->getGateNum() << endl;
@@ -642,6 +643,7 @@ int main(int argc, char *argv[])
       po->readStaticPGInfo(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
       po->simulate();
       po->simulate2();
+      po->simulation_post_processing(&T);
       //po->dump_Dmemory();
       po->dumpPmem(); // debug stuff for capturing PG info. Purpose in CroMoC
       po->update_profile_sizes(); // ensures that all the gates have the same toggle_profile length

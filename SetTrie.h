@@ -33,7 +33,7 @@ class SetTrie
   void print ();
   void remove_subsets();
   int num_sets () { return collection.size(); }
-  list < vector<int> > & get_collection () { return collection; }
+  list < pair< double,  vector<int> > > & get_collection () { return collection; }
   SetTrie ()
   {
     top = new Node;
@@ -42,7 +42,7 @@ class SetTrie
 
   private:
   Node * top;
-  list < vector<int> > collection;
+  list < pair < double , vector<int> > > collection;
 };
 
 #endif

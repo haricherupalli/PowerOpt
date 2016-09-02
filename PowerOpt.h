@@ -170,6 +170,7 @@ class PowerOpt {
     void topoSort();
     void simulate();
     void simulate2();
+    void simulation_post_processing(designTiming * T);
     bool check_peripherals();
     bool check_sim_end(int& i, bool wavefront);
     void readPmemFile();
@@ -1044,6 +1045,7 @@ class PowerOpt {
 
     int num_inputs;
     vector<string> inputs;
+    vector<int> cycle_toggled_indices;
     string dmem_data;
     unsigned int instr;
     string pmem_instr;

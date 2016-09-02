@@ -62,9 +62,9 @@ void Node::print_recurs()
 void SetTrie::remove_subsets()
 {
 
-  for (list<vector<int> >::iterator it = collection.begin(); it != collection.end() ; it++)
+  for (list< pair < double , vector<int> > >::iterator it = collection.begin(); it != collection.end() ; it++)
   {
-    vector<int>& set = *it;
+    vector<int>& set = it->second;
 //    cout << "Checking set: " << endl;
 //    cout << "{ ";
 //    for(int i = 0 ;i < set.size(); i++)
@@ -106,7 +106,7 @@ void SetTrie::insert(vector <int>& set)
       break;
     }
   }
-  collection.push_back(set);
+  collection.push_back(make_pair(0.0, set));
 }
 
 bool Node::essr(vector <int>& set, int i, bool strict)

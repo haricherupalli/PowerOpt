@@ -1816,7 +1816,6 @@ int Gate::max_toggle_profile_size = 0;
 
     bool Gate::computeVal(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
-      bool toggled;
       switch (func)
       {
         case AND  : toggled =  computeANDVal ( sim_wf ) ; break ; 

@@ -386,8 +386,7 @@ void PowerOpt::readCmdFile(string cmdFileStr)
         if (line.find("-dump_uts") != string::npos)
             is_dump_uts = true;
         if (line.find("-dump_units") != string::npos)
-          if (exeOp != 17){ cout << "NOT DUMPING UNITS SINCE EXEC_OP != 17" << endl; exit(0); }
-          else  is_dump_units = true;
+            is_dump_units = true;
         if (line.find("-deadend") != string::npos)
             is_dead_end_check = true;
         if (line.find("-ignoreClockGates") != string::npos)
@@ -462,7 +461,6 @@ void PowerOpt::openFiles()
     toggled_nets_file.open            ( (outDir+string("/PowerOpt/toggled_nets"                 )).c_str()                ) ;
     unique_not_toggle_gate_sets.open  ( (outDir+string("/PowerOpt/unique_not_toggle_gate_sets"  )).c_str()                ) ;
     unique_toggle_gate_sets.open      ( (outDir+string("/PowerOpt/unique_toggle_gate_sets"      )).c_str()                ) ;
-    units_file.open                   ( (outDir+string("/PowerOpt/UNITS_INFO"                   )).c_str()                ) ;
     slack_profile_file.open           ( (outDir+string("/PowerOpt/slack_profile"                )).c_str()                ) ;
     net_gate_maps.open                ( (outDir+string("/PowerOpt/net_gate_maps"                )).c_str()                ) ;
     net_pin_maps.open                 ( (outDir+string("/PowerOpt/net_pin_maps"                 )).c_str()                ) ;
@@ -479,7 +477,8 @@ void PowerOpt::openFiles()
   processor_state_profile_file.open ( (outDir+string("/PowerOpt/processor_state_profile")).c_str()   ) ;
   dmem_contents_file.open           ( (outDir+string("/PowerOpt/dmem_contents_file"     )).c_str()   ) ;
   pmem_contents_file.open           ( (outDir+string("/PowerOpt/pmem_contents_file"     )).c_str()   ) ;
-  debug_file_second.open            ( (outDir+string("/PowerOpt/debug_file_second"     )).c_str()   ) ;
+  debug_file_second.open            ( (outDir+string("/PowerOpt/debug_file_second"      )).c_str()   ) ;
+  units_file.open                   ( (outDir+string("/PowerOpt/UNITS_INFO"             )).c_str()   ) ;
 
   vcdOutFile = outDir+"PowerOpt/"+vcdOutFile;
   Gate * dummy_g; Net* dummy_n; system_state* dummy_ss;
@@ -496,7 +495,6 @@ void PowerOpt::closeFiles()
     toggled_nets_file.close();
     unique_not_toggle_gate_sets.close();
     unique_toggle_gate_sets.close();
-    units_file.close();
     slack_profile_file.close();
     net_gate_maps.close();
     net_pin_maps.close();
@@ -505,6 +503,7 @@ void PowerOpt::closeFiles()
     dead_end_info_file.close();
   }
   missed_nets.close();
+  units_file.close();
   toggle_profile_file.close();
   debug_file.close();
   pmem_request_file.close();
@@ -875,6 +874,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
         {
           toggled_count++;
           gate->updateToggleProfile(cycle_num);
+          cycle_toggled_indices.push_back(gate->getId());
           int cluster_id = gate->getClusterId();
           debug_file << node->getName() << endl;
           //if (cluster_id != 0) { }
@@ -1077,6 +1077,7 @@ void PowerOpt::updateRegOutputs(int cycle_num)
     {
       toggled_count++;
       ff_gate->updateToggleProfile(cycle_num);
+      cycle_toggled_indices.push_back(ff_gate->getId());
     }
   }
   debug_file << " Num toggled FF's in cycle " << cycle_num << " is " << toggled_count << endl;
@@ -2237,13 +2238,14 @@ void PowerOpt::simulate()
   readSimInitFile();
   readDmemInitFile();
   readInputValueFile();
-  bool wavefront = false;
+  bool wavefront = true;
   bool done_inputs = false;
   jump_cycle = 0;
   int i = 0;
   print_processor_state_profile(0,true);
   //for (i = 0; i < num_sim_cycles; i++)
   writeVCDBegin();
+  cycle_toggled_indices.clear();
   while(true)
   {
     i++;
@@ -2270,6 +2272,10 @@ void PowerOpt::simulate()
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
     updateRegOutputs(i);
+    sort(cycle_toggled_indices.begin(), cycle_toggled_indices.end());
+    if (!tree-> essr(cycle_toggled_indices, false))
+      tree->insert(cycle_toggled_indices);
+    cycle_toggled_indices.clear();
     debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
     //print_processor_state_profile(i, false);
     if (probeRegisters(i) == true)
@@ -2361,6 +2367,7 @@ void PowerOpt::simulate2()
     cout << "RESUMING at " << start_cycle << endl;
     pmem_request_file << "------------------------------ RE-RUNNING FROM SAVED POINT ----------------" << endl;
     debug_file_second << "------------------------------ RE-RUNNING FROM SAVED POINT ---------------- at cycle " << start_cycle << endl;
+    cycle_toggled_indices.clear();
     for (int i = start_cycle; i < num_sim_cycles; i++)
     {
 /*      if (check_peripherals() == true) {
@@ -2385,6 +2392,10 @@ void PowerOpt::simulate2()
 
       runSimulation(wavefront, i, true); // simulates  the positive edge
       updateRegOutputs(i);
+      sort(cycle_toggled_indices.begin(), cycle_toggled_indices.end());
+      if (!tree-> essr(cycle_toggled_indices, false))
+        tree->insert(cycle_toggled_indices);
+      cycle_toggled_indices.clear();
       debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
       if (probeRegisters(i) == true)
       {
@@ -2400,7 +2411,20 @@ void PowerOpt::simulate2()
       }
     }
   }
+}
+
+void PowerOpt::simulation_post_processing(designTiming* T)
+{
+  cout << "Unique (subsetted, during insert) toggle groups count = " << tree->num_sets() << endl;
+  tree->remove_subsets();
+  cout << "Unique (subsetted) toggle groups count = " << tree->num_sets() << endl;
+
+  find_dynamic_slack_subset(T);
+
+  dump_units();
+
   print_dmem_contents(num_sim_cycles-1);
+
 }
 
 int PowerOpt::getIState()
@@ -5021,11 +5045,14 @@ void PowerOpt::reset_all (designTiming* T)
 
 void PowerOpt::dump_units(){
 
-  list < vector <int> >& collection = tree->get_collection();
-  list <vector < int > > :: iterator it;
+  cout << " DUMPING UNITS " << endl;
+  list < pair < double,  vector <int> > >& collection = tree->get_collection();
+  list < pair < double , vector < int > > > :: iterator it;
   for(it = collection.begin(); it != collection.end(); it++)
   {
-    vector<int> & unit = *it;
+    vector<int> & unit = it->second;
+    double slack = it->first;
+    units_file << slack << " : " ;
     for (int i =0; i < unit.size(); i++)
     {
       int index = unit[i];
@@ -5196,11 +5223,11 @@ void PowerOpt::find_dynamic_slack_subset(designTiming *T)
   cout << "Finding Dynamic Slack" << endl;
   T->suppressMessage("UITE-216"); // won't warn that a gate is not a start/endpoint while reseting paths
   float dynamic_slack = 10000.0;
-  list < vector <int> >& collection = tree->get_collection();
-  list <vector < int > > :: iterator it;
+  list < pair < double ,  vector <int> > >& collection = tree->get_collection();
+  list < pair < double, vector < int > > > :: iterator it;
   for (it = collection.begin(); it != collection.end() ; it++)
   {
-    vector <int>& unit = *it;
+    vector <int>& unit = it->second;
     T->setFalsePathsThroughAllCells();
     for (int i = 0; i < unit.size(); i ++) // this is the toggled gate unit
     {
@@ -5212,6 +5239,7 @@ void PowerOpt::find_dynamic_slack_subset(designTiming *T)
     }
     //float worst_slack = T->runTimingPBA(10.0);
     float worst_slack = T->runTiming(10.0);
+    it->first = worst_slack;
     if (worst_slack < dynamic_slack)
     {
       dynamic_slack = worst_slack;
@@ -5251,11 +5279,11 @@ void PowerOpt::find_dynamic_slack_pins_subset(designTiming* T)
     cout << "Finding Dynamic Slack" << endl;
     T->suppressMessage("UITE-216");
     float dynamic_slack = 10000.0;
-    list <vector <int> > & collection = tree->get_collection();
-    list <vector <int> > :: iterator it;
+    list < pair < double , vector <int> > > & collection = tree->get_collection();
+    list < pair < double, vector <int> > > :: iterator it;
     for (it = collection.begin(); it != collection.end(); it++)
     {
-        vector <int>& unit = *it;
+        vector <int>& unit = it->second;
         T->setFalsePathsThroughAllPins();
         for (int i = 0; i < unit.size(); i++)
         {
