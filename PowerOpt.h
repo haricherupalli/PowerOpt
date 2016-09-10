@@ -937,6 +937,7 @@ class PowerOpt {
     bool is_dead_end_check;
     int num_sim_cycles;
     string design;
+    int conservative_state;
     int vStart;
     int vEnd;
     int vStep;

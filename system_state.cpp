@@ -36,6 +36,20 @@ void system_state::openFiles(string outDir)
     sys_state_debug_file.open(sys_state_debug_file_name.c_str(), std::ofstream::out);
 }
 
+system_state::system_state(vector<Net*>& nets, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf_inp, int cycle_num_inp, string PC_inp, bool inp_dep)
+{
+  taken = false; not_taken = false; 
+  for (int i = 0; i < nets.size(); i++)
+  {
+    net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
+  }
+  cycle_num = cycle_num;
+  sim_wf = sim_wf; // copy all contents!
+  DMemory = DMemory; // copy all contents!
+  PC = PC_inp;
+  inp_dependent = inp_dep;
+}
+
 static xbitset get_conservative_val(xbitset a, xbitset b)
 {
    bitset<NUM_BITS>& a_bs_x   = a.get_bs_x();

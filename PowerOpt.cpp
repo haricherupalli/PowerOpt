@@ -223,6 +223,7 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     is_dump_units = false;
     is_dead_end_check = false;
     ignoreMultiplier = 0;
+    conservative_state = 0;
     vStart = 120;
     vEnd = 40;
     vStep = 1;
@@ -409,6 +410,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             num_sim_cycles = getTokenI(line,"-num_sim_cycles ");
         if (line.find("-design ") != string::npos)
             design = getTokenS(line,"-design ");
+        if (line.find("-conservative_state ") != string::npos)
+            conservative_state = getTokenI(line,"-conservative_state ");
         if (line.find("-inputValueFile ") != string::npos)
             inputValueFile = getTokenS(line,"-inputValueFile ");
         if (line.find("-outDir ") != string::npos)
@@ -2312,28 +2315,35 @@ void PowerOpt::simulate2()
     string PC = sys_state->PC;
     string PC_hex = bin2hex(PC);
     // FOR NOW WE ARE NOT GENERATING THE WORST SYSTEM STATE.
-    map<string, system_state>::iterator sit = PC_worst_system_state.find(PC);
-    if (sit == PC_worst_system_state.end())
+    if (conservative_state == 1)
     {
-      // NEW PC
-      PC_worst_system_state[PC] = *sys_state;
-      cout << " NEW PC " << PC_hex << endl;
-    }
-    else
-    {
-      // COMPARE THE SYSTEM STATES
-      system_state & stored_state = sit->second;
-      system_state & this_state = *sys_state;
-      bool can_skip = stored_state.compare_and_update_state(this_state);
-      if (can_skip == true)
+      map<string, system_state>::iterator sit = PC_worst_system_state.find(PC);
+      if (sit == PC_worst_system_state.end())
       {
-        cout << "SKIPPING ! " << PC_hex << " " <<  sys_state->cycle_num << endl;
-        pmem_request_file  << "SKIPPING "  << sys_state->cycle_num << endl;
-        sleep(1) ;
-        continue;
+        // NEW PC
+        PC_worst_system_state[PC] = *sys_state;
+        cout << " NEW PC " << PC_hex << endl;
       }
-      cout << " OLD PC : " << PC_hex << " NOT SKIPPING " << endl;
-      sys_state = & stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
+      else
+      {
+        // COMPARE THE SYSTEM STATES
+        system_state & stored_state = sit->second;
+        system_state & this_state = *sys_state;
+        bool can_skip = stored_state.compare_and_update_state(this_state);
+        if (can_skip == true)
+        {
+          cout << "SKIPPING ! " << PC_hex << " " <<  sys_state->cycle_num << endl;
+          pmem_request_file  << "SKIPPING "  << sys_state->cycle_num << endl;
+          sleep(1) ;
+          continue;
+        }
+        cout << " OLD PC : " << PC_hex << " NOT SKIPPING " << endl;
+        sys_state = & stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
+      }
+    }
+    else 
+    {
+       cout << " CONSERVATIVE STATE NOT MAINTAINTED " << endl; 
     }
     map<int, string>::iterator it;
     for (it = sys_state->net_sim_value_map.begin(); it != sys_state->net_sim_value_map.end(); it++)

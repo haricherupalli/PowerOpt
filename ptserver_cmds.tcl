@@ -1016,6 +1016,18 @@ proc PtGetCellFromNet { NetName } {
     return $CellName
 }
 
+proc PtGetNetFromCell { CellName } {
+
+  set cell [get_cell $CellName]
+  set pins [get_pins -of_objects $cell ]
+  foreach_in_collection pin $pins {
+    if { [get_attri $pin direction] == "out" && [get_attri $pin is_port] == false } {
+      set NetName [get_attribute [get_net -of $pin] full_name]
+    }
+  }
+  return $NetName
+}
+
 proc PtGetTermsFromNet { NetName } {
     #echo "net name is $NetName"
     set term_list ""

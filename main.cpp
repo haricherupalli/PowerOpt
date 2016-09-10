@@ -625,6 +625,7 @@ int main(int argc, char *argv[])
 
     if (po->getExeOp() == 21) // NETLIST SIMULATION (X_based)
     {
+      t3 = time(NULL);
       po->checkConnectivity(&T); 
       po->readSelectGatesFile();
       po->readConstantTerminals();// my_handler(0);
@@ -641,10 +642,13 @@ int main(int argc, char *argv[])
       //po->print_pads(); return 0;
       po->readPmemFile();// Generating the pmem file in the right format is a bit of a work. But for our benchmarks they are in flat_no_clk_gt/run_10.0/results_10.0/INPUT_DEPENDENT_RUNS/pmem_files
       po->readStaticPGInfo(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
+      t4 = time(NULL);
       po->simulate();
       po->simulate2();
-      po->simulation_post_processing(&T);
+      t5 = time(NULL);
+      //po->simulation_post_processing(&T);
       //po->dump_Dmemory();
+      cout << " Time taken to simulate : " << t5 - t4 << endl;
       po->dumpPmem(); // debug stuff for capturing PG info. Purpose in CroMoC
       po->update_profile_sizes(); // ensures that all the gates have the same toggle_profile length
       po->print_toggle_profiles(); // Write the toggle profiles to be used for clustering in CroMoC
