@@ -224,6 +224,7 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     is_dead_end_check = false;
     ignoreMultiplier = 0;
     conservative_state = 0;
+    inp_ind_branches = 0;
     vStart = 120;
     vEnd = 40;
     vStep = 1;
@@ -237,6 +238,7 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     varMapSigmafile = "";
     path_time = 0.0;
     num_sim_cycles = 0;
+    global_curr_cycle = 0;
 
     while(std::getline(file, line))
     {
@@ -412,12 +414,15 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             design = getTokenS(line,"-design ");
         if (line.find("-conservative_state ") != string::npos)
             conservative_state = getTokenI(line,"-conservative_state ");
+        if (line.find("-inp_ind_branches ") != string::npos)
+            inp_ind_branches = getTokenI(line,"-inp_ind_branches ");
         if (line.find("-inputValueFile ") != string::npos)
             inputValueFile = getTokenS(line,"-inputValueFile ");
         if (line.find("-outDir ") != string::npos)
             outDir = getTokenS(line,"-outDir ");
     }
 
+    assert(num_sim_cycles > 0 );
     if (swapstep == 0) swapstep = 10000;
     if (!mmmcOn) mmmcFile.clear();
 
@@ -1633,8 +1638,9 @@ void PowerOpt::checkCorruption(int i)
 
 }
 
-void PowerOpt::handleCondJumps()
+bool PowerOpt::handleCondJumps(int cycle_num)
 {
+  bool can_skip = false;
   if(pmem_instr.compare(13,3,"100") == 0) // IS IT A JUMP?
   {
      string cond = pmem_instr.substr(10, 3);
@@ -1648,7 +1654,24 @@ void PowerOpt::handleCondJumps()
      else if (!cond.compare("111")){  instr_name = "JMP"     ; cout << "Instr is " << instr_name << endl;  pmem_request_file << "Instr is " << instr_name << endl;  checkCorruption('E'); }
      else  instr_name = "";
      jump_detected = true;
+     if (conservative_state == 1 && inp_ind_branches == 1)
+     {
+       system_state * sys_state = get_current_system_state(cycle_num);
+       bool can_skip = get_conservative_state(sys_state);
+       if (can_skip == false)
+       {
+         cout << "CONTINUING INP_IND SYSTEM STATE " << sys_state->get_state_short() << endl;
+         pmem_request_file << "CONTINUING INP_IND SYSTEM STATE " << sys_state->get_state_short() << endl;
+         //sys_state_queue.push(sys_state); 
+       }
+       else 
+       {
+         cout << "SKIPPING INP_IND SYSTEM STATE " << sys_state->get_state_short() << endl;
+         pmem_request_file << "SKIPPING INP_IND SYSTEM STATE " << sys_state->get_state_short() << endl;
+       }
+     }
   }
+  return can_skip;
 }
 
 void PowerOpt::compute_leakage_energy() // No caller function
@@ -1668,7 +1691,7 @@ void PowerOpt::compute_leakage_energy() // No caller function
   }
 }
 
-void PowerOpt::readMem(int cycle_num, bool wavefront)
+bool PowerOpt::readMem(int cycle_num, bool wavefront)
 {
     string pmem_addr_str = getPmemAddr();
     pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
@@ -1677,7 +1700,8 @@ void PowerOpt::readMem(int cycle_num, bool wavefront)
     else instr = PMemory[pmem_addr]->instr;
     //if (pmem_addr == 12289) { pmem_addr = 3; instr = PMemory[3]->instr;}
     pmem_instr = binary(instr);
-    handleCondJumps();
+    bool can_skip = handleCondJumps(cycle_num);
+
     send_instr = true;
     string pc = getPC();
     int e_state = getEState();
@@ -1686,6 +1710,7 @@ void PowerOpt::readMem(int cycle_num, bool wavefront)
     string i_state_str = binary(i_state);
     pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) and PC " << pc << " EState is " << e_state  << " IState is " << i_state <<  " instruction is " << hex << instr << dec << " -> " << pmem_instr << " and cycle is " << cycle_num << endl;
     handleDmem(cycle_num);
+    return can_skip;
 }
 
 void PowerOpt::sendPerDout(string data_str)
@@ -2258,8 +2283,8 @@ void PowerOpt::simulate()
       print_processor_state_profile(i, false);
       //return;
     }
-    readMem(i, wavefront);// -->  handleCondJumps()
-    bool brk = checkIfHung();
+    bool brk = readMem(i, wavefront);// -->  handleCondJumps()
+    brk |= checkIfHung();
     if (brk == true) break;
     runSimulation(wavefront, i, false); // simulates the negative edge
 
@@ -2294,6 +2319,7 @@ void PowerOpt::simulate()
       break ;
     }
   }
+  global_curr_cycle = i;
   vcd_file.close();
   print_dmem_contents(num_sim_cycles-1);
   cout << "Total Leakage Energy is " << total_leakage_energy*1e-9 << endl;
@@ -2309,6 +2335,7 @@ void PowerOpt::simulate2()
   bool wavefront = true;
   bool done_inputs = false;
   jump_cycle = 0;
+  cout << " simulate2() " << endl;
   while(!sys_state_queue.empty())
   {
     system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
@@ -2317,28 +2344,28 @@ void PowerOpt::simulate2()
     // FOR NOW WE ARE NOT GENERATING THE WORST SYSTEM STATE.
     if (conservative_state == 1)
     {
-      map<string, system_state>::iterator sit = PC_worst_system_state.find(PC);
+      map<string, system_state*>::iterator sit = PC_worst_system_state.find(PC);
       if (sit == PC_worst_system_state.end())
       {
         // NEW PC
-        PC_worst_system_state[PC] = *sys_state;
+        PC_worst_system_state[PC] = sys_state;
         cout << " NEW PC " << PC_hex << endl;
       }
       else
       {
         // COMPARE THE SYSTEM STATES
-        system_state & stored_state = sit->second;
+        system_state*  stored_state = sit->second;
         system_state & this_state = *sys_state;
-        bool can_skip = stored_state.compare_and_update_state(this_state);
+        bool can_skip = stored_state->compare_and_update_state(this_state);
         if (can_skip == true)
         {
-          cout << "SKIPPING ! " << PC_hex << " " <<  sys_state->cycle_num << endl;
-          pmem_request_file  << "SKIPPING "  << sys_state->cycle_num << endl;
+          cout << "SKIPPING ! " <<  sys_state->get_state_short() << endl;
+          pmem_request_file  << "SKIPPING " << sys_state->get_state_short() << endl;
           sleep(1) ;
           continue;
         }
-        cout << " OLD PC : " << PC_hex << " NOT SKIPPING " << endl;
-        sys_state = & stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
+        cout << " OLD PC : " << PC_hex << " NOT SKIPPING." << sys_state->get_state_short() <<  endl;
+        sys_state = stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
       }
     }
     else 
@@ -2385,8 +2412,9 @@ void PowerOpt::simulate2()
         print_dmem_contents(i);
         print_processor_state_profile(i, true);
       }*/
-      readMem(i, wavefront);// -->  handleCondJumps()
-      bool brk = checkIfHung();
+      bool brk = readMem(i, wavefront);// -->  handleCondJumps()
+      brk |= checkIfHung();
+      brk |= (global_curr_cycle >= num_sim_cycles);
       if (brk == true) break;
       runSimulation(wavefront, i, false); // simulates the negative edge
 
@@ -2519,6 +2547,41 @@ string PowerOpt::getGPR(int num)
   }
 }
 
+system_state* PowerOpt::get_current_system_state(int cycle_num)
+{
+    system_state* s_state = new system_state(nets, sim_wf, DMemory,  cycle_num, getPC(), pmem_instr,  false );
+    return s_state;
+}
+
+bool PowerOpt::get_conservative_state(system_state* sys_state)
+{
+  string PC = sys_state->PC;
+  if (PC.find("X") != string::npos) { cout << "PC Corrupt at sys_state with ID : " << sys_state->id << endl; return true; }
+  string PC_hex = bin2hex(PC);
+  map<string, system_state*>::iterator sit = PC_worst_system_state.find(PC);
+  if (sit == PC_worst_system_state.end())
+  {
+    // NEW PC
+    PC_worst_system_state[PC] = sys_state;
+    cout << " NEW PC " << PC_hex << endl;
+  }
+  else
+  {
+    // COMPARE THE SYSTEM STATES
+    system_state & stored_state = *(sit->second);
+    system_state & this_state = *sys_state;
+    bool can_skip = stored_state.compare_and_update_state(this_state);
+    if (can_skip == true)
+    {
+      cout << "SKIPPING ! : " << sys_state->get_state_short() << endl;
+      pmem_request_file  << "SKIPPING " << sys_state->get_state_short() << endl;
+      return true;
+    }
+    cout << " OLD PC : " << PC_hex << " NOT SKIPPING "  << sys_state->get_state_short() << endl;
+    sys_state = & stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
+  }
+  return false;
+}
 
 bool PowerOpt::probeRegisters(int cycle_num)
 {
@@ -2532,8 +2595,9 @@ bool PowerOpt::probeRegisters(int cycle_num)
 
    if (jump_detected == true)
    {
-      jump_cycle ++;
-      jump_detected = false;
+     jump_cycle ++;
+     jump_detected = false;
+
    }
 
    bool state_corrupted = false;
@@ -2550,29 +2614,17 @@ bool PowerOpt::probeRegisters(int cycle_num)
          state_corrupted = true;
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("0", sim_wf);
          cout << "SAVING STATE 1" << endl;
-         system_state* sys_state_1 = new system_state;
-         for (int i = 0; i < nets.size(); i++)
-         {
-           sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-         }
-         sys_state_1->cycle_num = cycle_num;
-         sys_state_1->sim_wf = sim_wf; // copy all contents!
-         sys_state_1->DMemory = DMemory; // copy all contents!
+         system_state* sys_state_1 = get_current_system_state(cycle_num) ;
          sys_state_1->not_taken = true;
-         sys_state_1->PC = getPC();
+         cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
-         system_state* sys_state_2 = new system_state;
-         for (int i = 0; i < nets.size(); i++)
-         {
-           sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-         }
-         sys_state_2->cycle_num = cycle_num;
-         sys_state_2->sim_wf = sim_wf; // copy all contents!
-         sys_state_2->DMemory = DMemory; // copy all contents!
+         system_state* sys_state_2 = get_current_system_state(cycle_num) ;
          sys_state_2->taken = true;
-         sys_state_2->PC = getPC();
+         cout << "PUSHING SYSTEM STATE"  << sys_state_2->get_state_short() << endl;
+         pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_2->get_state_short() << endl;
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2584,29 +2636,17 @@ bool PowerOpt::probeRegisters(int cycle_num)
          state_corrupted = true;
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("0", sim_wf);
          cout << "SAVING STATE 1" << endl;
-         system_state* sys_state_1 = new system_state;
-         for (int i = 0; i < nets.size(); i++)
-         {
-           sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-         }
-         sys_state_1->cycle_num = cycle_num;
-         sys_state_1->sim_wf = sim_wf; // copy all contents!
-         sys_state_1->DMemory = DMemory; // copy all contents!
+         system_state* sys_state_1 = get_current_system_state(cycle_num) ;
          sys_state_1->not_taken = true;
-         sys_state_1->PC = getPC();
+         cout << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
+         pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
-         system_state* sys_state_2 = new system_state;
-         for (int i = 0; i < nets.size(); i++)
-         {
-           sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-         }
-         sys_state_2->cycle_num = cycle_num;
-         sys_state_2->sim_wf = sim_wf; // copy all contents!
-         sys_state_2->DMemory = DMemory; // copy all contents!
+         system_state* sys_state_2 = get_current_system_state(cycle_num) ;
          sys_state_2->taken = true;
-         sys_state_2->PC = getPC();
+         cout << "PUSHING SYSTEM STATE"  << sys_state_2->get_state_short() << endl;
+         pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_2->get_state_short() << endl;
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2618,29 +2658,17 @@ bool PowerOpt::probeRegisters(int cycle_num)
          state_corrupted = true;
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
          cout << "SAVING STATE 1" << endl;
-         system_state* sys_state_1 = new system_state;
-         for (int i = 0; i < nets.size(); i++)
-         {
-           sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-         }
-         sys_state_1->cycle_num = cycle_num;
-         sys_state_1->sim_wf = sim_wf; // copy all contents!
-         sys_state_1->DMemory = DMemory; // copy all contents!
+         system_state* sys_state_1 = get_current_system_state(cycle_num) ;
          sys_state_1->not_taken = true;
-         sys_state_1->PC = getPC();
+         cout << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
+         pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
          cout << "SAVING STATE 2" << endl;
-         system_state* sys_state_2 = new system_state;
-         for (int i = 0; i < nets.size(); i++)
-         {
-           sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-         }
-         sys_state_2->cycle_num = cycle_num;
-         sys_state_2->sim_wf = sim_wf; // copy all contents!
-         sys_state_2->DMemory = DMemory; // copy all contents!
+         system_state* sys_state_2 = get_current_system_state(cycle_num) ;
          sys_state_2->taken = true;
-         sys_state_2->PC = getPC();
+         cout << "PUSHING SYSTEM STATE"  << sys_state_2->get_state_short() << endl;
+         pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_2->get_state_short() << endl;
          sys_state_queue.push(sys_state_2);
        }
      }
@@ -2653,36 +2681,33 @@ bool PowerOpt::probeRegisters(int cycle_num)
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
          cout << "SAVING STATE 1" << endl;
-         system_state* sys_state_1 = new system_state;
-         for (int i = 0; i < nets.size(); i++)
-         {
-           sys_state_1->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-         }
-         sys_state_1->cycle_num = cycle_num;
-         sys_state_1->sim_wf = sim_wf; // copy all contents!
-         sys_state_1->DMemory = DMemory; // copy all contents!
+         system_state* sys_state_1 = get_current_system_state(cycle_num) ;
          sys_state_1->not_taken = true;
-         sys_state_1->PC = getPC();
+         cout << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
+         pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          sys_state_queue.push(sys_state_1);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
          terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
          cout << "SAVING STATE 2" << endl;
-         system_state* sys_state_2 = new system_state;
-         for (int i = 0; i < nets.size(); i++)
-         {
-           sys_state_2->net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
-         }
-         sys_state_2->cycle_num = cycle_num;
-         sys_state_2->sim_wf = sim_wf; // copy all contents!
-         sys_state_2->DMemory = DMemory; // copy all contents!
+         system_state* sys_state_2 = get_current_system_state(cycle_num) ;
          sys_state_2->taken = true;
-         sys_state_2->PC = getPC();
+         cout << "PUSHING SYSTEM STATE"  << sys_state_2->get_state_short() << endl;
+         pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_2->get_state_short() << endl;
          sys_state_queue.push(sys_state_2);
        }
      }
    }
 
    if (state_corrupted) return true;
+//   else 
+//   {
+//     if (jump_detected == true)
+//     {
+//       jump_cycle ++;
+//       jump_detected = false;
+//
+//     }
+//   }
   return false;
 }
 

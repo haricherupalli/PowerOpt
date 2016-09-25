@@ -646,7 +646,8 @@ int main(int argc, char *argv[])
       po->simulate();
       po->simulate2();
       t5 = time(NULL);
-      //po->simulation_post_processing(&T);
+      if (po->postprocess())
+        po->simulation_post_processing(&T);
       //po->dump_Dmemory();
       cout << " Time taken to simulate : " << t5 - t4 << endl;
       po->dumpPmem(); // debug stuff for capturing PG info. Purpose in CroMoC

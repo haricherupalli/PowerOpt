@@ -21,6 +21,7 @@ using namespace std;
 namespace POWEROPT {
 
 ofstream system_state::sys_state_debug_file;
+long system_state::sys_state_count = 0;
 
 static string bin2hex (string binary_str)
 {
@@ -36,18 +37,37 @@ void system_state::openFiles(string outDir)
     sys_state_debug_file.open(sys_state_debug_file_name.c_str(), std::ofstream::out);
 }
 
-system_state::system_state(vector<Net*>& nets, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf_inp, int cycle_num_inp, string PC_inp, bool inp_dep)
+string system_state::get_state_short()
+{
+  stringstream ss;
+  ss << "( ID : " << id << " PC: " << bin2hex(PC) << ", " << " Instr: " << bin2hex(instr) << ", " << "Cycle: " << cycle_num << " ) ";
+  return ss.str();
+}
+
+system_state::system_state()
+{
+  taken = false;
+  not_taken = false; 
+  inp_dependent = true;
+  id = sys_state_count++; 
+  cout << " NEW SYS_STATE WITH ID : " << id << endl; 
+}
+
+system_state::system_state(vector<Net*>& nets, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf_inp, map<int, xbitset>& DMemory_inp, int cycle_num_inp, string PC_inp, string instr_inp, bool inp_dep)
 {
   taken = false; not_taken = false; 
   for (int i = 0; i < nets.size(); i++)
   {
     net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
   }
-  cycle_num = cycle_num;
-  sim_wf = sim_wf; // copy all contents!
-  DMemory = DMemory; // copy all contents!
+  cycle_num = cycle_num_inp;
+  sim_wf = sim_wf_inp; // copy all contents!
+  DMemory = DMemory_inp; // copy all contents!
   PC = PC_inp;
+  instr = instr_inp;
   inp_dependent = inp_dep;
+  id = sys_state_count++;
+  cout << " NEW SYS_STATE WITH ID : " << id << endl;
 }
 
 static xbitset get_conservative_val(xbitset a, xbitset b)
@@ -72,7 +92,7 @@ bool system_state::compare_and_update_state(system_state& sys_state)
 {
     bool can_skip = true;
     assert(PC == sys_state.PC);
-    sys_state_debug_file << " EVALUATING FOR PC " << bin2hex(PC) << " at cycle " << cycle_num <<  endl;
+    sys_state_debug_file << "ID : " << id << " EVALUATING FOR PC " << bin2hex(PC) << " at cycle " << cycle_num <<  endl;
 
     // compare net_sim_value_map
     map<int, string>::iterator it;
@@ -82,12 +102,16 @@ bool system_state::compare_and_update_state(system_state& sys_state)
        string sys_state_sim_val = sys_state.net_sim_value_map[id];  
        //if (sys_state_sim_val != sim_val)
        if (sim_val != "X" && sys_state_sim_val != sim_val)
-       { 
+       {
           Net * net = PowerOpt::getInstance()->getNet(id);
           string net_name = net->getName();
           if (net_name != "n355" && net_name != "n1164" && net_name != "n1167" && net_name != "n1161") // status register
           {
-            sys_state_debug_file << "Net : " << net_name  << " ( " << net->getDriverGate()->getName() << " ) "  << sim_val << " : " << sys_state_sim_val << endl ;
+            Gate* gate = net->getDriverGate();
+            string gate_name;
+            if (gate != NULL) gate_name = gate->getName();
+            else gate_name = "NO DRIVER";
+            sys_state_debug_file << "Net : " << net_name  << " ( " << gate_name << " ) "  << sim_val << " : " << sys_state_sim_val << endl ;
             // BUILD CONSERVATIVE STATE 
             it->second = "X";
             can_skip = false; 
@@ -112,10 +136,11 @@ bool system_state::compare_and_update_state(system_state& sys_state)
        else // addr exists
        {
          xbitset old_val = my_dit->second;
-         if (old_val == other_val) { } // nothing to do
+         if (old_val.is_conservative(other_val)) { } // nothing to do
          else 
          {
            my_dit->second = get_conservative_val(my_dit->second, other_val);
+           assert(my_dit->second.is_conservative(other_val));
            sys_state_debug_file << " Mem Location different : " << addr << " Old val : " << old_val.to_string() << 
            " Other val : " << other_val.to_string() <<
            " New val : " << my_dit->second.to_string() << endl;

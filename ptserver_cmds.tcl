@@ -241,14 +241,14 @@ proc PtSetFalsePathsForPins {} {
 }
 
 proc PtGetClkTreeCells {} {
-    echo "Getting Clk Tree Cells"
+    #echo "Getting Clk Tree Cells"
     set clk_nwrk [get_clock_network_objects -type cell]
     set ret_val ""
-    echo "Got Cells"
+    #echo "Got Cells"
     foreach obj $clk_nwrk {
         set ret_val [append $ret_val [get_attribute $obj full_name] ]
     }
-    echo "Done with the string. Now returning"
+    #echo "Done with the string. Now returning"
     return $ret_val
 }
 
