@@ -2272,11 +2272,25 @@ void PowerOpt::simulate()
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
     updateRegOutputs(i);
-    sort(cycle_toggled_indices.begin(), cycle_toggled_indices.end());
-    if (!tree-> essr(cycle_toggled_indices, false))
-      tree->insert(cycle_toggled_indices);
-    cycle_toggled_indices.clear();
-    debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
+    // DEAD_END GATE ELIMINATION
+    // generate toggled_gates_str
+    string toggled_gates_str;
+    toggled_gates_str += m_gates[cycle_toggled_indices[0]]->getName();
+    for (int j = 0; j< cycle_toggled_indices.size(); j++)
+    {
+      int id = cycle_toggled_indices[j] ;
+      Gate* gate = m_gates[id];
+      string gate_name = gate->getName();
+      toggled_gates_str += ","+gate_name;
+    }
+    vector<int> live_toggled_set_indices;
+    check_for_dead_ends(i, toggled_gates_str, live_toggled_set_indices);
+
+    sort(live_toggled_set_indices.begin(), live_toggled_set_indices.end());
+    if (!tree-> essr(live_toggled_set_indices, false))
+      tree->insert(live_toggled_set_indices);
+    live_toggled_set_indices.clear(); cycle_toggled_indices.clear();
+    //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
     //print_processor_state_profile(i, false);
     if (probeRegisters(i) == true)
     {
@@ -2392,11 +2406,25 @@ void PowerOpt::simulate2()
 
       runSimulation(wavefront, i, true); // simulates  the positive edge
       updateRegOutputs(i);
-      sort(cycle_toggled_indices.begin(), cycle_toggled_indices.end());
-      if (!tree-> essr(cycle_toggled_indices, false))
-        tree->insert(cycle_toggled_indices);
-      cycle_toggled_indices.clear();
-      debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
+
+      string toggled_gates_str;
+      toggled_gates_str += m_gates[cycle_toggled_indices[0]]->getName();
+      for (int j = 0; j< cycle_toggled_indices.size(); j++)
+      {
+        int id = cycle_toggled_indices[j] ;
+        Gate* gate = m_gates[id];
+        string gate_name = gate->getName();
+        toggled_gates_str += ","+gate_name;
+      }
+      vector<int> live_toggled_set_indices;
+      check_for_dead_ends(i, toggled_gates_str, live_toggled_set_indices);
+
+      sort(live_toggled_set_indices.begin(), live_toggled_set_indices.end());
+      if (!tree-> essr(live_toggled_set_indices, false))
+        tree->insert(live_toggled_set_indices);
+      live_toggled_set_indices.clear(); cycle_toggled_indices.clear();
+
+      //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
       if (probeRegisters(i) == true)
       {
         //print_processor_state_profile(i, true);
@@ -2419,7 +2447,7 @@ void PowerOpt::simulation_post_processing(designTiming* T)
   tree->remove_subsets();
   cout << "Unique (subsetted) toggle groups count = " << tree->num_sets() << endl;
 
-  find_dynamic_slack_subset(T);
+  //find_dynamic_slack_subset(T);
 
   dump_units();
 
@@ -5947,6 +5975,42 @@ void PowerOpt::print_dead_end_gates(int cycle_num)
 
 
 
+}
+
+void PowerOpt::check_for_dead_ends(int cycle_num, string toggled_gates_str, vector<int>& nondeadend_toggled_gates_indices)
+{
+
+  vector<string> toggled_gates;
+  int dead_gates_count = 0;
+  int non_clk_tree_non_ff_toggled_gates_count = 0;
+  tokenize(toggled_gates_str, ',', toggled_gates);
+  cout << "CHECKING FOR DEAD ENDS and size of toggled set is " << toggled_gates.size() << endl;
+  for (int i = 0 ; i < toggled_gates.size(); i++)
+  {
+    string gate_name = toggled_gates[i];
+    Gate* gate = gate_name_dictionary[gate_name];
+    if (gate->getFFFlag()) continue;
+    if (gate->getIsClkTree() == false) non_clk_tree_non_ff_toggled_gates_count ++;
+    bool dead_gate = gate->check_for_dead_toggle(cycle_num);
+    if (dead_gate)
+    {
+      gate->setDeadToggle(true);
+      //cout << gate->getName() << " is a dead end gate" << endl;
+      gate->trace_back_dead_gate(dead_gates_count, cycle_num);
+    }
+  }
+
+  for (int i =0; i < toggled_gates.size(); i++)
+  {
+    string gate_name = toggled_gates[i];
+    Gate* gate = gate_name_dictionary[gate_name];
+    if (!gate->isDeadToggle())
+    {
+      int id = gate->getId();
+      nondeadend_toggled_gates_indices.push_back(id);
+    }
+  }
+  cout << " Number of dead end gates : " << dead_gates_count << "/" << non_clk_tree_non_ff_toggled_gates_count << endl;
 }
 
 void PowerOpt::check_for_dead_ends(int cycle_num, string toggled_gates_str)

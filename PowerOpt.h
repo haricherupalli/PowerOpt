@@ -141,6 +141,7 @@ class PowerOpt {
     void set_mux_false_paths();
     void check_for_dead_ends(designTiming* T);
     void check_for_dead_ends(int cycle_num, string toggled_gates_str);
+    void check_for_dead_ends(int cycle_num, string toggled_gates_str, vector<int>& nondeadend_toggled_gates_indices);
     void print_dead_end_gates(int cycle_num);
     void resetAllVisitedForGates();
     void resetAllDeadToggles();
