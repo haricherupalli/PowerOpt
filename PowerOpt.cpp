@@ -2272,24 +2272,31 @@ void PowerOpt::simulate()
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
     updateRegOutputs(i);
+
+    vector<int>& toggled_set_indices = cycle_toggled_indices;
     // DEAD_END GATE ELIMINATION
     // generate toggled_gates_str
-    string toggled_gates_str;
-    toggled_gates_str += m_gates[cycle_toggled_indices[0]]->getName();
-    for (int j = 0; j< cycle_toggled_indices.size(); j++)
+    if (is_dead_end_check == true)
     {
-      int id = cycle_toggled_indices[j] ;
-      Gate* gate = m_gates[id];
-      string gate_name = gate->getName();
-      toggled_gates_str += ","+gate_name;
+       string toggled_gates_str;
+       toggled_gates_str += m_gates[cycle_toggled_indices[0]]->getName();
+       for (int j = 0; j< cycle_toggled_indices.size(); j++)
+       {
+         int id = cycle_toggled_indices[j] ;
+         Gate* gate = m_gates[id];
+         string gate_name = gate->getName();
+         toggled_gates_str += ","+gate_name;
+       }
+       vector<int> live_toggled_set_indices;
+       check_for_dead_ends(i, toggled_gates_str, live_toggled_set_indices);
+       toggled_set_indices = live_toggled_set_indices;
     }
-    vector<int> live_toggled_set_indices;
-    check_for_dead_ends(i, toggled_gates_str, live_toggled_set_indices);
 
-    sort(live_toggled_set_indices.begin(), live_toggled_set_indices.end());
-    if (!tree-> essr(live_toggled_set_indices, false))
-      tree->insert(live_toggled_set_indices);
-    live_toggled_set_indices.clear(); cycle_toggled_indices.clear();
+    // GENERATE UNITS
+    sort(toggled_set_indices.begin(), toggled_set_indices.end());
+    if (!tree-> essr(toggled_set_indices, false))
+      tree->insert(toggled_set_indices);
+    toggled_set_indices.clear(); cycle_toggled_indices.clear();
     //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
     //print_processor_state_profile(i, false);
     if (probeRegisters(i) == true)
