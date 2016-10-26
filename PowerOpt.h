@@ -168,7 +168,8 @@ class PowerOpt {
     void checkConnectivity(designTiming* T);
     string getPC();
     string getGPR(int num);
-    void topoSort();
+    void getSimValOfTerminal(string term_name, string& val);
+   void topoSort();
     void simulate();
     void simulate2();
     void simulation_post_processing(designTiming * T);

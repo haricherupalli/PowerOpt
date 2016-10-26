@@ -806,7 +806,7 @@ void PowerOpt::readSimInitFile()
       else
       {
         it = padNameIdMap.find(name);
-        assert(it != padNameIdMap.end());
+        //assert(it != padNameIdMap.end());
         Pad* pad = m_pads[it->second];
         pad->setSimValue(value, sim_wf);
         //debug_file << pad->getName() << " : "  << value << endl;
@@ -2167,27 +2167,48 @@ void PowerOpt::checkConnectivity(designTiming* T)
   cout << " ALL FINE"  << endl;
 }
 
+void PowerOpt::getSimValOfTerminal(string term_name, string& val)
+{
+  map<string, int>::iterator it = terminalNameIdMap.find(term_name);
+  if (it != terminalNameIdMap.end()){ val = terms[it->second]->getSimValue();}
+}
+
 string PowerOpt::getPC()
 {
-  string pc_15_val , pc_14_val , pc_13_val , pc_12_val , pc_11_val , pc_10_val , pc_9_val  , pc_8_val  , pc_7_val  , pc_6_val  , pc_5_val  , pc_4_val  , pc_3_val  , pc_2_val  , pc_1_val  , pc_0_val;
+  string pc_15_val="0"; 
+  string pc_14_val="0"; 
+  string pc_13_val="0"; 
+  string pc_12_val="0"; 
+  string pc_11_val="0"; 
+  string pc_10_val="0"; 
+  string pc_9_val ="0"; 
+  string pc_8_val ="0"; 
+  string pc_7_val ="0"; 
+  string pc_6_val ="0"; 
+  string pc_5_val ="0"; 
+  string pc_4_val ="0"; 
+  string pc_3_val ="0"; 
+  string pc_2_val ="0"; 
+  string pc_1_val ="0"; 
+  string pc_0_val ="0";
   if (design == "flat_no_clk_gt")
   {
-    pc_15_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_15_/Q")]->getSimValue();
-    pc_14_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_14_/Q")]->getSimValue();
-    pc_13_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_13_/Q")]->getSimValue();
-    pc_12_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_12_/Q")]->getSimValue();
-    pc_11_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_11_/Q")]->getSimValue();
-    pc_10_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_10_/Q")]->getSimValue();
-    pc_9_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_9_/Q")]->getSimValue();
-    pc_8_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_8_/Q")]->getSimValue();
-    pc_7_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_7_/Q")]->getSimValue();
-    pc_6_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_6_/Q")]->getSimValue();
-    pc_5_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_5_/Q")]->getSimValue();
-    pc_4_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_4_/Q")]->getSimValue();
-    pc_3_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_3_/Q")]->getSimValue();
-    pc_2_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_2_/Q")]->getSimValue();
-    pc_1_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_1_/Q")]->getSimValue();
-    pc_0_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_0_/Q")]->getSimValue();
+    getSimValOfTerminal("frontend_0_pc_reg_15_/Q", pc_15_val );
+    getSimValOfTerminal("frontend_0_pc_reg_14_/Q", pc_14_val );
+    getSimValOfTerminal("frontend_0_pc_reg_13_/Q", pc_13_val );
+    getSimValOfTerminal("frontend_0_pc_reg_12_/Q", pc_12_val );
+    getSimValOfTerminal("frontend_0_pc_reg_11_/Q", pc_11_val );
+    getSimValOfTerminal("frontend_0_pc_reg_10_/Q", pc_10_val );
+    getSimValOfTerminal("frontend_0_pc_reg_9_/Q" , pc_9_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_8_/Q" , pc_8_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_7_/Q" , pc_7_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_6_/Q" , pc_6_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_5_/Q" , pc_5_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_4_/Q" , pc_4_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_3_/Q" , pc_3_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_2_/Q" , pc_2_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_1_/Q" , pc_1_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_0_/Q" , pc_0_val  );
   }
   else if (design == "modified_9_hier")
   {
