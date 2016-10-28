@@ -66,3 +66,12 @@ string xbitset::to_string()
   }
   return output_str;
 }
+
+bool xbitset::is_conservative(xbitset inp)
+{
+  for (int i = 0; i < NUM_BITS; i++)
+  {
+    if(bs_x[i] == 0 && bs_val[i] != inp.bs_val[i] ) { return false;}
+  }
+  return true;
+}

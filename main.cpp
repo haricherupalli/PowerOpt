@@ -625,12 +625,12 @@ int main(int argc, char *argv[])
 
     if (po->getExeOp() == 21) // NETLIST SIMULATION (X_based)
     {
-      po->checkConnectivity(&T); 
+      //po->checkConnectivity(&T); 
       po->readSelectGatesFile();
       po->readConstantTerminals();// my_handler(0);
       po->createSetTrie();
       po->topoSort(); 
-      po->print_fanin_cone(&T);
+      //po->print_fanin_cone(&T);
       cout << "[UPDATED] Gate Count : " << po->getGateNum() << endl;
       cout << "[UPDATED] Reg Count : " << po->getRegNum() << endl;
       cout << "[UPDATED] Net Count : " << po->getNetNum() << endl;

@@ -29,6 +29,8 @@ class xbitset
       bs_val = bitset<NUM_BITS> (input);
   }
 
+  bool is_conservative(xbitset inp);
+
   bool operator == (xbitset a)
   {
     bool ret_val = true;

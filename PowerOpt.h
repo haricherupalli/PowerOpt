@@ -193,9 +193,9 @@ class PowerOpt {
     void recvInputs1(int cycle_num, bool wavefront);
     void recvInputs2(int cycle_num, bool wavefront);
     void debug_per_din(int cycle_num);
-    void readMem(int cycle_num, bool wavefront);
+    bool readMem(int cycle_num, bool wavefront);
     bool checkIfHung();
-    void handleCondJumps();
+    bool handleCondJumps(int cycle_num);
     void checkCorruption(int i);
     void sendInstr(string instr_str);
     void sendData (string data_str);
@@ -211,6 +211,8 @@ class PowerOpt {
     void readDmemInitFile();
     void updateRegOutputs(int cycle_num);
     bool probeRegisters(int cycle_num);
+    system_state* get_current_system_state(int cycle_num);
+    bool get_conservative_state(system_state* sys_state);
     void updateFromMem();
     void printRegValues();
     void printSelectGateValues();
@@ -938,7 +940,10 @@ class PowerOpt {
     bool is_dump_units;
     bool is_dead_end_check;
     int num_sim_cycles;
+    int print_processor_state_profile_every_cycle;
     string design;
+    int conservative_state;
+    int inp_ind_branches;
     int vStart;
     int vEnd;
     int vStep;
@@ -1038,7 +1043,7 @@ class PowerOpt {
     map<int, list <pair<Gate*, Gate*> > > corr_map; // correlation map
     map<int, Cluster* > clusters; // Power Domains
     map<string, pair< bool, bool > > PC_taken_nottaken;;
-    map<string, system_state> PC_worst_system_state;
+    map<string, system_state*> PC_worst_system_state;
     SetTrie* tree;
     Graph * graph;
     //vector< vector <gate*> > Power_domains;
@@ -1052,6 +1057,7 @@ class PowerOpt {
     unsigned int instr;
     string pmem_instr;
     string instr_name;
+    long global_curr_cycle;
     int jump_cycle;
     bool jump_detected;
     bool recv_inputs;

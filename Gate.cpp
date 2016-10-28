@@ -716,23 +716,23 @@ int Gate::max_toggle_profile_size = 0;
       for (int i = 0; i < faninPads.size(); i ++)
       {
         Pad* pad = faninPads[i];
-        file << pad->getName() << " : " << pad->getSimValue() << endl; 
-      } 
+        file << pad->getName() << " : " << pad->getSimValue() << endl;
+      }
       for (int i = 0; i < faninTerms.size(); i ++)
       {
         Terminal* term = faninTerms[i];
-        file << term->getFullName() << " : " << term->getSimValue() << endl; 
-      } 
+        file << term->getFullName() << " : " << term->getSimValue() << endl;
+      }
       for (int i = 0; i < fanoutTerms.size(); i ++)
       {
         Terminal* term = fanoutTerms[i];
-        file << term->getFullName() << " : " << term->getSimValue() << endl; 
-      } 
+        file << term->getFullName() << " : " << term->getSimValue() << endl;
+      }
       for (int i = 0; i < fanoutPads.size(); i ++)
       {
         Pad* pad = fanoutPads[i];
-        file << pad->getName() << " : " << pad->getSimValue() << endl; 
-      } 
+        file << pad->getName() << " : " << pad->getSimValue() << endl;
+      }
    }
 
    int Gate::getToggleCountFromProfile()
@@ -1513,7 +1513,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleORExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr = " ( ";
       for (int i = 0; i < faninTerms.size(); i++)
@@ -1530,7 +1530,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleANDExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr = " ( ";
       for (int i = 0; i < faninTerms.size(); i++)
@@ -1548,7 +1548,7 @@ int Gate::max_toggle_profile_size = 0;
     {
       assert(fanoutTerms.size() == 1);
       assert(faninTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr = " ( ";
       Terminal* term = faninTerms[0];
@@ -1561,7 +1561,7 @@ int Gate::max_toggle_profile_size = 0;
     {
       assert(fanoutTerms.size() == 1);
       assert(faninTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr = " ( ~";
       Terminal* term = faninTerms[0];
@@ -1573,7 +1573,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleMUXExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr;
       string S_expr, I1_expr, I0_expr;
@@ -1594,7 +1594,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleAOIExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr;
       string B_expr, A1_expr, A2_expr;
@@ -1615,7 +1615,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleOAIExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr;
       string B_expr, A1_expr, A2_expr;
@@ -1636,7 +1636,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleNANDExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr = " ~( ";
       for (int i = 0; i < faninTerms.size(); i++)
@@ -1653,7 +1653,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleNORExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr = " ~( ";
       for (int i = 0; i < faninTerms.size(); i++)
@@ -1670,7 +1670,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleXORExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr = " ( ";
       for (int i = 0; i < faninTerms.size(); i++)
@@ -1687,7 +1687,7 @@ int Gate::max_toggle_profile_size = 0;
     void Gate::handleXNORExpr()
     {
       assert(fanoutTerms.size() == 1);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string expr = " ~( ";
       for (int i = 0; i < faninTerms.size(); i++)
@@ -1705,22 +1705,22 @@ int Gate::max_toggle_profile_size = 0;
     {
         // GET LIBCELL CLASS -> NAND, AND, NOR, OR, OAI, IAO, MUX, DFF, INV, XOR/XNOR, BUFF, LHQ (LATCH)
         Terminal* fo_term = fanoutTerms[0];
-        if (isClkTree) 
+        if (isClkTree)
         {
             fo_term->setExpr("clk");
             return;
         }
-        if (FFFlag) 
+        if (FFFlag)
         {
             fo_term->setExpr(name);
             return;
         }
 /*        string expr = "(";
-        for (int i = 0; i < faninTerms.size(); i++) 
+        for (int i = 0; i < faninTerms.size(); i++)
         {
            Terminal* term = faninTerms[i];
            string exp = term->getExpr();
-           expr = expr+ exp + " & ";   
+           expr = expr+ exp + " & ";
         }
         expr.resize(expr.size() - 2); // removing the last '&' and the accompanying white space
         expr = expr+")";
@@ -1745,13 +1745,13 @@ int Gate::max_toggle_profile_size = 0;
         // Get the input pins and get their nets and their drivers.
 
     }
-   
-    string Gate::getSimValue() 
+
+    string Gate::getSimValue()
     {
         if (fanoutTerms.size() == 0) return "No Fanout Terms for Gate "+name;
         return fanoutTerms[0]->getSimValue();
     }
-     
+
     bool Gate::transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(FFFlag);
@@ -1769,9 +1769,9 @@ int Gate::max_toggle_profile_size = 0;
           }
           Terminal* fo_term = fanoutTerms[0];
           assert(fo_term->getName() == "Q");
-          Qval = fo_term->getSimValue(); 
-          if (ClrVal == "0") 
-          { 
+          Qval = fo_term->getSimValue();
+          if (ClrVal == "0")
+          {
             if (Dval != "0") toggled = true;
             fo_term->setSimValue("0", sim_wf);
           }
@@ -1798,13 +1798,13 @@ int Gate::max_toggle_profile_size = 0;
           }
           Terminal* fo_term = fanoutTerms[0];
           assert(fo_term->getName() == "Q");
-          Qval = fo_term->getSimValue(); 
-          if (EnVal == "0") 
+          Qval = fo_term->getSimValue();
+          if (EnVal == "0")
           {
             if (Dval != "0") toggled = true;
             fo_term->setSimValue("0", sim_wf);
           }
-          else 
+          else
           {
             if (Dval != Qval) toggled = true;
             fo_term->setSimValue(Dval, sim_wf);
@@ -1818,19 +1818,19 @@ int Gate::max_toggle_profile_size = 0;
     {
       switch (func)
       {
-        case AND  : toggled =  computeANDVal ( sim_wf ) ; break ; 
-        case AOI  : toggled =  computeAOIVal ( sim_wf ) ; break ; 
-        case BUFF : toggled =  computeBUFFVal( sim_wf ) ; break ; 
-        case DFF  : toggled =  computeDFFVal ( sim_wf ) ; break ; 
-        case INV  : toggled =  computeINVVal ( sim_wf ) ; break ; 
-        case LH   : toggled =  computeLHVal  ( sim_wf ) ; break ; 
-        case MUX  : toggled =  computeMUXVal ( sim_wf ) ; break ; 
-        case NAND : toggled =  computeNANDVal( sim_wf ) ; break ; 
-        case NOR  : toggled =  computeNORVal ( sim_wf ) ; break ; 
-        case OAI  : toggled =  computeOAIVal ( sim_wf ) ; break ; 
-        case OR   : toggled =  computeORVal  ( sim_wf ) ; break ; 
-        case XNOR : toggled =  computeXNORVal( sim_wf ) ; break ; 
-        case XOR  : toggled =  computeXORVal ( sim_wf ) ; break ; 
+        case AND  : toggled =  computeANDVal ( sim_wf ) ; break ;
+        case AOI  : toggled =  computeAOIVal ( sim_wf ) ; break ;
+        case BUFF : toggled =  computeBUFFVal( sim_wf ) ; break ;
+        case DFF  : toggled =  computeDFFVal ( sim_wf ) ; break ;
+        case INV  : toggled =  computeINVVal ( sim_wf ) ; break ;
+        case LH   : toggled =  computeLHVal  ( sim_wf ) ; break ;
+        case MUX  : toggled =  computeMUXVal ( sim_wf ) ; break ;
+        case NAND : toggled =  computeNANDVal( sim_wf ) ; break ;
+        case NOR  : toggled =  computeNORVal ( sim_wf ) ; break ;
+        case OAI  : toggled =  computeOAIVal ( sim_wf ) ; break ;
+        case OR   : toggled =  computeORVal  ( sim_wf ) ; break ;
+        case XNOR : toggled =  computeXNORVal( sim_wf ) ; break ;
+        case XOR  : toggled =  computeXORVal ( sim_wf ) ; break ;
         default   :  assert(0);
       }
       return toggled;
@@ -1841,7 +1841,7 @@ int Gate::max_toggle_profile_size = 0;
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
-        Terminal* fo_term = fanoutTerms[0]; 
+        Terminal* fo_term = fanoutTerms[0];
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
         bool toggled;
@@ -1862,12 +1862,12 @@ int Gate::max_toggle_profile_size = 0;
             else toggled = fo_term->setSimValue("X", sim_wf);
         }
         return toggled;
-    } 
+    }
     bool Gate::computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
       assert(faninTerms.size() == 3);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string B_val, A1_val, A2_val;
       bool toggled;
@@ -1910,33 +1910,33 @@ int Gate::max_toggle_profile_size = 0;
         else toggled = fo_term->setSimValue("X", sim_wf);
       }
       return toggled;
-    } 
+    }
     bool Gate::computeBUFFVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 1);
         bool toggled;
-        Terminal* fo_term = fanoutTerms[0]; 
-        Terminal* fi_term = faninTerms[0]; 
+        Terminal* fo_term = fanoutTerms[0];
+        Terminal* fi_term = faninTerms[0];
         toggled = fo_term->setSimValue(fi_term->getSimValue(), sim_wf);
-    } 
-    bool Gate::computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf){ return true; } // since if a ff is required to be evaluated from the sim_wf it must have toggled. 
+    }
+    bool Gate::computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf){ return true; } // since if a ff is required to be evaluated from the sim_wf it must have toggled.
     bool Gate::computeINVVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 1);
-        Terminal* fo_term = fanoutTerms[0]; 
-        string fi_val = faninTerms[0]->getSimValue(); 
+        Terminal* fo_term = fanoutTerms[0];
+        string fi_val = faninTerms[0]->getSimValue();
         if (fi_val == "0") toggled = fo_term->setSimValue("1", sim_wf);
         else if (fi_val == "1") toggled = fo_term->setSimValue("0", sim_wf);
         else if (fi_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
-    } 
-    bool Gate::computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf){ return true; } 
+    }
+    bool Gate::computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf){ return true; }
     bool Gate::computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
       assert(faninTerms.size() == 3);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       string S_val, I1_val, I0_val;
       for (int i = 0; i < faninTerms.size(); i++)
       {
@@ -1951,14 +1951,18 @@ int Gate::max_toggle_profile_size = 0;
       bool toggled;
       if (S_val == "0") toggled = fo_term->setSimValue(I0_val, sim_wf);
       else if (S_val == "1") toggled = fo_term->setSimValue(I1_val, sim_wf);
-      else if (S_val == "X") toggled = fo_term->setSimValue("X", sim_wf);
+      else if (S_val == "X")
+      {
+        if (I1_val != I0_val) toggled = fo_term->setSimValue("X", sim_wf);
+        else toggled = fo_term->setSimValue(I1_val, sim_wf);
+      }
       return toggled;
-    } 
+    }
     bool Gate::computeNANDVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
-        Terminal* fo_term = fanoutTerms[0]; 
+        Terminal* fo_term = fanoutTerms[0];
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
         bool toggled;
@@ -1978,12 +1982,12 @@ int Gate::max_toggle_profile_size = 0;
             else toggled = fo_term->setSimValue("X", sim_wf);
         }
         return toggled;
-    } 
+    }
     bool Gate::computeNORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
-        Terminal* fo_term = fanoutTerms[0]; 
+        Terminal* fo_term = fanoutTerms[0];
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
         bool toggled;
@@ -2003,12 +2007,12 @@ int Gate::max_toggle_profile_size = 0;
             else toggled = fo_term->setSimValue("X", sim_wf);
         }
         return toggled;
-    } 
+    }
     bool Gate::computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
       assert(fanoutTerms.size() == 1);
       assert(faninTerms.size() == 3);
-      Terminal* fo_term = fanoutTerms[0]; 
+      Terminal* fo_term = fanoutTerms[0];
       list <pair<Terminal*, double> > term_slack_list;
       string B_val, A1_val, A2_val;
       for (int i = 0; i < faninTerms.size(); i++)
@@ -2051,12 +2055,12 @@ int Gate::max_toggle_profile_size = 0;
         else toggled = fo_term->setSimValue("X", sim_wf);
       }
       return toggled;
-    } 
+    }
     bool Gate::computeORVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
-        Terminal* fo_term = fanoutTerms[0]; 
+        Terminal* fo_term = fanoutTerms[0];
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
         bool toggled;
@@ -2076,12 +2080,12 @@ int Gate::max_toggle_profile_size = 0;
             else toggled = fo_term->setSimValue("X", sim_wf);
         }
         return toggled;
-    } 
+    }
     bool Gate::computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
-        Terminal* fo_term = fanoutTerms[0]; 
+        Terminal* fo_term = fanoutTerms[0];
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
         bool toggled;
@@ -2101,12 +2105,12 @@ int Gate::max_toggle_profile_size = 0;
         {
             toggled = fo_term->setSimValue("X", sim_wf);
         }
-    } 
+    }
     bool Gate::computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
     {
         assert(fanoutTerms.size() == 1);
         assert(faninTerms.size() == 2);
-        Terminal* fo_term = fanoutTerms[0]; 
+        Terminal* fo_term = fanoutTerms[0];
         string fi_0_val = faninTerms[0]->getSimValue();
         string fi_1_val = faninTerms[1]->getSimValue();
         bool toggled;
@@ -2127,7 +2131,7 @@ int Gate::max_toggle_profile_size = 0;
             toggled = fo_term->setSimValue("X", sim_wf);
         }
         return toggled;
-    } 
+    }
 
     bool Gate::allInpNetsVisited()
     {
@@ -2137,10 +2141,10 @@ int Gate::max_toggle_profile_size = 0;
             Net* fanin_net = fanin_term->getNet(0);
             if (fanin_net->getTopoSortMarked() == false)
               return false;
-        } 
+        }
         return true;
     }
-    
+
     void Gate::getDriverTopoIds(vector<int>& topo_ids)
     {
         for(int i = 0; i < faninTerms.size(); i++)
@@ -2152,7 +2156,7 @@ int Gate::max_toggle_profile_size = 0;
             else if (net->getPadNum() == 0) {// net has no driver (pad or gate) so it must be a forced constant (net_name == terminal_name)
               assert (net->getName() == net->getTerminal(0)->getFullName());
               id = -1;
-            } 
+            }
             else {
               id = net->getPad(0)->getTopoId();
             }
@@ -2173,9 +2177,9 @@ int Gate::max_toggle_profile_size = 0;
         if (fanout_gate->isToggled() && !(fanout_gate->isDeadToggle())) // toggled and is not a dead toggle
           all_fanout_dead = false;
         if (fanout_gate->getFFFlag()) all_fanout_dead = false;
-      } 
-      if (all_fanout_dead && !isClkTree) 
-        gate_debug_file << " Gate " << name << " is dead_ended in cycle " << cycle_num << endl; 
+      }
+      if (all_fanout_dead && !isClkTree)
+        gate_debug_file << " Gate " << name << " is dead_ended in cycle " << cycle_num << endl;
       return all_fanout_dead;
     }
 
@@ -2193,12 +2197,12 @@ int Gate::max_toggle_profile_size = 0;
         Gate* fanin_gate = fanin[i];
         if (fanin_gate->getFFFlag()) continue;
         bool dead_gate = fanin_gate->check_for_dead_toggle(cycle_num);
-        if (dead_gate)  
+        if (dead_gate)
         {
-          fanin_gate->setDeadToggle(true);  
+          fanin_gate->setDeadToggle(true);
           fanin_gate->trace_back_dead_gate(dead_gates_count, cycle_num);
         }
-      } 
+      }
     }
 
 }
