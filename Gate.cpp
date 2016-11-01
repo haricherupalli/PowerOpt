@@ -1951,10 +1951,11 @@ int Gate::max_toggle_profile_size = 0;
       bool toggled;
       if (S_val == "0") toggled = fo_term->setSimValue(I0_val, sim_wf);
       else if (S_val == "1") toggled = fo_term->setSimValue(I1_val, sim_wf);
-      else if (S_val == "X")
-      {
-        if (I1_val != I0_val) toggled = fo_term->setSimValue("X", sim_wf);
-        else toggled = fo_term->setSimValue(I1_val, sim_wf);
+      else if (S_val == "X") {
+         if (I1_val != I0_val)
+          toggled = fo_term->setSimValue("X", sim_wf);
+        else
+          toggled = fo_term->setSimValue(I1_val, sim_wf);
       }
       return toggled;
     }

@@ -685,6 +685,7 @@ class PowerOpt {
     string getTokenS(string line, string option);
 
     int cmpString(string wild, string pattern);
+    string getDesign() { return design;}
 
     private:
     PowerOpt() // 

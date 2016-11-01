@@ -39,6 +39,11 @@ static string bin2hex (string binary_str)
   return ss.str();
 }
 
+static bool hasX(string binary_str)
+{
+  return (binary_str.find("X") != string::npos);
+}
+
 //static bool replace_substr (std::string& str,const std::string& from, const std::string& to)
 //{
 //  size_t start_pos = str.find(from);
@@ -989,6 +994,8 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       tokenize(line, ':', tokens);
       string gate_name = tokens[0];
       string term_name = tokens[1];
+
+      if (gate_name.find("Logic1") != string::npos || gate_name.find("Logic0") != string::npos) continue;
 
       int id = gateNameIdMap[gate_name];
       Gate * gate = m_gates[id];
@@ -2240,22 +2247,38 @@ string PowerOpt::getPC()
   }
   else if (design == "modified_9_hier")
   {
-    pc_15_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_15_/Q")]->getSimValue();
-    pc_14_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_14_/Q")]->getSimValue();
-    pc_13_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_13_/Q")]->getSimValue();
-    pc_12_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_12_/Q")]->getSimValue();
-    pc_11_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_11_/Q")]->getSimValue();
-    pc_10_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_10_/Q")]->getSimValue();
-    pc_9_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_9_/Q")]->getSimValue();
-    pc_8_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_8_/Q")]->getSimValue();
-    pc_7_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_7_/Q")]->getSimValue();
-    pc_6_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_6_/Q")]->getSimValue();
-    pc_5_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_5_/Q")]->getSimValue();
-    pc_4_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_4_/Q")]->getSimValue();
-    pc_3_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_3_/Q")]->getSimValue();
-    pc_2_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_2_/Q")]->getSimValue();
-    pc_1_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_1_/Q")]->getSimValue();
-    pc_0_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_0_/Q")]->getSimValue();
+    getSimValOfTerminal("frontend_0/pc_reg_15_/Q", pc_15_val );
+    getSimValOfTerminal("frontend_0/pc_reg_14_/Q", pc_14_val );
+    getSimValOfTerminal("frontend_0/pc_reg_13_/Q", pc_13_val );
+    getSimValOfTerminal("frontend_0/pc_reg_12_/Q", pc_12_val );
+    getSimValOfTerminal("frontend_0/pc_reg_11_/Q", pc_11_val );
+    getSimValOfTerminal("frontend_0/pc_reg_10_/Q", pc_10_val );
+    getSimValOfTerminal("frontend_0/pc_reg_9_/Q" , pc_9_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_8_/Q" , pc_8_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_7_/Q" , pc_7_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_6_/Q" , pc_6_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_5_/Q" , pc_5_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_4_/Q" , pc_4_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_3_/Q" , pc_3_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_2_/Q" , pc_2_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_1_/Q" , pc_1_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_0_/Q" , pc_0_val  );
+//    pc_15_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_15_/Q")]->getSimValue();
+//    pc_14_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_14_/Q")]->getSimValue();
+//    pc_13_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_13_/Q")]->getSimValue();
+//    pc_12_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_12_/Q")]->getSimValue();
+//    pc_11_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_11_/Q")]->getSimValue();
+//    pc_10_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_10_/Q")]->getSimValue();
+//    pc_9_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_9_/Q")]->getSimValue();
+//    pc_8_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_8_/Q")]->getSimValue();
+//    pc_7_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_7_/Q")]->getSimValue();
+//    pc_6_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_6_/Q")]->getSimValue();
+//    pc_5_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_5_/Q")]->getSimValue();
+//    pc_4_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_4_/Q")]->getSimValue();
+//    pc_3_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_3_/Q")]->getSimValue();
+//    pc_2_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_2_/Q")]->getSimValue();
+//    pc_1_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_1_/Q")]->getSimValue();
+//    pc_0_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_0_/Q")]->getSimValue();
   }
 
   string pc_str = pc_15_val + pc_14_val + pc_13_val+ pc_12_val+ pc_11_val+ pc_10_val+ pc_9_val + pc_8_val + pc_7_val + pc_6_val + pc_5_val + pc_4_val + pc_3_val + pc_2_val + pc_1_val + pc_0_val ;
@@ -2384,6 +2407,7 @@ void PowerOpt::simulate2()
   {
     system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
     string PC = sys_state->PC;
+    if (hasX(PC)) continue;
     string PC_hex = bin2hex(PC);
     // FOR NOW WE ARE NOT GENERATING THE WORST SYSTEM STATE.
     if (conservative_state == 1)
@@ -2653,12 +2677,17 @@ bool PowerOpt::probeRegisters(int cycle_num)
    string Z ;
    string C ;
 
+  int fork_e_state, fork_inst_type;
+  int e_state = getEState();
+  int inst_type = getInstType();
   if (design == "flat_no_clk_gt")
   {
     V = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_8_"]]->getSimValue();
     N = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_2_"]]->getSimValue();
     Z = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_1_"]]->getSimValue();
     C = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_0_"]]->getSimValue();
+    fork_e_state = 5; // actual e_state = 1011
+    fork_inst_type = 5; // actual inst_type = 010
   }
   else if (design == "modified_9_hier")
   {
@@ -2666,11 +2695,11 @@ bool PowerOpt::probeRegisters(int cycle_num)
     N = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_2_"]]->getSimValue();
     Z = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_1_"]]->getSimValue();
     C = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_0_"]]->getSimValue();
+    fork_e_state = e_state; // No check needed
+    fork_inst_type = inst_type; // No check needed
   }
   else assert(0);
 
-  int e_state = getEState();
-  int inst_type = getInstType();
 
   if (jump_detected == true)
   {
@@ -2679,11 +2708,10 @@ bool PowerOpt::probeRegisters(int cycle_num)
   }
 
    bool state_corrupted = false;
-
     //debug_file << "E_state " << e_state << " Inst_type " << inst_type <<  " at " << cycle_num << endl;
    //if (jump_cycle == 4)// e_state == 1011 && inst_type == 010
-//   if ((e_state == 5) && (inst_type == 5))// e_state == 1011 && inst_type == 010
-//   {
+   if ((e_state == fork_e_state) && (inst_type == fork_inst_type))// e_state == 1011 && inst_type == 010
+   {
      if (instr_name == "JNE/JNZ" || instr_name == "JEQ/JZ" )
      {
        if (Z == "X")
@@ -2800,7 +2828,7 @@ bool PowerOpt::probeRegisters(int cycle_num)
          sys_state_queue.push(sys_state_2);
        }
      }
-   //}
+   }
 
    if (state_corrupted) return true;
   return false;

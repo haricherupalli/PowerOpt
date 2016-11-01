@@ -93,7 +93,25 @@ bool system_state::compare_and_update_state(system_state& sys_state)
     bool can_skip = true;
     assert(PC == sys_state.PC);
     sys_state_debug_file << "ID : " << id << " EVALUATING FOR PC " << bin2hex(PC) << " at cycle " << cycle_num <<  endl;
+    string design = PowerOpt::getInstance()->getDesign();
+    set<string> ignore_nets;
+    if (design == "flat_no_clk_gt")
+    {
+      ignore_nets.insert("n355");
+      ignore_nets.insert("n1164");
+      ignore_nets.insert("n1167");
+      ignore_nets.insert("n1161");
+    }
+    else  if (design == "modified_9_hier")
+    {
+      ignore_nets.insert("execution_unit_0/register_file_0/n406");
+      ignore_nets.insert("execution_unit_0/register_file_0/n400");
+      ignore_nets.insert("execution_unit_0/register_file_0/n424");
+      ignore_nets.insert("execution_unit_0/register_file_0/n403");
+    }
 
+    else assert(0);
+      
     // compare net_sim_value_map
     map<int, string>::iterator it;
     for (it = net_sim_value_map.begin(); it!= net_sim_value_map.end(); it++)
@@ -105,7 +123,7 @@ bool system_state::compare_and_update_state(system_state& sys_state)
        {
           Net * net = PowerOpt::getInstance()->getNet(id);
           string net_name = net->getName();
-          if (net_name != "n355" && net_name != "n1164" && net_name != "n1167" && net_name != "n1161") // status register
+          if (ignore_nets.find(net_name) == ignore_nets.end()) // status register
           {
             Gate* gate = net->getDriverGate();
             string gate_name;
