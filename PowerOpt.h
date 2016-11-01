@@ -141,6 +141,7 @@ class PowerOpt {
     void set_mux_false_paths();
     void check_for_dead_ends(designTiming* T);
     void check_for_dead_ends(int cycle_num, string toggled_gates_str);
+    void check_for_dead_ends(int cycle_num, string toggled_gates_str, vector<int>& nondeadend_toggled_gates_indices);
     void print_dead_end_gates(int cycle_num);
     void resetAllVisitedForGates();
     void resetAllDeadToggles();
@@ -167,7 +168,8 @@ class PowerOpt {
     void checkConnectivity(designTiming* T);
     string getPC();
     string getGPR(int num);
-    void topoSort();
+    void getSimValOfTerminal(string term_name, string& val);
+   void topoSort();
     void simulate();
     void simulate2();
     void simulation_post_processing(designTiming * T);
@@ -683,6 +685,7 @@ class PowerOpt {
     string getTokenS(string line, string option);
 
     int cmpString(string wild, string pattern);
+    string getDesign() { return design;}
 
     private:
     PowerOpt() // 
@@ -938,6 +941,7 @@ class PowerOpt {
     bool is_dump_units;
     bool is_dead_end_check;
     int num_sim_cycles;
+    int print_processor_state_profile_every_cycle;
     string design;
     int conservative_state;
     int inp_ind_branches;

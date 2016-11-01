@@ -39,6 +39,11 @@ static string bin2hex (string binary_str)
   return ss.str();
 }
 
+static bool hasX(string binary_str)
+{
+  return (binary_str.find("X") != string::npos);
+}
+
 //static bool replace_substr (std::string& str,const std::string& from, const std::string& to)
 //{
 //  size_t start_pos = str.find(from);
@@ -814,7 +819,7 @@ void PowerOpt::readSimInitFile()
       else
       {
         it = padNameIdMap.find(name);
-        assert(it != padNameIdMap.end());
+        //assert(it != padNameIdMap.end());
         Pad* pad = m_pads[it->second];
         pad->setSimValue(value, sim_wf);
         //debug_file << pad->getName() << " : "  << value << endl;
@@ -989,6 +994,8 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       tokenize(line, ':', tokens);
       string gate_name = tokens[0];
       string term_name = tokens[1];
+
+      if (gate_name.find("Logic1") != string::npos || gate_name.find("Logic0") != string::npos) continue;
 
       int id = gateNameIdMap[gate_name];
       Gate * gate = m_gates[id];
@@ -2195,46 +2202,83 @@ void PowerOpt::checkConnectivity(designTiming* T)
   cout << " ALL FINE"  << endl;
 }
 
+void PowerOpt::getSimValOfTerminal(string term_name, string& val)
+{
+  map<string, int>::iterator it = terminalNameIdMap.find(term_name);
+  if (it != terminalNameIdMap.end()){ val = terms[it->second]->getSimValue();}
+}
+
 string PowerOpt::getPC()
 {
-  string pc_15_val , pc_14_val , pc_13_val , pc_12_val , pc_11_val , pc_10_val , pc_9_val  , pc_8_val  , pc_7_val  , pc_6_val  , pc_5_val  , pc_4_val  , pc_3_val  , pc_2_val  , pc_1_val  , pc_0_val;
+  string pc_15_val="0";
+  string pc_14_val="0";
+  string pc_13_val="0";
+  string pc_12_val="0";
+  string pc_11_val="0";
+  string pc_10_val="0";
+  string pc_9_val ="0";
+  string pc_8_val ="0";
+  string pc_7_val ="0";
+  string pc_6_val ="0";
+  string pc_5_val ="0";
+  string pc_4_val ="0";
+  string pc_3_val ="0";
+  string pc_2_val ="0";
+  string pc_1_val ="0";
+  string pc_0_val ="0";
   if (design == "flat_no_clk_gt")
   {
-    pc_15_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_15_/Q")]->getSimValue();
-    pc_14_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_14_/Q")]->getSimValue();
-    pc_13_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_13_/Q")]->getSimValue();
-    pc_12_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_12_/Q")]->getSimValue();
-    pc_11_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_11_/Q")]->getSimValue();
-    pc_10_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_10_/Q")]->getSimValue();
-    pc_9_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_9_/Q")]->getSimValue();
-    pc_8_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_8_/Q")]->getSimValue();
-    pc_7_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_7_/Q")]->getSimValue();
-    pc_6_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_6_/Q")]->getSimValue();
-    pc_5_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_5_/Q")]->getSimValue();
-    pc_4_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_4_/Q")]->getSimValue();
-    pc_3_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_3_/Q")]->getSimValue();
-    pc_2_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_2_/Q")]->getSimValue();
-    pc_1_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_1_/Q")]->getSimValue();
-    pc_0_val = terms[terminalNameIdMap.at("frontend_0_pc_reg_0_/Q")]->getSimValue();
+    getSimValOfTerminal("frontend_0_pc_reg_15_/Q", pc_15_val );
+    getSimValOfTerminal("frontend_0_pc_reg_14_/Q", pc_14_val );
+    getSimValOfTerminal("frontend_0_pc_reg_13_/Q", pc_13_val );
+    getSimValOfTerminal("frontend_0_pc_reg_12_/Q", pc_12_val );
+    getSimValOfTerminal("frontend_0_pc_reg_11_/Q", pc_11_val );
+    getSimValOfTerminal("frontend_0_pc_reg_10_/Q", pc_10_val );
+    getSimValOfTerminal("frontend_0_pc_reg_9_/Q" , pc_9_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_8_/Q" , pc_8_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_7_/Q" , pc_7_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_6_/Q" , pc_6_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_5_/Q" , pc_5_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_4_/Q" , pc_4_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_3_/Q" , pc_3_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_2_/Q" , pc_2_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_1_/Q" , pc_1_val  );
+    getSimValOfTerminal("frontend_0_pc_reg_0_/Q" , pc_0_val  );
   }
   else if (design == "modified_9_hier")
   {
-    pc_15_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_15_/Q")]->getSimValue();
-    pc_14_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_14_/Q")]->getSimValue();
-    pc_13_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_13_/Q")]->getSimValue();
-    pc_12_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_12_/Q")]->getSimValue();
-    pc_11_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_11_/Q")]->getSimValue();
-    pc_10_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_10_/Q")]->getSimValue();
-    pc_9_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_9_/Q")]->getSimValue();
-    pc_8_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_8_/Q")]->getSimValue();
-    pc_7_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_7_/Q")]->getSimValue();
-    pc_6_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_6_/Q")]->getSimValue();
-    pc_5_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_5_/Q")]->getSimValue();
-    pc_4_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_4_/Q")]->getSimValue();
-    pc_3_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_3_/Q")]->getSimValue();
-    pc_2_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_2_/Q")]->getSimValue();
-    pc_1_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_1_/Q")]->getSimValue();
-    pc_0_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_0_/Q")]->getSimValue();
+    getSimValOfTerminal("frontend_0/pc_reg_15_/Q", pc_15_val );
+    getSimValOfTerminal("frontend_0/pc_reg_14_/Q", pc_14_val );
+    getSimValOfTerminal("frontend_0/pc_reg_13_/Q", pc_13_val );
+    getSimValOfTerminal("frontend_0/pc_reg_12_/Q", pc_12_val );
+    getSimValOfTerminal("frontend_0/pc_reg_11_/Q", pc_11_val );
+    getSimValOfTerminal("frontend_0/pc_reg_10_/Q", pc_10_val );
+    getSimValOfTerminal("frontend_0/pc_reg_9_/Q" , pc_9_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_8_/Q" , pc_8_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_7_/Q" , pc_7_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_6_/Q" , pc_6_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_5_/Q" , pc_5_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_4_/Q" , pc_4_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_3_/Q" , pc_3_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_2_/Q" , pc_2_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_1_/Q" , pc_1_val  );
+    getSimValOfTerminal("frontend_0/pc_reg_0_/Q" , pc_0_val  );
+//    pc_15_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_15_/Q")]->getSimValue();
+//    pc_14_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_14_/Q")]->getSimValue();
+//    pc_13_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_13_/Q")]->getSimValue();
+//    pc_12_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_12_/Q")]->getSimValue();
+//    pc_11_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_11_/Q")]->getSimValue();
+//    pc_10_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_10_/Q")]->getSimValue();
+//    pc_9_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_9_/Q")]->getSimValue();
+//    pc_8_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_8_/Q")]->getSimValue();
+//    pc_7_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_7_/Q")]->getSimValue();
+//    pc_6_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_6_/Q")]->getSimValue();
+//    pc_5_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_5_/Q")]->getSimValue();
+//    pc_4_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_4_/Q")]->getSimValue();
+//    pc_3_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_3_/Q")]->getSimValue();
+//    pc_2_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_2_/Q")]->getSimValue();
+//    pc_1_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_1_/Q")]->getSimValue();
+//    pc_0_val = terms[terminalNameIdMap.at("frontend_0/pc_reg_0_/Q")]->getSimValue();
   }
 
   string pc_str = pc_15_val + pc_14_val + pc_13_val+ pc_12_val+ pc_11_val+ pc_10_val+ pc_9_val + pc_8_val + pc_7_val + pc_6_val + pc_5_val + pc_4_val + pc_3_val + pc_2_val + pc_1_val + pc_0_val ;
@@ -2300,12 +2344,35 @@ void PowerOpt::simulate()
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
     updateRegOutputs(i);
-    sort(cycle_toggled_indices.begin(), cycle_toggled_indices.end());
-    if (!tree-> essr(cycle_toggled_indices, false))
-      tree->insert(cycle_toggled_indices);
-    cycle_toggled_indices.clear();
-    debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
-    //print_processor_state_profile(i, false);
+
+    vector<int>& toggled_set_indices = cycle_toggled_indices;
+    // DEAD_END GATE ELIMINATION
+    // generate toggled_gates_str
+    if (is_dead_end_check == true)
+    {
+       string toggled_gates_str;
+       toggled_gates_str += m_gates[cycle_toggled_indices[0]]->getName();
+       for (int j = 0; j< cycle_toggled_indices.size(); j++)
+       {
+         int id = cycle_toggled_indices[j] ;
+         Gate* gate = m_gates[id];
+         string gate_name = gate->getName();
+         toggled_gates_str += ","+gate_name;
+       }
+       vector<int> live_toggled_set_indices;
+       check_for_dead_ends(i, toggled_gates_str, live_toggled_set_indices);
+       toggled_set_indices = live_toggled_set_indices;
+    }
+
+    // GENERATE UNITS
+    sort(toggled_set_indices.begin(), toggled_set_indices.end());
+    if (!tree-> essr(toggled_set_indices, false))
+      tree->insert(toggled_set_indices);
+    toggled_set_indices.clear(); cycle_toggled_indices.clear();
+    //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
+    if (print_processor_state_profile_every_cycle == 1) {
+      print_processor_state_profile(i, false);
+    }
     if (probeRegisters(i) == true)
     {
       print_processor_state_profile(i, true);
@@ -2340,30 +2407,31 @@ void PowerOpt::simulate2()
   {
     system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
     string PC = sys_state->PC;
+    if (hasX(PC)) continue;
     string PC_hex = bin2hex(PC);
     // FOR NOW WE ARE NOT GENERATING THE WORST SYSTEM STATE.
     if (conservative_state == 1)
     {
       map<string, system_state*>::iterator sit = PC_worst_system_state.find(PC);
-      if (sit == PC_worst_system_state.end())
-      {
-        // NEW PC
+    if (sit == PC_worst_system_state.end())
+    {
+      // NEW PC
         PC_worst_system_state[PC] = sys_state;
-        cout << " NEW PC " << PC_hex << endl;
-      }
-      else
-      {
-        // COMPARE THE SYSTEM STATES
+      cout << " NEW PC " << PC_hex << endl;
+    }
+    else
+    {
+      // COMPARE THE SYSTEM STATES
         system_state*  stored_state = sit->second;
-        system_state & this_state = *sys_state;
+      system_state & this_state = *sys_state;
         bool can_skip = stored_state->compare_and_update_state(this_state);
-        if (can_skip == true)
-        {
+      if (can_skip == true)
+      {
           cout << "SKIPPING ! " <<  sys_state->get_state_short() << endl;
           pmem_request_file  << "SKIPPING " << sys_state->get_state_short() << endl;
-          sleep(1) ;
-          continue;
-        }
+        sleep(1) ;
+        continue;
+      }
         cout << " OLD PC : " << PC_hex << " NOT SKIPPING." << sys_state->get_state_short() <<  endl;
         sys_state = stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
       }
@@ -2430,11 +2498,30 @@ void PowerOpt::simulate2()
 
       runSimulation(wavefront, i, true); // simulates  the positive edge
       updateRegOutputs(i);
-      sort(cycle_toggled_indices.begin(), cycle_toggled_indices.end());
-      if (!tree-> essr(cycle_toggled_indices, false))
-        tree->insert(cycle_toggled_indices);
-      cycle_toggled_indices.clear();
-      debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
+
+      vector<int>& toggled_set_indices = cycle_toggled_indices;
+      if (is_dead_end_check == true)
+      {
+        string toggled_gates_str;
+        toggled_gates_str += m_gates[cycle_toggled_indices[0]]->getName();
+        for (int j = 0; j< cycle_toggled_indices.size(); j++)
+        {
+          int id = cycle_toggled_indices[j] ;
+          Gate* gate = m_gates[id];
+          string gate_name = gate->getName();
+          toggled_gates_str += ","+gate_name;
+        }
+        vector<int> live_toggled_set_indices;
+        check_for_dead_ends(i, toggled_gates_str, live_toggled_set_indices);
+        toggled_set_indices = live_toggled_set_indices;
+      }
+
+      sort(toggled_set_indices.begin(), toggled_set_indices.end());
+      if (!tree-> essr(toggled_set_indices, false))
+        tree->insert(toggled_set_indices);
+      toggled_set_indices.clear(); cycle_toggled_indices.clear();
+
+      //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
       if (probeRegisters(i) == true)
       {
         //print_processor_state_profile(i, true);
@@ -2457,7 +2544,7 @@ void PowerOpt::simulation_post_processing(designTiming* T)
   tree->remove_subsets();
   cout << "Unique (subsetted) toggle groups count = " << tree->num_sets() << endl;
 
-  find_dynamic_slack_subset(T);
+  //find_dynamic_slack_subset(T);
 
   dump_units();
 
@@ -2585,26 +2672,44 @@ bool PowerOpt::get_conservative_state(system_state* sys_state)
 
 bool PowerOpt::probeRegisters(int cycle_num)
 {
-   string V = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_8_"]]->getSimValue();
-   string N = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_2_"]]->getSimValue();
-   string Z = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_1_"]]->getSimValue();
-   string C = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_0_"]]->getSimValue();
+   string V ;
+   string N ;
+   string Z ;
+   string C ;
 
-   int e_state = getEState();
-   int inst_type = getInstType();
+  int fork_e_state, fork_inst_type;
+  int e_state = getEState();
+  int inst_type = getInstType();
+  if (design == "flat_no_clk_gt")
+  {
+    V = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_8_"]]->getSimValue();
+    N = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_2_"]]->getSimValue();
+    Z = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_1_"]]->getSimValue();
+    C = m_gates[gateNameIdMap["execution_unit_0_register_file_0_r2_reg_0_"]]->getSimValue();
+    fork_e_state = 5; // actual e_state = 1011
+    fork_inst_type = 5; // actual inst_type = 010
+  }
+  else if (design == "modified_9_hier")
+  {
+    V = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_8_"]]->getSimValue();
+    N = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_2_"]]->getSimValue();
+    Z = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_1_"]]->getSimValue();
+    C = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_0_"]]->getSimValue();
+    fork_e_state = e_state; // No check needed
+    fork_inst_type = inst_type; // No check needed
+  }
+  else assert(0);
 
-   if (jump_detected == true)
-   {
+  if (jump_detected == true)
+  {
      jump_cycle ++;
      jump_detected = false;
-
-   }
+  }
 
    bool state_corrupted = false;
-
     //debug_file << "E_state " << e_state << " Inst_type " << inst_type <<  " at " << cycle_num << endl;
    //if (jump_cycle == 4)// e_state == 1011 && inst_type == 010
-   if ((e_state == 5) && (inst_type == 5))// e_state == 1011 && inst_type == 010
+   if ((e_state == fork_e_state) && (inst_type == fork_inst_type))// e_state == 1011 && inst_type == 010
    {
      if (instr_name == "JNE/JNZ" || instr_name == "JEQ/JZ" )
      {
@@ -2612,14 +2717,18 @@ bool PowerOpt::probeRegisters(int cycle_num)
        {
          pmem_request_file << "Z is corrupt\n" ;
          state_corrupted = true;
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("0", sim_wf);
+         if (design == "flat_no_clk_gt") {terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("0", sim_wf);}
+         else if (design == "modified_9_hier") {terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_1_/Q"]]->setSimValue("0", sim_wf);}
+         else assert(0);
          cout << "SAVING STATE 1" << endl;
          system_state* sys_state_1 = get_current_system_state(cycle_num) ;
          sys_state_1->not_taken = true;
          cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
          pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
          sys_state_queue.push(sys_state_1);
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("1", sim_wf);
+         if (design == "flat_no_clk_gt") {terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_1_/Q"]]->setSimValue("1", sim_wf);}
+         else if (design == "modified_9_hier") {terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_1_/Q"]]->setSimValue("1", sim_wf);}
+         else assert(0);
          cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = get_current_system_state(cycle_num) ;
          sys_state_2->taken = true;
@@ -2634,14 +2743,18 @@ bool PowerOpt::probeRegisters(int cycle_num)
        {
          pmem_request_file << "C is corrupt\n" ;
          state_corrupted = true;
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("0", sim_wf);
+         if (design == "flat_no_clk_gt") {terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("0", sim_wf);}
+         else if (design == "modified_9_hier") {terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_0_/Q"]]->setSimValue("0", sim_wf);}
+         else assert(0);
          cout << "SAVING STATE 1" << endl;
          system_state* sys_state_1 = get_current_system_state(cycle_num) ;
          sys_state_1->not_taken = true;
          cout << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          sys_state_queue.push(sys_state_1);
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("1", sim_wf);
+         if (design == "flat_no_clk_gt") {terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_0_/Q"]]->setSimValue("1", sim_wf);}
+         else if (design == "modified_9_hier") {terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_0_/Q"]]->setSimValue("1", sim_wf);}
+         else assert(0);
          cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = get_current_system_state(cycle_num) ;
          sys_state_2->taken = true;
@@ -2656,14 +2769,18 @@ bool PowerOpt::probeRegisters(int cycle_num)
        {
          pmem_request_file << "N is corrupt\n" ;
          state_corrupted = true;
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
+         if (design == "flat_no_clk_gt") {terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);}
+         else if (design == "modified_9_hier") {terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_2_/Q"]]->setSimValue("0", sim_wf);}
+         else assert(0);
          cout << "SAVING STATE 1" << endl;
          system_state* sys_state_1 = get_current_system_state(cycle_num) ;
          sys_state_1->not_taken = true;
          cout << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          sys_state_queue.push(sys_state_1);
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
+         if (design == "flat_no_clk_gt") {terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);}
+         else if (design == "modified_9_hier") {terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_2_/Q"]]->setSimValue("1", sim_wf);}
+         else assert(0);
          cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = get_current_system_state(cycle_num) ;
          sys_state_2->taken = true;
@@ -2678,16 +2795,30 @@ bool PowerOpt::probeRegisters(int cycle_num)
        {
          pmem_request_file << "V or N is corrupt\n" ;
          state_corrupted = true;
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+         if (design == "flat_no_clk_gt") {
+           terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
+           terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+           }
+         else if (design == "modified_9_hier") {
+           terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
+           terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+           }
+         else assert(0);
          cout << "SAVING STATE 1" << endl;
          system_state* sys_state_1 = get_current_system_state(cycle_num) ;
          sys_state_1->not_taken = true;
          cout << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          sys_state_queue.push(sys_state_1);
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
-         terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+         if (design == "flat_no_clk_gt") {
+           terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
+           terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+           }
+         else if (design == "modified_9_hier") {
+           terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
+           terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+           }
+         else assert(0);
          cout << "SAVING STATE 2" << endl;
          system_state* sys_state_2 = get_current_system_state(cycle_num) ;
          sys_state_2->taken = true;
@@ -5982,6 +6113,42 @@ void PowerOpt::print_dead_end_gates(int cycle_num)
 
 
 
+}
+
+void PowerOpt::check_for_dead_ends(int cycle_num, string toggled_gates_str, vector<int>& nondeadend_toggled_gates_indices)
+{
+
+  vector<string> toggled_gates;
+  int dead_gates_count = 0;
+  int non_clk_tree_non_ff_toggled_gates_count = 0;
+  tokenize(toggled_gates_str, ',', toggled_gates);
+  cout << "CHECKING FOR DEAD ENDS and size of toggled set is " << toggled_gates.size() << endl;
+  for (int i = 0 ; i < toggled_gates.size(); i++)
+  {
+    string gate_name = toggled_gates[i];
+    Gate* gate = gate_name_dictionary[gate_name];
+    if (gate->getFFFlag()) continue;
+    if (gate->getIsClkTree() == false) non_clk_tree_non_ff_toggled_gates_count ++;
+    bool dead_gate = gate->check_for_dead_toggle(cycle_num);
+    if (dead_gate)
+    {
+      gate->setDeadToggle(true);
+      //cout << gate->getName() << " is a dead end gate" << endl;
+      gate->trace_back_dead_gate(dead_gates_count, cycle_num);
+    }
+  }
+
+  for (int i =0; i < toggled_gates.size(); i++)
+  {
+    string gate_name = toggled_gates[i];
+    Gate* gate = gate_name_dictionary[gate_name];
+    if (!gate->isDeadToggle())
+    {
+      int id = gate->getId();
+      nondeadend_toggled_gates_indices.push_back(id);
+    }
+  }
+  cout << " Number of dead end gates : " << dead_gates_count << "/" << non_clk_tree_non_ff_toggled_gates_count << endl;
 }
 
 void PowerOpt::check_for_dead_ends(int cycle_num, string toggled_gates_str)

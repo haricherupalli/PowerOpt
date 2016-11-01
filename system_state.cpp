@@ -47,15 +47,15 @@ string system_state::get_state_short()
 system_state::system_state()
 {
   taken = false;
-  not_taken = false; 
+  not_taken = false;
   inp_dependent = true;
-  id = sys_state_count++; 
-  cout << " NEW SYS_STATE WITH ID : " << id << endl; 
+  id = sys_state_count++;
+  cout << " NEW SYS_STATE WITH ID : " << id << endl;
 }
 
 system_state::system_state(vector<Net*>& nets, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf_inp, map<int, xbitset>& DMemory_inp, int cycle_num_inp, string PC_inp, string instr_inp, bool inp_dep)
 {
-  taken = false; not_taken = false; 
+  taken = false; not_taken = false;
   for (int i = 0; i < nets.size(); i++)
   {
     net_sim_value_map.insert(make_pair(i, nets[i]->getSimValue()));
@@ -93,28 +93,46 @@ bool system_state::compare_and_update_state(system_state& sys_state)
     bool can_skip = true;
     assert(PC == sys_state.PC);
     sys_state_debug_file << "ID : " << id << " EVALUATING FOR PC " << bin2hex(PC) << " at cycle " << cycle_num <<  endl;
+    string design = PowerOpt::getInstance()->getDesign();
+    set<string> ignore_nets;
+    if (design == "flat_no_clk_gt")
+    {
+      ignore_nets.insert("n355");
+      ignore_nets.insert("n1164");
+      ignore_nets.insert("n1167");
+      ignore_nets.insert("n1161");
+    }
+    else  if (design == "modified_9_hier")
+    {
+      ignore_nets.insert("execution_unit_0/register_file_0/n406");
+      ignore_nets.insert("execution_unit_0/register_file_0/n400");
+      ignore_nets.insert("execution_unit_0/register_file_0/n424");
+      ignore_nets.insert("execution_unit_0/register_file_0/n403");
+    }
 
+    else assert(0);
+      
     // compare net_sim_value_map
     map<int, string>::iterator it;
     for (it = net_sim_value_map.begin(); it!= net_sim_value_map.end(); it++)
     {
-       int id = it->first; string sim_val = it->second; 
-       string sys_state_sim_val = sys_state.net_sim_value_map[id];  
+       int id = it->first; string sim_val = it->second;
+       string sys_state_sim_val = sys_state.net_sim_value_map[id];
        //if (sys_state_sim_val != sim_val)
        if (sim_val != "X" && sys_state_sim_val != sim_val)
        {
           Net * net = PowerOpt::getInstance()->getNet(id);
           string net_name = net->getName();
-          if (net_name != "n355" && net_name != "n1164" && net_name != "n1167" && net_name != "n1161") // status register
+          if (ignore_nets.find(net_name) == ignore_nets.end()) // status register
           {
             Gate* gate = net->getDriverGate();
             string gate_name;
             if (gate != NULL) gate_name = gate->getName();
             else gate_name = "NO DRIVER";
             sys_state_debug_file << "Net : " << net_name  << " ( " << gate_name << " ) "  << sim_val << " : " << sys_state_sim_val << endl ;
-            // BUILD CONSERVATIVE STATE 
+            // BUILD CONSERVATIVE STATE
             it->second = "X";
-            can_skip = false; 
+            can_skip = false;
           }
        }
     }
@@ -137,13 +155,11 @@ bool system_state::compare_and_update_state(system_state& sys_state)
        {
          xbitset old_val = my_dit->second;
          if (old_val.is_conservative(other_val)) { } // nothing to do
-         else 
+         else
          {
            my_dit->second = get_conservative_val(my_dit->second, other_val);
            assert(my_dit->second.is_conservative(other_val));
-           sys_state_debug_file << " Mem Location different : " << addr << " Old val : " << old_val.to_string() << 
-           " Other val : " << other_val.to_string() <<
-           " New val : " << my_dit->second.to_string() << endl;
+           sys_state_debug_file << " Mem Location different : " << addr << " Old val : " << old_val.to_string() << " Other val : " << other_val.to_string() << " New val : " << my_dit->second.to_string() << endl;
            can_skip = false;
          }
        }
