@@ -147,6 +147,7 @@ class PowerOpt {
     void resetAllDeadToggles();
     void dump_toggled_sets();
     void dump_units();
+    void dump_all_toggled_gates_file();
     void dump_slack_profile();
     void dump_toggle_counts(); 
     void dump_Dmemory();
@@ -251,7 +252,12 @@ class PowerOpt {
     void parseVCDALL(designTiming *T);
     string getVCDAbbrev(int id);
     void writeVCDBegin();
-    void writeVCDNet(Net *n);
+    void writeVCDNets(Net *n, int cycle_num, string value_odd, string value_even, string actual_value);
+    void writeVCDNet(Net *n, int cycle_num);
+    void addVCDNetVal(Net *n);
+    void writeVCDCycle(int cycle_num);
+    void writeVCDLastCycle(int cycle_num);
+    void writeVCDInitial(ofstream& vcd_file);
     void parseVCDALL_mode_15(designTiming *T);
     int parseVCD_mode_15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
     int parseVCDMode15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
@@ -857,6 +863,7 @@ class PowerOpt {
     ofstream toggle_info_file;
     ofstream toggled_nets_file;
     ofstream units_file;
+    ofstream all_toggled_gates_file;
     ofstream unique_not_toggle_gate_sets;
     ofstream unique_toggle_gate_sets;
     ofstream slack_profile_file;
@@ -875,7 +882,12 @@ class PowerOpt {
     ofstream dmem_contents_file;
     ofstream pmem_contents_file;
     ofstream missed_nets;
+    ofstream vcd_odd_file;
+    ofstream vcd_even_file;
     ofstream vcd_file;
+    int vcd_cycle;
+    map<string, Net*> *vcd_writes_p1; // nets that are toggled this cycle
+    map<string, Net*> *vcd_writes_0;  // nets that are toggled in the cycle that will be written
     bool keepLog;
     int iter;
     int L, U;
@@ -1054,6 +1066,7 @@ class PowerOpt {
     int num_inputs;
     vector<string> inputs;
     vector<int> cycle_toggled_indices;
+    set<int> all_toggled_gates;
     string dmem_data;
     unsigned int instr;
     string pmem_instr;
@@ -1069,6 +1082,10 @@ class PowerOpt {
     double total_leakage_energy;
     double baseline_leakage_energy;
     string outDir;
+    bool subnegFlag;
+    int  subnegState;
+    int sim_units;
+    int maintain_toggle_profiles;
 };
 
 }

@@ -53,6 +53,8 @@ void my_handler (int s) {
   po->dump_Dmemory();
   po->update_profile_sizes();
   po->print_toggle_profiles();
+  if (po->postprocess())
+    po->simulation_post_processing(&T);
   //po->print_nets();
   //po->print_term_exprs();
   po->exitPT();
@@ -635,8 +637,8 @@ int main(int argc, char *argv[])
       cout << "[UPDATED] Reg Count : " << po->getRegNum() << endl;
       cout << "[UPDATED] Net Count : " << po->getNetNum() << endl;
       cout << "[UPDATED] Terminal Count : " << po->getTerminalNum() << endl;
-      po->print_nets();
-      po->print_terminals();
+      //po->print_nets();
+      //po->print_terminals();
       po->readClusters();
       //po->print_pads(); return 0;
       po->readPmemFile();// Generating the pmem file in the right format is a bit of a work. But for our benchmarks they are in flat_no_clk_gt/run_10.0/results_10.0/INPUT_DEPENDENT_RUNS/pmem_files

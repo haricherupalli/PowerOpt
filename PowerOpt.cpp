@@ -229,6 +229,9 @@ void PowerOpt::readCmdFile(string cmdFileStr)
     is_dead_end_check = false;
     ignoreMultiplier = 0;
     conservative_state = 0;
+    subnegFlag = false;
+    sim_units = 0;
+    maintain_toggle_profiles = 0;
     inp_ind_branches = 0;
     vStart = 120;
     vEnd = 40;
@@ -425,6 +428,12 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             inputValueFile = getTokenS(line,"-inputValueFile ");
         if (line.find("-outDir ") != string::npos)
             outDir = getTokenS(line,"-outDir ");
+        if (line.find("-subneg") != string::npos)
+            subnegFlag = true; subnegState= 0;
+        if (line.find("-sim_units") != string::npos)
+            sim_units = getTokenI(line,"-sim_units ");
+        if (line.find("-maintain_toggle_profiles") != string::npos)
+            maintain_toggle_profiles = getTokenI(line,"-maintain_toggle_profiles ");
     }
 
     assert(num_sim_cycles > 0 );
@@ -492,8 +501,10 @@ void PowerOpt::openFiles()
   pmem_contents_file.open           ( (outDir+string("/PowerOpt/pmem_contents_file"     )).c_str()   ) ;
   debug_file_second.open            ( (outDir+string("/PowerOpt/debug_file_second"      )).c_str()   ) ;
   units_file.open                   ( (outDir+string("/PowerOpt/UNITS_INFO"             )).c_str()   ) ;
+  all_toggled_gates_file.open       ( (outDir+string("/PowerOpt/all_toggled_gates_file" )).c_str()   ) ;
 
-  vcdOutFile = outDir+"PowerOpt/"+vcdOutFile;
+  //vcdOutFile = outDir+"/PowerOpt/"+vcdOutFile;
+  vcd_file.open((outDir+string("/PowerOpt/")+vcdOutFile).c_str()); 
   Gate * dummy_g; Net* dummy_n; system_state* dummy_ss;
   dummy_g->openFiles(outDir);
   dummy_n->openFiles(outDir);
@@ -517,6 +528,7 @@ void PowerOpt::closeFiles()
   }
   missed_nets.close();
   units_file.close();
+  all_toggled_gates_file.close();
   toggle_profile_file.close();
   debug_file.close();
   pmem_request_file.close();
@@ -868,7 +880,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
   {
     int gate_count = 0;
     int toggled_count = 0;
-    debug_file << "Cycle : " << cycle_num << endl;
+    //debug_file << "Cycle : " << cycle_num << endl;
     //missed_nets << "Cycle : " << cycle_num << endl;
     while (!sim_wf.empty())
     {
@@ -883,13 +895,18 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
         sim_visited.push(node);
         Gate* gate = node->getGate();
         bool toggled = gate->computeVal(sim_wf); // here we push gates into sim_wf
+        //if (cycle_num > 0) 
+//        if (toggled){
+//        }
         if (toggled && !gate->getIsClkTree())
         {
           toggled_count++;
-          gate->updateToggleProfile(cycle_num);
+          if (maintain_toggle_profiles == 1) gate->updateToggleProfile(cycle_num);
+          //cycle_toggled_indices.push_back(gate->getId());
+          all_toggled_gates.insert(gate->getId());
           cycle_toggled_indices.push_back(gate->getId());
           int cluster_id = gate->getClusterId();
-          debug_file << node->getName() << endl;
+          //debug_file << node->getName() << endl;
           //if (cluster_id != 0) { }
           if (clusterNamesFile != "")
           {
@@ -900,15 +917,22 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
               cluster->setActive(true);
             }
           }
-          writeVCDNet(gate->getFanoutTerminal(0)->getNet(0));
+          addVCDNetVal(gate->getFanoutTerminal(0)->getNet(0));
+          //writeVCDNet(gate->getFanoutTerminal(0)->getNet(0));
         }
         else
         {
           //missed_nets << "Not Toggled : " << node->getName() << endl;
         }
+        if (toggled && gate->getIsClkTree())
+        {
+          //debug_file << "clock_tree_cell : " <<  node->getName() << " : " <<  node->getGate()->getFanoutTerminal(0)->getNet(0)->getName() << " : " <<  node->getSimValue()<< endl;
+          addVCDNetVal(gate->getFanoutTerminal(0)->getNet(0));
+          //writeVCDNet(gate->getFanoutTerminal(0)->getNet(0),cycle_num);
+        }
       }
     }
-    debug_file << "In cycle " << cycle_num << " " << gate_count << " gates were simulated and " << toggled_count << " toggled."  << endl;
+    //debug_file << "In cycle " << cycle_num << " " << gate_count << " gates were simulated and " << toggled_count << " toggled."  << endl;
   }
   else
   {
@@ -926,18 +950,18 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
   if (!pos_edge)
   {
     map<int, Cluster* >::iterator it;
-    debug_file << "At Time " << cycle_num  << " Clusters that are ON : ";
+    //debug_file << "At Time " << cycle_num  << " Clusters that are ON : ";
     for (it = clusters.begin(); it != clusters.end(); it++)
     {
       if (it->second->getActive() && pmem_addr < 12288)
       {
         int id = it->second->getId();
-        debug_file << id << ", ";
+        //debug_file << id << ", ";
         PMemory[pmem_addr]->domain_activity[id] = true;
         PMemory[pmem_addr]->executed = true;
       }
     }
-    debug_file << endl;
+    //debug_file << endl;
     resetClustersActive();
   }
 }
@@ -1091,8 +1115,10 @@ void PowerOpt::updateRegOutputs(int cycle_num)
     if (toggled)
     {
       toggled_count++;
-      ff_gate->updateToggleProfile(cycle_num);
+      if (maintain_toggle_profiles == 1) ff_gate->updateToggleProfile(cycle_num);
       cycle_toggled_indices.push_back(ff_gate->getId());
+      //if (cycle_num > 0)
+        all_toggled_gates.insert(ff_gate->getId());
     }
   }
   debug_file << " Num toggled FF's in cycle " << cycle_num << " is " << toggled_count << endl;
@@ -1153,6 +1179,33 @@ void PowerOpt::readStaticPGInfo()
 
 string PowerOpt::getPmemAddr()
 {
+  // HERE
+  // return in if.
+  string all_x="XXXXXXXXXXXXXX";
+  if (subnegFlag == true)
+  {
+    if(subnegState ==0)
+    {
+      subnegState++;
+    }
+    else if (subnegState == 1)
+    {
+      subnegState++;
+    }
+    else if (subnegState == 2)
+    {
+      subnegState++;
+    }
+    else if (subnegState == 3)
+    {
+      subnegState=0;
+    }
+  return all_x;
+  }
+  
+
+
+
 
   string pmem_addr_13_val , pmem_addr_12_val , pmem_addr_11_val , pmem_addr_10_val , pmem_addr_9_val  , pmem_addr_8_val  , pmem_addr_7_val  , pmem_addr_6_val  , pmem_addr_5_val  , pmem_addr_4_val  , pmem_addr_3_val  , pmem_addr_2_val  , pmem_addr_1_val  , pmem_addr_0_val;
   if (design =="flat_no_clk_gt")
@@ -1704,9 +1757,40 @@ bool PowerOpt::readMem(int cycle_num, bool wavefront)
     pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
     static string  last_addr_string;
     if (pmem_addr > 12287) instr = 0;
+    //HERE2
+    else if ( subnegFlag == true){
+      instr = 2;
+    }
     else instr = PMemory[pmem_addr]->instr;
     //if (pmem_addr == 12289) { pmem_addr = 3; instr = PMemory[3]->instr;}
-    pmem_instr = binary(instr);
+    
+    if ( subnegFlag == true)
+    {
+      if(subnegState ==0)
+      {
+        // sub instr
+        //pmem_instr = "1000 src 1 0 01 dst"
+        pmem_instr = "1000001010010010";
+      }
+      else if (subnegState == 1)
+      {
+        //NOP
+        //pmem_instr = "0100 0011 0000 0011";
+        pmem_instr = "XXXXXXXXXXXXXXXX";
+      }
+      else if (subnegState == 2)
+      {
+        //NOP
+        //pmem_instr = "0100001100000011";
+        pmem_instr = "XXXXXXXXXXXXXXXX";
+      }
+      else if (subnegState == 3)
+      {
+        //JN
+        pmem_instr = "0011 00XXX XXX X010";
+      }
+    }
+    else pmem_instr = binary(instr);
     bool can_skip = handleCondJumps(cycle_num);
 
     send_instr = true;
@@ -2328,9 +2412,12 @@ void PowerOpt::simulate()
       //return;
     }
     bool brk = readMem(i, wavefront);// -->  handleCondJumps()
+    if(subnegFlag == false){
     brk |= checkIfHung();
+    }
     if (brk == true) break;
     runSimulation(wavefront, i, false); // simulates the negative edge
+    writeVCDCycle(2*i);
 
     if (!done_inputs)
     {
@@ -2343,6 +2430,7 @@ void PowerOpt::simulate()
     recvInputs2(i, wavefront);
 
     runSimulation(wavefront, i, true); // simulates  the positive edge
+    writeVCDCycle(2*i+1); //  Since writeVCDCycle actually writes half a cycle ! Go through the function to see why;
     updateRegOutputs(i);
 
     vector<int>& toggled_set_indices = cycle_toggled_indices;
@@ -2365,9 +2453,12 @@ void PowerOpt::simulate()
     }
 
     // GENERATE UNITS
-    sort(toggled_set_indices.begin(), toggled_set_indices.end());
-    if (!tree-> essr(toggled_set_indices, false))
-      tree->insert(toggled_set_indices);
+    if (sim_units == 1)
+    {
+      sort(toggled_set_indices.begin(), toggled_set_indices.end());
+      if (!tree-> essr(toggled_set_indices, false))
+        tree->insert(toggled_set_indices);
+    }
     toggled_set_indices.clear(); cycle_toggled_indices.clear();
     //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
     if (print_processor_state_profile_every_cycle == 1) {
@@ -2485,6 +2576,7 @@ void PowerOpt::simulate2()
       brk |= (global_curr_cycle >= num_sim_cycles);
       if (brk == true) break;
       runSimulation(wavefront, i, false); // simulates the negative edge
+      writeVCDCycle(2*global_curr_cycle);
 
       if (!done_inputs)
       {
@@ -2497,6 +2589,7 @@ void PowerOpt::simulate2()
       recvInputs2(i, wavefront);
 
       runSimulation(wavefront, i, true); // simulates  the positive edge
+      writeVCDCycle(2*global_curr_cycle+1); //  Since writeVCDCycle actually writes half a cycle ! Go through the function to see why;
       updateRegOutputs(i);
 
       vector<int>& toggled_set_indices = cycle_toggled_indices;
@@ -2516,9 +2609,12 @@ void PowerOpt::simulate2()
         toggled_set_indices = live_toggled_set_indices;
       }
 
-      sort(toggled_set_indices.begin(), toggled_set_indices.end());
-      if (!tree-> essr(toggled_set_indices, false))
-        tree->insert(toggled_set_indices);
+      if (sim_units == 1)
+      {
+        sort(toggled_set_indices.begin(), toggled_set_indices.end());
+        if (!tree-> essr(toggled_set_indices, false))
+          tree->insert(toggled_set_indices);
+      }
       toggled_set_indices.clear(); cycle_toggled_indices.clear();
 
       //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
@@ -2547,6 +2643,7 @@ void PowerOpt::simulation_post_processing(designTiming* T)
   //find_dynamic_slack_subset(T);
 
   dump_units();
+  dump_all_toggled_gates_file();
 
   print_dmem_contents(num_sim_cycles-1);
 
@@ -2695,8 +2792,8 @@ bool PowerOpt::probeRegisters(int cycle_num)
     N = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_2_"]]->getSimValue();
     Z = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_1_"]]->getSimValue();
     C = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_0_"]]->getSimValue();
-    fork_e_state = e_state; // No check needed
-    fork_inst_type = inst_type; // No check needed
+    fork_e_state = 12; // No check needed
+    fork_inst_type = 4; // No check needed
   }
   else assert(0);
 
@@ -3616,41 +3713,35 @@ string PowerOpt::getVCDAbbrev(int id)
     char first_val = 33;
     char last_val = 126;
     int num_chars = last_val-first_val+1;
-    int size = ((int) (log2(id)/log2(num_chars)))+1; // indicates length of this id's abbreviation
     string abbrev("");
-    //#abbrev.reserve(size);
 
-    int modSize = 1;
-    for (int i = 0; i < size; ++i) {
-        modSize *= num_chars;
-        char c = id % modSize;
-        abbrev += c;
-    }
+    int val = id;
+    do {
+        char c = (char) (val % num_chars);
+        abbrev += c+first_val;
+        //cout << val << " " << c+first_val<< endl;
+        val /= num_chars;
 
-    //return string(abbrev.rbegin(),abbrev.rend());
+    } while (val > 0);
+
+    reverse(abbrev.begin(),abbrev.end());
     return abbrev;
 }
 
-void PowerOpt::writeVCDBegin()
+void PowerOpt::writeVCDInitial (ofstream& vcd_file)
 {
-    // Open output VCD File
-    vcd_file.open(vcdOutFile.c_str());
-    if (!vcd_file.is_open()) {
-        cout << "WARNING: VCD Output file Cannot be opened!" << endl;
-	return;
-    }
 
-    // Write date stection
     vcd_file << "$date" << endl;
     time_t t = time(0);
     struct tm * now = localtime(&t);
     string date_time_str = asctime(now);
-    vcd_file << date_time_str << endl;
+    vcd_file << date_time_str;
     vcd_file << "$end" << endl;
 
     // Write version section
     vcd_file << "$version" << endl;
-    vcd_file << "PowerOpt version unknown?" <<endl;
+    //vcd_file << "PowerOpt version `\\_(o_O)_/`?" <<endl;
+    vcd_file << "PowerOpt version 2.0" <<endl;
     vcd_file << "$end" << endl;
 
     // Write comment section
@@ -3659,39 +3750,265 @@ void PowerOpt::writeVCDBegin()
     vcd_file << "$end" << endl;
 
     // Write timescale
-    vcd_file << "$timescale 1ps $end" << endl;
+    vcd_file << "$timescale 10ps $end" << endl;
 
     // Generate and write VCD abbreviations for each net in design
     vcd_file << "$scope module dut $end" << endl;
     for (int i = 0; i<nets.size(); ++i) {
 	Net *n =getNet(i);
+        string netName = n->getName();
+        // VCD scalars cannot have [ or ] charcters. From VCS output VCD files it seems that _ characters are used to denote bit selection.
+        size_t pos = 0;
+        while ((pos = netName.find("\\[")) != string::npos) {
+            netName.replace(pos,2,"_");
+        }
+        while ((pos = netName.find("\\]")) != string::npos) {
+            netName.replace(pos,2,"_");
+        }
         string abbrev = getVCDAbbrev(i);
-        vcd_file << "$var wire 1 " << abbrev << " " << n->getName() << " $end" << endl;
+        vcd_file << "$var wire 1 " << abbrev << " " << netName << " $end" << endl;
         n->setVCDAbbrev(abbrev);
     }
     // FIXME: Write any module definitions which matter mainly for hierarchical designs
+
+    // Incomplete FIX: currently works only for flat netlist.
+
+    for (int i = 0; i < m_gates.size(); i++)
+    {
+        Gate* gate = m_gates[i];
+        string gate_name = gate->getName();
+        vcd_file << "$scope module " << gate_name << " $end" << endl;
+        int num_gate_fi_terms = gate->getFaninTerminalNum();
+        for (int j = 0; j < num_gate_fi_terms; j++)
+        {
+            Terminal* term = gate->getFaninTerminal(j);
+            Net * net = term->getNet(0);
+            vcd_file << "$var wire 1 " << net->getVCDAbbrev() << " " << term->getName() << " $end" << endl ;
+        }
+        int num_gate_fo_terms = gate->getFanoutTerminalNum();
+        for (int j = 0; j < num_gate_fo_terms; j++)
+        {
+            Terminal* term = gate->getFanoutTerminal(j);
+            Net * net = term->getNet(0);
+            vcd_file << "$var wire 1 " << net->getVCDAbbrev() << " " << term->getName() << " $end" << endl ;
+        }
+        vcd_file << "$upscope $end" << endl;
+    }
+
     vcd_file << "$upscope $end" << endl;
     vcd_file << "$enddefinitions $end" << endl;
 
 
     // Write initial dump section
-    vcd_file << "#0" << endl;
+    vcd_cycle = 0;
+    vcd_file << "#" << vcd_cycle << endl;
     vcd_file << "$dumpvars" << endl;
     for (int i = 0; i<nets.size(); ++i) {
-	Net *n =getNet(i);
+        Net *n =getNet(i);
         vcd_file << n->getSimValue() << n->getVCDAbbrev() << endl;
     }
     vcd_file << "$end" << endl;
 
+
+
+
 }
 
-// Adds the current simulated value of Net n to the VCD file. Assumes that a toggle has just taken place.
-void PowerOpt::writeVCDNet(Net *n)
+void PowerOpt::writeVCDBegin()
 {
-    if (vcd_file.is_open()) {
-        vcd_file << n->getSimValue() << n->getVCDAbbrev() << endl;
+    if (!vcd_odd_file.is_open()) {
+        cout << "WARNING: odd VCD Output file Cannot be opened!" << endl;
+	//return;
+    }
+    if (!vcd_even_file.is_open()) {
+        cout << "WARNING: even VCD Output file Cannot be opened!" << endl;
+	//return;
+    }
+
+    //dual_stream vcd_file(vcd_odd_file, vcd_even_file);
+    //
+//    typedef tee_device<ofstream, ofstream> TeeDevice;
+//    typedef stream<TeeDevice> TeeStream;
+//    TeeDevice my_tee(vcd_odd_file, vcd_even_file);
+//    TeeStream vcd_file(my_tee);
+    //vcd_file = tee(vcd_odd_file, vcd_even_file);
+
+    // Write date stection
+    writeVCDInitial (vcd_odd_file);
+    writeVCDInitial (vcd_even_file);
+    writeVCDInitial (vcd_file);
+
+    // Create structures to hold nets that toggled in the last two cycles
+    vcd_writes_p1 = new map<string,Net*>();
+    vcd_writes_0 = new map<string,Net*>();
+
+}
+
+// Adds the current simulation value of Net n to those that should be written to the VCD next cycle, assuming the value does not head post-processing (X->0 or X->1 requires the original X state)
+void PowerOpt::addVCDNetVal(Net *n)
+{
+     vcd_writes_p1->insert(make_pair(n->getName(), n));
+}
+
+
+void PowerOpt::writeVCDLastCycle(int cycle_num)
+{
+    map<string, Net*> :: iterator n;
+    for (n = vcd_writes_0->begin(); n != vcd_writes_0->end(); ++n)
+    {
+        string curr_value = n->second->getSimValue();  // p1
+        writeVCDNets(n->second, cycle_num, curr_value, curr_value, curr_value);
     }
 }
+
+
+void PowerOpt::writeVCDCycle(int cycle_num)
+{
+    // For odd file, worst case is in odd cycles (i.e., X->X transitions are 0->1 tranistions during the odd cycles)
+    // Even files has the worst case in the eycles
+    // Iterate through each net and write out the correct value for the current write cycle
+    string write_value_odd;
+    string write_value_even;
+    int write_cycle = cycle_num-1;
+    map<string, Net*> :: iterator n;
+    debug_file << " Cycle " << cycle_num << endl;
+    for (n = vcd_writes_0->begin(); n != vcd_writes_0->end(); ++n)
+    {
+//        string write_value, old_value;
+//        string curr_value = n->second->getSimValue();  // p1
+//        //write_value = n->getOldSimVal(0); // 0
+//        //old_value = n->getOldSimVal(1);  // m1
+//
+//        //Make sure that the sim values read correspond to consecutive cycles else, edit the values
+//        if (vcd_writes_p1->find(n->second->getName()) == vcd_writes_p1->end())
+//        {
+//            write_value = curr_value; // did not actually toggle in p1 so we can just use curr_value
+//            old_value = n->second->getOldSimVal(0);
+//        }
+//        else
+//        {
+//            write_value = n->second->getOldSimVal(0); // 0
+//            old_value = n->second->getOldSimVal(1);  // m1
+//        }
+//        string actual_value = write_value;
+////        write_value = n->second->getOldSimVal(0); // 0
+////        old_value = n->second->getOldSimVal(1);  // m1
+////        write_value = curr_value; // did not actually toggle in p1 so we can just use curr_value
+////        old_value = n->second->getOldSimVal(0);
+//
+//        if (write_value == "X") {
+//            if (write_cycle%2) {
+//                // This is an odd cycle
+//
+//                // Write worst case to odd file
+//                if (old_value == "1") {
+//                    // write a "0"
+//                    write_value_odd = "0";
+//                } else {
+//                    // old_value is a "0" or an "X", so write a "1"
+//                    write_value_odd = "1";
+//                }
+//
+//                // Write the value that will cause the worst case in the p1 cycle to the even file
+//                if (curr_value == "1" || curr_value == "X") {
+//                    // write a "0"
+//                    write_value_even = "0";
+//                } else {
+//                    // curr_value is a "0", so write a "1"
+//                    write_value_even = "1";
+//                }
+//
+//            } else {
+//                // This is an even cycle
+//
+//                // Write the value that will cause the worst case in the p1 cycle to the odd file
+//                if (curr_value == "1" || curr_value == "X") {
+//                    // write a "0"
+//                    write_value_odd = "0";
+//                } else {
+//                    // curr_value is a "0", so write a "1"
+//                    write_value_odd = "1";
+//                }
+//
+//                // Write worst case to even file
+//                if (old_value == "1") {
+//                    // write a "0"
+//                    write_value_even = "0";
+//                } else {
+//                    // old_value is a "0" an "X", so write a "1"
+//                    write_value_even = "1";
+//                }
+//            }
+//        } else {
+//            write_value_odd = write_value_even = write_value;
+//        }
+//        n->second->write_value = write_value;
+//        n->second->value_even = write_value_even;
+//        n->second->value_odd = write_value_odd;
+        string actual_value = n->second->getSimValue();
+        writeVCDNets(n->second, write_cycle, write_value_odd, write_value_even, actual_value);
+    }
+
+//    debug_file_second << "#" <<  write_cycle*clockPeriod/2 << endl;
+//    for ( int i = 0; i <  nets.size(); i++)
+//    {
+//      Net* n = nets[i];
+//      debug_file_second << n->getName() << " : " << n->getOldSimVal(1) << " : " << n->getOldSimVal(0) << " : " << n->getSimValue() << " : " << n->write_value <<  " : " <<  n->value_even << " : " << n->value_odd << endl;
+//    }
+
+    //cout << "Sizes : " << vcd_writes_p1->size() << " : "  << vcd_writes_0->size() << endl;
+    // update the past cycle VCD function
+    free(vcd_writes_0);
+    vcd_writes_0 = vcd_writes_p1;
+    vcd_writes_p1 = new map<string, Net*>();
+}
+
+// Writes a given nets value at a given cycle to the provided file.
+void PowerOpt::writeVCDNets(Net *n, int cycle_num, string value_odd, string value_even, string actual_value)
+{
+    // Catch any empty simulation values
+    if (value_even.empty()) {
+        //debug_file << "Empty even sim value for net: " << n->getName() << " for cycle: " << cycle_num << endl;
+        //return;
+    }
+    if (value_odd.empty()) {
+        //debug_file << "Empty odd sim value for net: " << n->getName() << " for cycle: " << cycle_num << endl;
+        //return;
+    }
+
+    //cout << "*";
+    if (vcd_cycle != cycle_num)
+    {
+      vcd_cycle = cycle_num;
+      debug_file << n->getName() << " : " << n->getSimValue() << endl;
+      vcd_file << "#" << cycle_num*clockPeriod/2 << endl;
+    }
+    vcd_file << actual_value << n->getVCDAbbrev() << endl;
+    if (!vcd_odd_file.is_open() || !vcd_even_file.is_open()) { }
+    else {
+        if (vcd_cycle != cycle_num) {
+            vcd_cycle = cycle_num;
+            vcd_odd_file << "#" <<  cycle_num*clockPeriod/2 << endl;
+            vcd_even_file << "#" <<  cycle_num*clockPeriod/2 << endl;
+            //vcd_file << "#" << cycle_num*clockPeriod/2 << endl;
+            debug_file_second << "#" << cycle_num*clockPeriod/2 << endl;
+         }
+        //cout << "n";
+        vcd_odd_file << value_odd << n->getVCDAbbrev() << endl;
+        vcd_even_file << value_even << n->getVCDAbbrev() << endl;
+        //vcd_file << actual_value << n->getVCDAbbrev() << endl;
+        //if (cycle_num*clockPeriod/2 == 130000)
+          //debug_file_second << n->getName() << n->getDriverGate()->getName() <<  " : " << n->getOldSimVal(1) << " : " << n->getOldSimVal(0) << " : " << n->getSimValue() << " : " << actual_value <<  " : " <<  value_even << " : " << value_odd << endl;
+    }
+
+}
+// Adds the current simulated value of Net n to the VCD file. Assumes that a toggle has just taken place.
+//void PowerOpt::writeVCDNet(Net *n)
+//{
+//    if (vcd_file.is_open()) {
+//        vcd_file << n->getSimValue() << n->getVCDAbbrev() << endl;
+//    }
+//}
 
 
 // parseCycle is the number of cycles to parse in each VCD file
@@ -5230,6 +5547,17 @@ void PowerOpt::dump_units(){
 
 }
 
+void PowerOpt::dump_all_toggled_gates_file()
+{
+  set<int>::iterator it;
+  for ( it = all_toggled_gates.begin(); it != all_toggled_gates.end(); it ++)
+  {
+    string gate_name = m_gates.at(*it)->getName();
+    all_toggled_gates_file << gate_name << endl;
+  }
+
+}
+
 void PowerOpt::dump_slack_profile()
 {
   if (exeOp != 16) return;
@@ -5262,6 +5590,11 @@ void PowerOpt::update_profile_sizes()
 void PowerOpt::print_toggle_profiles()
 {
   cout << "[PowerOpt] Printing toggle profiles" << endl;
+  if (maintain_toggle_profiles == 0)
+  {
+    toggle_profile_file << " -maintain_toggle_profiles option is set to 0. Please set it to 1. " << endl;
+    return;
+  }
   for (int i = 0; i < getGateNum(); i++)
   {
     if (m_gates[i]->getIsClkTree() == true) continue;
