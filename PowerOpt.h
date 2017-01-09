@@ -200,6 +200,8 @@ class PowerOpt {
     void sendInstr(string instr_str);
     void sendData (string data_str);
     void sendPerDout (string data_str);
+    void sendIRQX ();
+    void sendDbgX ();
     void testReadAddr();
     void initialRun();
     void initialize_sim_wf();
@@ -210,7 +212,7 @@ class PowerOpt {
     void resetClustersActive();
     void readDmemInitFile();
     void updateRegOutputs(int cycle_num);
-    bool probeRegisters(int cycle_num);
+    bool probeRegisters(int& cycle_num);
     system_state* get_current_system_state(int cycle_num);
     bool get_conservative_state(system_state* sys_state);
     void updateFromMem();
@@ -1054,6 +1056,7 @@ class PowerOpt {
     int num_inputs;
     vector<string> inputs;
     vector<int> cycle_toggled_indices;
+    set<string> all_toggled_gates;
     string dmem_data;
     unsigned int instr;
     string pmem_instr;

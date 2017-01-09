@@ -385,6 +385,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             vcdStopCycle = getTokenULL(line,"-vcdStopCycle");
         if (line.find("-vcdCheckStartCycle ") != string::npos)
             vcdCheckStartCycle = getTokenULL(line,"-vcdCheckStartCycle");
+        if (line.find ("print_processor_state_profile_every_cycle") != string::npos)
+            print_processor_state_profile_every_cycle = getTokenI(line, "-print_processor_state_profile_every_cycle");
         if (line.find("-IMOI ") != string::npos)
             internal_module_of_interest = getTokenS(line,"-IMOI");
         if (line.find("-preprocess") != string::npos)
@@ -583,18 +585,18 @@ void PowerOpt::print_fanin_cone(designTiming* T)
       Gate* gate = net->getDriverGate();
       if (gate != 0) {
         int id = gate->getTopoId();
-        if (!g->getFFFlag()) assert(id < parent_topo_id);
+        //if (!g->getFFFlag()) assert(id < parent_topo_id);
         fanins_file << " . \t  Gate is -->" << gate->getName() << " (" << terminal->getName()  << ") " << " (" << id << ") " <<  endl;
         string gate_name_from_pt = T->getFaninGateAtTerm(terminal->getFullName());
         if (gate->getName() != gate_name_from_pt) {
           cout << gate->getName() << " : " << gate_name_from_pt << endl;
-          assert(gate->getName() == gate_name_from_pt);
+          //assert(gate->getName() == gate_name_from_pt);
         }
       }
       else if (net->getName() != terminal->getFullName()) {
         Pad* pad = net->getPad(0);
         int id = pad->getTopoId();
-        if (!g->getFFFlag()) assert(id < parent_topo_id);
+        //if (!g->getFFFlag()) assert(id < parent_topo_id);
         fanins_file <<  " . \t  Input Pad is --> " << pad->getName() << " (" << terminal->getName() << ") " <<  " (" << id << ") " << endl;
         string pad_name_from_pt = T->getFaninPortAtTerm(terminal->getFullName());
         string pad_name = pad->getName();
@@ -603,12 +605,12 @@ void PowerOpt::print_fanin_cone(designTiming* T)
           replace_substr(pad_name, "\\[", "_" );
           replace_substr(pad_name, "\\]", "_" );
         }
-        assert(pad_name == pad_name_from_pt);
+        //assert(pad_name == pad_name_from_pt);
       }
       else { // constant nets
         fanins_file << " . \t  Constant --> " << terminal->getSimValue() << " (" << terminal->getName() << ") "  << endl;
         string value_from_pt = T->getTerminalConstValue(terminal->getFullName());
-        assert(terminal->getSimValue() == value_from_pt);
+        //assert(terminal->getSimValue() == value_from_pt);
       }
     }
   }
@@ -646,6 +648,7 @@ void PowerOpt::populateGraphDatabase(Graph* graph)
          node->setIsSource(true);
          graph->addSource(node);
          graph->addWfNode(node);
+         debug_file << "Adding : " << node->getName() << endl;
          graph->addNode(node);
        }
        else if (pad->getType() == PrimiaryOutput)
@@ -663,6 +666,7 @@ void PowerOpt::populateGraphDatabase(Graph* graph)
          node->setIsSink(true);
          graph->addSource(node);
          graph->addWfNode(node);
+         debug_file << "Adding : " << node->getName() << endl;
          graph->addSink(node);
          graph->addNode(node);
        }
@@ -684,6 +688,7 @@ void PowerOpt::populateGraphDatabase(Graph* graph)
         node->setIsSink(true);
         graph->addSource(node);
         graph->addWfNode(node);
+        debug_file << "Adding : " << node->getName() << endl;
         graph->addSink(node);
         graph->addNode(node);
       }
@@ -695,6 +700,7 @@ void PowerOpt::populateGraphDatabase(Graph* graph)
         //node->etIsNode(true);
         graph->addNode(node);
       }
+      //debug_file << " Gate " << gate->getName() << "'s Node is " << node  << endl;
       gate->setGNode(node);
     }
 
@@ -995,35 +1001,44 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       string gate_name = tokens[0];
       string term_name = tokens[1];
 
+      string full_term_name = gate_name + "/" + term_name;
+
       if (gate_name.find("Logic1") != string::npos || gate_name.find("Logic0") != string::npos) continue;
+      if (terminalNameIdMap.find(full_term_name) != terminalNameIdMap.end())
+      {
+        Terminal* term = terms[terminalNameIdMap[full_term_name]];
+        term->setSimValue("1");
+      }
+      else
+      {
+        int id = gateNameIdMap.at(gate_name);
+        Gate * gate = m_gates[id];
+        int num_terms = terms.size();
 
-      int id = gateNameIdMap[gate_name];
-      Gate * gate = m_gates[id];
-      int num_terms = terms.size();
+        Terminal* term = new Terminal(num_terms, term_name);
+        //Net *n = new Net(nets.size()+1, term_name); // set the net name to be same as term name
 
-      Terminal* term = new Terminal(num_terms, term_name);
-      //Net *n = new Net(nets.size()+1, term_name); // set the net name to be same as term name
+        term->setGate(gate);
+        term->computeFullName();
+        term->setPinType(INPUT);
+        Net *n = new Net(nets.size(), term->getFullName(), true); // set the net name to be same as term name
+        //debug_file << "Creating one Net with id " << n->getId() << " and name " << n->getName() << endl;
+        n->addInputTerminal(term);
+        n->setTopoSortMarked(true);
+        term->addNet(n);
+        term->setSimValue("1");
 
-      term->setGate(gate);
-      term->computeFullName();
-      term->setPinType(INPUT);
-      Net *n = new Net(nets.size(), term->getFullName(), true); // set the net name to be same as term name
-      //debug_file << "Creating one Net with id " << n->getId() << " and name " << n->getName() << endl;
-      n->addInputTerminal(term);
-      n->setTopoSortMarked(true);
-      term->addNet(n);
-      term->setSimValue("1");
+        assert(term->getId() == terms.size());
+        assert(n->getId() == nets.size());
+        addTerminal(term);
+        addNet(n);
 
-      assert(term->getId() == terms.size());
-      assert(n->getId() == nets.size());
-      addTerminal(term);
-      addNet(n);
-
-      string name = term->getFullName();
-      if (terminalNameIdMap.find(name) != terminalNameIdMap.end()) assert(0);
-      gate->addFaninTerminal(term);
-      terminalNameIdMap[name] = term->getId();
-      netNameIdMap[n->getName()] = n->getId();
+        string name = term->getFullName();
+        //if (terminalNameIdMap.find(name) != terminalNameIdMap.end()) assert(0);
+        gate->addFaninTerminal(term);
+        terminalNameIdMap[name] = term->getId();
+        netNameIdMap[n->getName()] = n->getId();
+      }
     }
   }
   if (zero_pins_file.is_open())
@@ -1036,31 +1051,41 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       string gate_name = tokens[0];
       string term_name = tokens[1];
 
-      int id = gateNameIdMap[gate_name];
-      Gate * gate = m_gates[id];
-      int num_terms = terms.size();
-      Terminal* term = new Terminal(num_terms, term_name);
+      string full_term_name = gate_name + "/" + term_name;
+      if (gate_name.find("Logic1") != string::npos || gate_name.find("Logic0") != string::npos) continue;
+      if (terminalNameIdMap.find(full_term_name) != terminalNameIdMap.end())
+      {
+        Terminal* term = terms[terminalNameIdMap[full_term_name]];
+        term->setSimValue("0");
+      }
+      else
+      {
+        int id = gateNameIdMap[gate_name];
+        Gate * gate = m_gates[id];
+        int num_terms = terms.size();
+        Terminal* term = new Terminal(num_terms, term_name);
 
-      term->setGate(gate);
-      term->computeFullName();
-      term->setPinType(INPUT);
-      Net *n = new Net(nets.size(), term->getFullName(), true); // set the net name to be same as term name
-      //debug_file << "Creating zero Net with id " << n->getId() << " and name " << n->getName() << endl;
-      n->addInputTerminal(term);
-      n->setTopoSortMarked(true);
-      term->addNet(n);
-      term->setSimValue("0");
+        term->setGate(gate);
+        term->computeFullName();
+        term->setPinType(INPUT);
+        Net *n = new Net(nets.size(), term->getFullName(), true); // set the net name to be same as term name
+        //debug_file << "Creating zero Net with id " << n->getId() << " and name " << n->getName() << endl;
+        n->addInputTerminal(term);
+        n->setTopoSortMarked(true);
+        term->addNet(n);
+        term->setSimValue("0");
 
-      assert(term->getId() == terms.size());
-      assert(n->getId() == nets.size());
-      addTerminal(term);
-      addNet(n);
+        assert(term->getId() == terms.size());
+        assert(n->getId() == nets.size());
+        addTerminal(term);
+        addNet(n);
 
-      string name = term->getFullName();
-      if (terminalNameIdMap.find(name) != terminalNameIdMap.end()) assert(0);
-      gate->addFaninTerminal(term);
-      terminalNameIdMap[name] = term->getId();
-      netNameIdMap[n->getName()] = n->getId();
+        string name = term->getFullName();
+        //if (terminalNameIdMap.find(name) != terminalNameIdMap.end()) assert(0);
+        gate->addFaninTerminal(term);
+        terminalNameIdMap[name] = term->getId();
+        netNameIdMap[n->getName()] = n->getId();
+      }
     }
   }
 
@@ -1489,6 +1514,8 @@ bool PowerOpt::sendInputs()
   //pmem_request_file << " Sending Inputs for i " << i << endl;
   data_str = inputs[i];
   sendPerDout(data_str);
+  sendIRQX();
+  //sendDbgX();
   pmem_request_file << " In Case " << i << endl;
 /*  switch (i)
   {
@@ -1669,9 +1696,9 @@ bool PowerOpt::handleCondJumps(int cycle_num)
        {
          cout << "CONTINUING INP_IND SYSTEM STATE " << sys_state->get_state_short() << endl;
          pmem_request_file << "CONTINUING INP_IND SYSTEM STATE " << sys_state->get_state_short() << endl;
-         //sys_state_queue.push(sys_state); 
+         //sys_state_queue.push(sys_state);
        }
-       else 
+       else
        {
          cout << "SKIPPING INP_IND SYSTEM STATE " << sys_state->get_state_short() << endl;
          pmem_request_file << "SKIPPING INP_IND SYSTEM STATE " << sys_state->get_state_short() << endl;
@@ -1715,9 +1742,60 @@ bool PowerOpt::readMem(int cycle_num, bool wavefront)
     string e_state_str = binary(e_state);
     int i_state = getIState();
     string i_state_str = binary(i_state);
-    pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) and PC " << pc << " EState is " << e_state  << " IState is " << i_state <<  " instruction is " << hex << instr << dec << " -> " << pmem_instr << " and cycle is " << cycle_num << endl;
+    int inst_type = getInstType();
+    pmem_request_file << "At address " << pmem_addr << " ( " << pmem_addr_str << " ) and PC " << pc << " EState is " << e_state  << " IState is " << i_state <<  " Inst Type " << inst_type << " instruction is " << hex << instr << dec << " -> " << pmem_instr << " and cycle is " << cycle_num << endl;
     handleDmem(cycle_num);
     return can_skip;
+}
+
+void PowerOpt::sendIRQX()
+{
+  for (int i =0 ; i < 62; i ++)
+  {
+    stringstream ss;
+    if (design == "flat_no_clk_gt") ss << "irq_" << i << "_";
+    else if (design == "modified_9_hier") ss << "irq[" << i << "]";
+    else assert(0);
+    string port_name = ss.str();
+    m_pads[padNameIdMap.at(port_name)] -> setSimValue("X", sim_wf);
+  }
+  m_pads[padNameIdMap.at("nmi")]->setSimValue("X", sim_wf);
+}
+
+void PowerOpt::sendDbgX()
+{
+  static int count = 0;
+  if (count > 0) return;
+  count++;
+  if(design == "flat_no_clk_gt")
+  {
+
+
+  }
+  else if (design == "modified_9_hier")
+  {
+//    m_pads[padNameIdMap.at("dbg_i2c_addr[6]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_addr[5]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_addr[4]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_addr[3]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_addr[2]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_addr[1]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_addr[0]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_broadcast[6]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_broadcast[5]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_broadcast[4]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_broadcast[3]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_broadcast[2]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_broadcast[1]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_broadcast[0]")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_scl")] ->setSimValue("X",sim_wf);
+//    m_pads[padNameIdMap.at("dbg_i2c_sda_in")] ->setSimValue("X",sim_wf);
+    m_pads[padNameIdMap.at("dbg_uart_rxd")] ->setSimValue("X",sim_wf);
+    m_pads[padNameIdMap.at("dbg_en")] ->setSimValue("1",sim_wf);
+
+  }
+  else assert(0);
+
 }
 
 void PowerOpt::sendPerDout(string data_str)
@@ -1960,7 +2038,8 @@ bool PowerOpt::check_peripherals()
 
 
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
-  if (per_addr_str != "00000000001100") return false; // per_addrs is 000c
+  //if (per_addr_str != "00000000001100") return false; // per_addrs is 000c
+  if (per_addr_str != "00000000010100") return false; // per_addrs is 000c
   return true;
 }
 
@@ -2022,16 +2101,17 @@ bool PowerOpt::check_sim_end(int& i, bool wavefront)
   else assert(0);
 
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
-  if (per_addr_str != "00000000001100") return false;
+  //if (per_addr_str != "00000000001100") return false;
+  if (per_addr_str != "00000000010100") return false;
 
-  string per_din_0_val;
+  string per_din_1_val;
   if (design == "flat_no_clk_gt")
-     per_din_0_val = m_pads[padNameIdMap.at("per_din_0_")]->getSimValue();
+     per_din_1_val = m_pads[padNameIdMap.at("per_din_1_")]->getSimValue();
   else if (design == "modified_9_hier")
-    per_din_0_val = m_pads[padNameIdMap.at("per_din[0]")]->getSimValue();
+    per_din_1_val = m_pads[padNameIdMap.at("per_din[1]")]->getSimValue();
   else assert(0);
   //ToggleType per_din_0_tog_type = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimToggType(); // checking for FALL might be hard when starting simulation from a saved state.
-  if (per_din_0_val != "0") return false;
+  if (per_din_1_val != "0") return false;
   return true;
 }
 
@@ -2297,7 +2377,7 @@ bool PowerOpt::checkIfHung()
     last_instr = instr;
   }
 
-  if (count > 5) {
+  if (count > 10) {
     cout << " System hung" << endl;
     return true;
   }
@@ -2329,6 +2409,7 @@ void PowerOpt::simulate()
     }
     bool brk = readMem(i, wavefront);// -->  handleCondJumps()
     brk |= checkIfHung();
+    brk |= (i> num_sim_cycles);
     if (brk == true) break;
     runSimulation(wavefront, i, false); // simulates the negative edge
 
@@ -2366,12 +2447,16 @@ void PowerOpt::simulate()
 
     // GENERATE UNITS
     sort(toggled_set_indices.begin(), toggled_set_indices.end());
+    if (i < 2) toggled_set_indices.clear();
     if (!tree-> essr(toggled_set_indices, false))
       tree->insert(toggled_set_indices);
     toggled_set_indices.clear(); cycle_toggled_indices.clear();
     //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
     if (print_processor_state_profile_every_cycle == 1) {
       print_processor_state_profile(i, false);
+    }
+    else if (print_processor_state_profile_every_cycle == 2) {
+      print_processor_state_profile(i, true);
     }
     if (probeRegisters(i) == true)
     {
@@ -2388,7 +2473,7 @@ void PowerOpt::simulate()
   }
   global_curr_cycle = i;
   vcd_file.close();
-  print_dmem_contents(num_sim_cycles-1);
+  print_dmem_contents(i-1);
   cout << "Total Leakage Energy is " << total_leakage_energy*1e-9 << endl;
   cout << "Baseline Leakage Energy is " << baseline_leakage_energy*1e-9 << endl;
 }
@@ -2436,9 +2521,9 @@ void PowerOpt::simulate2()
         sys_state = stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
       }
     }
-    else 
+    else
     {
-       cout << " CONSERVATIVE STATE NOT MAINTAINTED " << endl; 
+       cout << " CONSERVATIVE STATE NOT MAINTAINTED " << endl;
     }
     map<int, string>::iterator it;
     for (it = sys_state->net_sim_value_map.begin(); it != sys_state->net_sim_value_map.end(); it++)
@@ -2522,6 +2607,12 @@ void PowerOpt::simulate2()
       toggled_set_indices.clear(); cycle_toggled_indices.clear();
 
       //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
+      if (print_processor_state_profile_every_cycle == 1) {
+        print_processor_state_profile(i, false);
+      }
+      else if (print_processor_state_profile_every_cycle == 2) {
+        print_processor_state_profile(i, true);
+      }
       if (probeRegisters(i) == true)
       {
         //print_processor_state_profile(i, true);
@@ -2548,7 +2639,7 @@ void PowerOpt::simulation_post_processing(designTiming* T)
 
   dump_units();
 
-  print_dmem_contents(num_sim_cycles-1);
+  print_dmem_contents(global_curr_cycle);
 
 }
 
@@ -2601,9 +2692,20 @@ int PowerOpt::getEState()
 
 int PowerOpt::getInstType()
 {
-  string inst_type_2 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_2_"]]->getSimValue();
-  string inst_type_1 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_1_"]]->getSimValue();
-  string inst_type_0 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_0_"]]->getSimValue();
+  string inst_type_2, inst_type_1, inst_type_0;
+  if (design == "flat_no_clk_gt")
+  {
+    inst_type_2 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_2_"]]->getSimValue();
+    inst_type_1 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_1_"]]->getSimValue();
+    inst_type_0 = m_gates[gateNameIdMap["frontend_0_inst_type_reg_0_"]]->getSimValue();
+  }
+  else if (design == "modified_9_hier")
+  {
+    inst_type_2 = m_gates[gateNameIdMap["frontend_0/inst_type_reg_2_"]]->getSimValue();
+    inst_type_1 = m_gates[gateNameIdMap["frontend_0/inst_type_reg_1_"]]->getSimValue();
+    inst_type_0 = m_gates[gateNameIdMap["frontend_0/inst_type_reg_0_"]]->getSimValue();
+  }
+  else assert(0);
 
   string inst_type_str = inst_type_2 + inst_type_1 + inst_type_0;
   int inst_type = strtoull(inst_type_str.c_str(), NULL, 2);
@@ -2670,7 +2772,7 @@ bool PowerOpt::get_conservative_state(system_state* sys_state)
   return false;
 }
 
-bool PowerOpt::probeRegisters(int cycle_num)
+bool PowerOpt::probeRegisters(int& cycle_num)
 {
    string V ;
    string N ;
@@ -2695,8 +2797,8 @@ bool PowerOpt::probeRegisters(int cycle_num)
     N = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_2_"]]->getSimValue();
     Z = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_1_"]]->getSimValue();
     C = m_gates[gateNameIdMap["execution_unit_0/register_file_0/r2_reg_0_"]]->getSimValue();
-    fork_e_state = e_state; // No check needed
-    fork_inst_type = inst_type; // No check needed
+    fork_e_state = 12; // No check needed
+    fork_inst_type = 4; // No check needed
   }
   else assert(0);
 
@@ -2799,11 +2901,14 @@ bool PowerOpt::probeRegisters(int cycle_num)
          if (design == "flat_no_clk_gt") {
            terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
            terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
-           }
+         }
          else if (design == "modified_9_hier") {
+//           pmem_request_file << " Extra Sim at cycle " << cycle_num << endl;
+//           runSimulation(true, cycle_num, false);
+//           runSimulation(true, cycle_num++, true);
            terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
            terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
-           }
+         }
          else assert(0);
          cout << "SAVING STATE 1" << endl;
          system_state* sys_state_1 = get_current_system_state(cycle_num) ;
@@ -2812,12 +2917,12 @@ bool PowerOpt::probeRegisters(int cycle_num)
          pmem_request_file << "PUSHING SYSTEM STATE"  << sys_state_1->get_state_short() << endl;
          sys_state_queue.push(sys_state_1);
          if (design == "flat_no_clk_gt") {
-           terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
-           terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+           terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
+           terms[terminalNameIdMap["execution_unit_0_register_file_0_r2_reg_8_/Q"]]->setSimValue("1", sim_wf);
            }
          else if (design == "modified_9_hier") {
-           terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_2_/Q"]]->setSimValue("1", sim_wf);
-           terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_8_/Q"]]->setSimValue("0", sim_wf);
+           terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_2_/Q"]]->setSimValue("0", sim_wf);
+           terms[terminalNameIdMap["execution_unit_0/register_file_0/r2_reg_8_/Q"]]->setSimValue("1", sim_wf);
            }
          else assert(0);
          cout << "SAVING STATE 2" << endl;
@@ -3000,15 +3105,16 @@ void PowerOpt::computeTopoSort_new(Graph* graph)
   int count = 0;
   //m_gates_topo.resize(count);
 
-  vector<Gate*>::iterator it = m_gates.begin();
+  //vector<Gate*>::iterator it = m_gates.begin();
   while (graph->getWfSize() != 0)
   {
     GNode* node = graph->getWfNode();
-    //debug_file << "Removing : " << node->getName() << endl;
+    debug_file << "Removing : " << node->getName() << endl;
     graph->popWfNode();
     if (node->getVisited() == true)
       continue;
     nodes_topo.push_back(node);
+    //debug_file << " Setting Topo_id of Node : " << node->getName() << " as "  << count << endl;
     node->setTopoId(count++);
     node->setVisited(true);
     Net* net;
@@ -3026,18 +3132,18 @@ void PowerOpt::computeTopoSort_new(Graph* graph)
       net = gate->getFanoutTerminal(0)->getNet(0);
     }
     net->setTopoSortMarked(true);
-    //debug_file << "   Net is : " <<  net->getName() << endl;
+    debug_file << "   Net is : " <<  net->getName() << endl;
     for (int i = 0; i < net->getTerminalNum(); i++)
     {
       Terminal * term = net->getTerminal(i);
       if (term->getPinType() == OUTPUT)
         continue;
-      //debug_file << "       Terminal is : " << term->getFullName() << endl;
+      debug_file << "       Terminal is : " << term->getFullName() << endl;
       Gate* gate_nxt = term->getGate();
       GNode* node_nxt = gate_nxt->getGNode();
       if (gate_nxt->allInpNetsVisited() == true && node_nxt->getVisited() == false)
       {
-        //debug_file << "Adding : " << node_nxt->getName() << " from terminal : " << term->getFullName() << " and Net : " << net->getName() << endl;
+        debug_file << "Adding : " << node_nxt->getName() << " from terminal : " << term->getFullName() << " and Net : " << net->getName() << endl;
         graph->addWfNode(node_nxt);// add to queue
       }
     }
@@ -3296,11 +3402,13 @@ void PowerOpt::print_regs()
 
 void PowerOpt::print_gates()
 {
+  debug_file << " GATES : " << endl;
   for (int i =0; i < getGateNum(); i++)
   {
     Gate* gate = m_gates[i];
-    cout << gate->getName() << " : " << i << endl;
+    debug_file << gate->getName() << " : " << i << endl;
   }
+  debug_file << " DONE GATES " << endl;
 
 }
 
@@ -3362,9 +3470,9 @@ void PowerOpt::topoSort()
     //graph->print();
     cout << "Finished Top Sort" << endl;
     //printTopoOrder();
-    cout << " Checking topo order ... " ;
-    checkTopoOrder(graph);
-    cout << " done " << endl;
+//    cout << " Checking topo order ... " ;
+//    checkTopoOrder(graph);
+//    cout << " done " << endl;
 
     //TODO: COMPUTE EXPRESSIONS!!!
 
@@ -4007,7 +4115,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
   if (toggled_nets.size())
   {
     cout << "Handling Toggled Nets"  << endl;
-    debug_file << " CYCLE : " << cycle_num << endl;
+    //debug_file << " CYCLE : " << cycle_num << endl;
       for (int i = 0 ; i < toggled_nets.size() ; i++)
       {
           string cellstr;
@@ -4032,7 +4140,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
             m_gates[CurInstId]->setToggled ( true, toggled_nets[i].second) ;
             m_gates[CurInstId]->incToggleCount();
             m_gates[CurInstId]->updateToggleProfile(cycle_num);
-            debug_file << cellstr << " : " <<  toggled_nets[i].first << " : " << toggled_nets[i].second << endl;
+            //debug_file << cellstr << " : " <<  toggled_nets[i].first << " : " << toggled_nets[i].second << endl;
             if (toggled_nets[i].second == "x")
               X_valued_gates.insert(cellstr);
             else  X_valued_gates.erase(cellstr); // no problem if non-existent
@@ -4067,7 +4175,7 @@ void PowerOpt::handle_toggled_nets(vector< pair<string, string> > & toggled_nets
         exit(0);
       }
   }
-  clearToggled();
+  //clearToggled();
   toggled_nets.clear();
 }
 
@@ -4406,7 +4514,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
          if (time <= max_time && time >= min_time && (time %5000 == 0) )
          {
            cycle_num++;
-           debug_file_second  << " CYCLE : " << cycle_num  << " TIME : " << time << endl;
+           //debug_file_second  << " CYCLE : " << cycle_num  << " TIME : " << time << endl;
            valid_time_instant = true;
          }
          else
@@ -4420,7 +4528,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
          }
       }
       else if (valid_time_instant) { // parse for time values of interest
-        debug_file_second << line  << " :: " ;
+        //debug_file_second << line  << " :: " ;
         string value = line.substr(0, 1);
         string abbrev;
         if (value == "b") { // bus // This code is deprecated since there were issues with sending '[' over the socket to primetime.
@@ -4471,12 +4579,12 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
         else {
           abbrev = line.substr(1);// first character is the value
           //cout << " At valid time : " << time << endl;
-          debug_file_second << value << " : ";
+          //debug_file_second << value << " : ";
           map<string, string> :: iterator it = net_dictionary.find(abbrev);
           if (it != net_dictionary.end())
           {
             string net_name = net_dictionary[abbrev];
-            debug_file_second << net_name;
+            //debug_file_second << net_name;
             vector<string> tokens;
             tokenize(net_name, '/', tokens);
             if (tokens.size() == 2) net_name = tokens[1];
@@ -4490,13 +4598,13 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
               else
               {
                 net->updateValue(value);
-                debug_file_second << endl;
+                //debug_file_second << endl;
                 toggled_nets.push_back(make_pair(net_name, value));
               }
               //cout << net_name << " -- > "  << value << endl;
             }
-            else
-              debug_file_second << "   SKIPPED" << endl;
+            //else
+              //debug_file_second << "   SKIPPED" << endl;
             // cout << " Toggled Net : " << net_name << endl;
           }
 //        IMPORTANT: we miss eseveral nets because they belong to modules that are not of interest.
@@ -4504,10 +4612,10 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
           else
           {
             missed_nets << "Missed" <<  abbrev << endl;
-            debug_file_second << " MISSED " << endl;
+            //debug_file_second << " MISSED " << endl;
           }
         }
-        debug_file_second << endl;
+        //debug_file_second << endl;
       }
       line_contents.clear();
     }
@@ -4517,6 +4625,12 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
     cout << "Total parsed cycles (all benchmarks) = " << cycle_num << endl;
     //cout << "Unique toggle groups count = " << toggled_terms_counts.size() << endl;
     cout << "Unique toggle groups count = " << toggled_sets_counts.size() << endl;
+    set<string> ::iterator it;
+    for (it = all_toggled_gates.begin(); it != all_toggled_gates.end(); it++)
+    {
+      string gate_name = *it;
+      toggle_info_file << gate_name << endl;
+    }
 //    cout << "Not Toggled gates size is " << not_toggled_gate_map.size() << endl;
 
     if (exeOp == 17) {
@@ -5091,7 +5205,7 @@ int PowerOpt::parseVCD_mode_15_new (string vcd_file_name, designTiming  *T, int 
 void PowerOpt::check_for_flop_toggles(int cycle_num, int cycle_time, designTiming * T)
 {
     cout << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
-    toggle_info_file << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
+    //toggle_info_file << "Checking for toggles in cycle " << cycle_num << " and cycle time " << cycle_time << endl;
     //T->resetPathsThroughAllCells();
     int count_not_toggled = 0;
     int count_toggled = 0;
@@ -5105,7 +5219,8 @@ void PowerOpt::check_for_flop_toggles(int cycle_num, int cycle_time, designTimin
         count_toggled++;
         //toggle_info_file << gate_name << ", ";
          toggled_gates.push_back(make_pair(gate_name, g->getToggledTo()));
-          toggle_info_file << gate_name << " " << g->getToggledTo() << endl;
+         //if (cycle_num > 1 ) all_toggled_gates.insert(gate_name);
+         toggle_info_file << gate_name << " " << g->getToggledTo() << endl;
       }
       else
       {
@@ -5122,7 +5237,7 @@ void PowerOpt::check_for_flop_toggles(int cycle_num, int cycle_time, designTimin
 //    toggle_info_file << "[TOG] count_not_toggled is " <<  count_not_toggled << endl;
 //    toggle_info_file << "[TOG] count_toggled is " <<  count_toggled << endl;
     //toggle_info_file << endl;
-    toggle_info_file << "************" << endl;
+    //toggle_info_file << "************" << endl;
 }
 
 void PowerOpt::read_unt_dump_file()

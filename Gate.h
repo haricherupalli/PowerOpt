@@ -42,7 +42,7 @@ namespace POWEROPT {
       else if (cellName.compare(0,2,"OR") == 0) { func = OR;    gate_op = "|";}
       else if (cellName.compare(0,2,"XN") == 0) { func = XNOR;  gate_op = "~^";}
       else if (cellName.compare(0,2,"XO") == 0) { func = XOR;   gate_op = "^";}
-    
+
         isClkTree = false;
       cluster_id = -1;
       dead_toggle = false;
@@ -239,9 +239,9 @@ namespace POWEROPT {
 	bool    isToggled() { return toggled; }
   bool check_for_dead_toggle(int cycle_num);
   void setDeadToggle(bool val) { dead_toggle = val; }
-  bool isDeadToggle() { return dead_toggle; } 
+  bool isDeadToggle() { return dead_toggle; }
   void setVisited(bool val) { visited = val; }
-  bool isVisited() { return visited; } 
+  bool isVisited() { return visited; }
   void trace_back_dead_gate(int& dead_gates_count, int cycle_num);
         string  getToggledTo() {return toggledTo; }
         void    incToggleCount() {toggle_count++ ;}
@@ -343,7 +343,7 @@ namespace POWEROPT {
                 string getMuxSelectPinVal();
                 void untoggleMuxInput(string input);
                 int numToggledInputs();
-                void checkControllingMIS(vector<int> & false_term_ids, designTiming* T); 
+                void checkControllingMIS(vector<int> & false_term_ids, designTiming* T);
                 bool check_toggle_fine();
                 bool checkANDToggle  ( );
                 bool checkAOIToggle  ( );
@@ -385,19 +385,19 @@ namespace POWEROPT {
                 void handleORExpr   ( );
                 void handleXNORExpr ( );
                 void handleXORExpr  ( );
-                bool computeANDVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeBUFFVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeINVVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeNANDVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeNORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeORVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
-                bool computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf); 
+                bool computeANDVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeAOIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeBUFFVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeDFFVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeINVVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeLHVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeMUXVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeNANDVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeNORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeOAIVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeORVal  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 bool computeVal(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 bool transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 string getSimValue();
@@ -417,7 +417,7 @@ namespace POWEROPT {
     bool isRollBack() { return rolledBack; }
     void setRollBack(bool b) { rolledBack = b; }
 
-    void setGNode(GNode* gnode) {node = gnode;} 
+    void setGNode(GNode* gnode) {node = gnode;}
     GNode* getGNode () { return node; }
     NetVector &getNets() { return nets; }
     void getDriverTopoIds(vector<int>& topo_ids);
