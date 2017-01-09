@@ -49,9 +49,9 @@ namespace POWEROPT {
   };*/
 
 class Instr {
-  
+
   public :
-  Instr(int val) 
+  Instr(int val)
   {
     instr = val;
     domain_activity.resize(4, false);
@@ -65,11 +65,11 @@ class Instr {
 class Cluster  {
 
   public:
-  Cluster() 
+  Cluster()
   {
     active = false;
   }
-  void setActive(bool act) { active = act;}  
+  void setActive(bool act) { active = act;}
   bool getActive() { return active; }
   void push_back(Gate* gate) { members.push_back(gate); }
   vector<Gate*> & getMembers() { return members; }
@@ -147,8 +147,9 @@ class PowerOpt {
     void resetAllDeadToggles();
     void dump_toggled_sets();
     void dump_units();
+    void dump_all_toggled_gates_file();
     void dump_slack_profile();
-    void dump_toggle_counts(); 
+    void dump_toggle_counts();
     void dump_Dmemory();
     void histogram_toggle_counts();
     void estimate_correlation();
@@ -234,8 +235,8 @@ class PowerOpt {
     void print_gates();
     void print_regs();
     void print_term_exprs();
-    void leakage_compute();                
-    void leakage_compute_coarse();                
+    void leakage_compute();
+    void leakage_compute_coarse();
     void leakage_compute_per_module();
     void find_dynamic_slack(designTiming* T);
     void find_dynamic_slack_1(designTiming* T);
@@ -253,7 +254,12 @@ class PowerOpt {
     void parseVCDALL(designTiming *T);
     string getVCDAbbrev(int id);
     void writeVCDBegin();
-    void writeVCDNet(Net *n);
+    void writeVCDNets(Net *n, int cycle_num, string value_odd, string value_even, string actual_value);
+    void writeVCDNet(Net *n, int cycle_num);
+    void addVCDNetVal(Net *n);
+    void writeVCDCycle(int cycle_num);
+    void writeVCDLastCycle(int cycle_num);
+    void writeVCDInitial(ofstream& vcd_file);
     void parseVCDALL_mode_15(designTiming *T);
     int parseVCD_mode_15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
     int parseVCDMode15(string VCDfilename, designTiming *T, int parse_cyc, int cycle_offset);
@@ -690,7 +696,7 @@ class PowerOpt {
     string getDesign() { return design;}
 
     private:
-    PowerOpt() // 
+    PowerOpt() //
     { }
     ~PowerOpt()
     { }
@@ -715,10 +721,10 @@ class PowerOpt {
     GateVector m_gates;
     GateVector m_gates_topo;
     list<GNode*> nodes_topo;
-    priority_queue<GNode*, vector<GNode*>, sim_wf_compare> sim_wf; 
+    priority_queue<GNode*, vector<GNode*>, sim_wf_compare> sim_wf;
     stack<GNode*> sim_visited;
     queue<system_state*> sys_state_queue;
-    //priority_queue<GNode*> sim_wf; 
+    //priority_queue<GNode*> sim_wf;
     list<Gate*> m_muxes;
     list<Gate*> m_regs;
     map <string, Gate*> gate_name_dictionary;
@@ -859,6 +865,7 @@ class PowerOpt {
     ofstream toggle_info_file;
     ofstream toggled_nets_file;
     ofstream units_file;
+    ofstream all_toggled_gates_file;
     ofstream unique_not_toggle_gate_sets;
     ofstream unique_toggle_gate_sets;
     ofstream slack_profile_file;
@@ -877,7 +884,12 @@ class PowerOpt {
     ofstream dmem_contents_file;
     ofstream pmem_contents_file;
     ofstream missed_nets;
+    ofstream vcd_odd_file;
+    ofstream vcd_even_file;
     ofstream vcd_file;
+    int vcd_cycle;
+    map<string, Net*> *vcd_writes_p1; // nets that are toggled this cycle
+    map<string, Net*> *vcd_writes_0;  // nets that are toggled in the cycle that will be written
     bool keepLog;
     int iter;
     int L, U;
@@ -985,7 +997,7 @@ class PowerOpt {
     map<int, xbitset> DMemory;
 
 
-    
+
     int ptPort;
     int divNum;
     float guardBand;
@@ -1034,7 +1046,7 @@ class PowerOpt {
     vector<vector< pair<string, string> > > toggled_gate_vector_rise_fall;
     vector<vector< pair<Terminal*, ToggleType> > > toggled_term_vector;
     vector<string> dbgSelectGates;
-    
+
     vector<int> cycles_of_toggled_gate_vector; // this holds the corresponding cycles for the toggled gate vector.
     vector<pair<int, map<string, pair< int, pair<int, float> > >::iterator > > per_cycle_toggled_sets; // cycle_time, iterator to map
     vector<pair<int, map< string, pair<int, pair<int, float> > >::iterator > > per_cycle_toggled_sets_terms;
@@ -1056,7 +1068,7 @@ class PowerOpt {
     int num_inputs;
     vector<string> inputs;
     vector<int> cycle_toggled_indices;
-    set<string> all_toggled_gates;
+    set<int> all_toggled_gates;
     string dmem_data;
     unsigned int instr;
     string pmem_instr;
@@ -1072,6 +1084,10 @@ class PowerOpt {
     double total_leakage_energy;
     double baseline_leakage_energy;
     string outDir;
+    bool subnegFlag;
+    int  subnegState;
+    int sim_units;
+    int maintain_toggle_profiles;
 };
 
 }

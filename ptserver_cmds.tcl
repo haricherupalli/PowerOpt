@@ -241,14 +241,14 @@ proc PtSetFalsePathsForPins {} {
 }
 
 proc PtGetClkTreeCells {} {
-    echo "Getting Clk Tree Cells"
+    #echo "Getting Clk Tree Cells"
     set clk_nwrk [get_clock_network_objects -type cell]
     set ret_val ""
-    echo "Got Cells"
+    #echo "Got Cells"
     foreach obj $clk_nwrk {
         set ret_val [append $ret_val [get_attribute $obj full_name] ]
     }
-    echo "Done with the string. Now returning"
+    #echo "Done with the string. Now returning"
     return $ret_val
 }
 
@@ -1014,6 +1014,18 @@ proc PtGetCellFromNet { NetName } {
     }
     #echo "net name is $NetName and its cell is $CellName"
     return $CellName
+}
+
+proc PtGetNetFromCell { CellName } {
+
+  set cell [get_cell $CellName]
+  set pins [get_pins -of_objects $cell ]
+  foreach_in_collection pin $pins {
+    if { [get_attri $pin direction] == "out" && [get_attri $pin is_port] == false } {
+      set NetName [get_attribute [get_net -of $pin] full_name]
+    }
+  }
+  return $NetName
 }
 
 proc PtGetTermsFromNet { NetName } {

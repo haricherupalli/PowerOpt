@@ -71,9 +71,19 @@ bool check_toggles = false;
 
   }
 
+  string Net::getOldSimVal(int toggle_offset)
+  {
+    if (toggle_offset = 0)
+        return sim_val_old_0;
+    else if (toggle_offset = 1)
+        return sim_val_old_1;
+    else assert(0);
+  }
+
   bool Net::setSimValue(string value) // return value is whether the net toggled or not.
   {
      //if (value.empty()) assert(0);
+     //assert(!value.empty()); // H3 added for debu
      if (sim_val != value)
      {
        if ((sim_ignore_once == true) && (sim_val == "X" || sim_val == "Xb") )
@@ -95,6 +105,8 @@ bool check_toggles = false;
 //        else if (sim_val == "0") sim_val = "1";
 //        else if (sim_val == "1") sim_val = "0";
        sim_val = value; 
+       sim_val_old_1 = sim_val_old_0;
+       sim_val_old_0 = sim_val;
        return true;
      }
     sim_toggle_type = CONSTANT;

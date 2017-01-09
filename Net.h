@@ -54,6 +54,8 @@ static bool replace_substr (std::string& str,const std::string& from, const std:
         prev_val = "x";
         new_val = "x";
         sim_val = "X";
+        sim_val_old_0 = "X";
+        sim_val_old_1 = "X";
         sim_ignore_once = true;
         toggled  = false;
         topo_sort_marked = false;
@@ -104,6 +106,11 @@ static bool replace_substr (std::string& str,const std::string& from, const std:
       string getVCDAbbrev() { return vcdAbbrev; }
       void setVCDAbbrev(string new_abbrev) { vcdAbbrev = new_abbrev; }
       ToggleType getSimToggType() { return sim_toggle_type;}
+      void setSimToggType(ToggleType value) { sim_toggle_type = value;}
+      string getOldSimVal(int toggle_offset); 
+      string value_even;// value used for simulation (exe_op = 21)       // p1
+      string value_odd;// value used for simulation (exe_op = 21)       // p1
+      string write_value;// value used for simulation (exe_op = 21)       // p1
 
     private:
       int id;
@@ -122,7 +129,9 @@ static bool replace_substr (std::string& str,const std::string& from, const std:
       string vcdAbbrev;
       string new_val;// these values are used for reading vcd;
       ToggleType toggle_type;
-      string sim_val;// value used for simulation (exe_op = 20)
+      string sim_val;// value used for simulation (exe_op = 21)       // p1
+      string sim_val_old_0;// value used for simulation (exe_op = 21) // 0
+      string sim_val_old_1;// value used for simulation (exe_op = 21) // m1
       ToggleType sim_toggle_type;
       bool is_constant;
       static ofstream net_debug_file;

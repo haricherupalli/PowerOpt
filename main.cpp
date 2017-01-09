@@ -638,18 +638,14 @@ int main(int argc, char *argv[])
       cout << "[UPDATED] Reg Count : " << po->getRegNum() << endl;
       cout << "[UPDATED] Net Count : " << po->getNetNum() << endl;
       cout << "[UPDATED] Terminal Count : " << po->getTerminalNum() << endl;
-//      po->print_nets();
-//      po->print_terminals();
+      //po->print_nets();
+      //po->print_terminals();
       po->readClusters();
       //po->print_pads(); return 0;
       po->readPmemFile();// Generating the pmem file in the right format is a bit of a work. But for our benchmarks they are in flat_no_clk_gt/run_10.0/results_10.0/INPUT_DEPENDENT_RUNS/pmem_files
       po->readStaticPGInfo(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
-      t3 = time(NULL);
-      po->simulate();
-      po->simulate2();
-      t4 = time(NULL);
-      po->simulation_post_processing(&T);
-      //po->dump_Dmemory();
+      if (po->postprocess())
+        po->simulation_post_processing(&T);
       po->dumpPmem(); // debug stuff for capturing PG info. Purpose in CroMoC
       po->update_profile_sizes(); // ensures that all the gates have the same toggle_profile length
       po->print_toggle_profiles(); // Write the toggle profiles to be used for clustering in CroMoC

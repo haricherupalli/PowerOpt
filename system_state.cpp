@@ -159,9 +159,7 @@ bool system_state::compare_and_update_state(system_state& sys_state)
          {
            my_dit->second = get_conservative_val(my_dit->second, other_val);
            assert(my_dit->second.is_conservative(other_val));
-           sys_state_debug_file << " Mem Location different : " << addr << " Old val : " << old_val.to_string() <<
-           " Other val : " << other_val.to_string() <<
-           " New val : " << my_dit->second.to_string() << endl;
+           sys_state_debug_file << " Mem Location different : " << addr << " Old val : " << old_val.to_string() << " Other val : " << other_val.to_string() << " New val : " << my_dit->second.to_string() << endl;
            can_skip = false;
          }
        }
