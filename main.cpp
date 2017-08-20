@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
     cout << "[PowerOpt] Design read ... done " << endl;
 
     cout << "[PowerOpt] PrimeTime server excecution ... " << endl;
-    po->exePTServer(false);
+    //po->exePTServer(false);
     cout << "[PowerOpt] PrimeTime server excecution ... done " << endl;
 
     if (po->getMmmcOn()) {
@@ -146,7 +146,7 @@ int main(int argc, char *argv[])
     }
 
     cout<<"[PowerOpt] PrimeTime server contact ... "<<endl;
-    int pt_trial_cnt = 0;
+/*    int pt_trial_cnt = 0;
     while (true) {
         po->wait (5);
         T.initializeServerContact(po->getPtClientTcl());
@@ -155,14 +155,14 @@ int main(int argc, char *argv[])
             cout << "Error: cannot access to PrimeTime!" << endl;
             exit(0);
         }
-    }
+    }*/
     cout<<"[PowerOpt] PrimeTime server contact ... done "<<endl;
 
     cout << "[PowerOpt] Library Cell Read ... "<<endl;
-    po->findLeakage(&T);
+    //po->findLeakage(&T);
     //cout << " Exiting"  << endl; 
     //exit(0);
-    if (!po->getUseGT()) po->readLibCells(&T);
+//    if (!po->getUseGT()) po->readLibCells(&T);
     po->updateLibCells();
     cout << "[PowerOpt] Library Cell Read done... "<<endl;
 
@@ -170,33 +170,34 @@ int main(int argc, char *argv[])
 
     fout.open(po->getReportFile().c_str());
 
-    po->initSTA(&T);
+    //po->initSTA(&T);
 
     double worstSlack = po->getInitWNS();
     //double worstSlackMin = po->getInitWNSMin();
-    double leakage = po->getPtpxOff() ? po->getLeakPower() : T.getLeakPower();
-    double totalPower = po->getPtpxOff() ? 0 : T.getTotalPower();
+    double leakage; double totalPower;
+//    double leakage = po->getPtpxOff() ? po->getLeakPower() : T.getLeakPower();
+//    double totalPower = po->getPtpxOff() ? 0 : T.getTotalPower();
 
-    po->setInitLeak (leakage);
-    po->setCurLeak (leakage);
-    po->setInitPower (totalPower);
+//    po->setInitLeak (leakage);
+//    po->setCurLeak (leakage);
+//    po->setInitPower (totalPower);
 
     fout << "# Gate_count : "   << gateCount << endl;
     fout << "# Initial_WNS : "  << worstSlack << endl;
-    fout << "# Initial_leakage : "  << scientific << leakage << endl;
-    fout << "# Initial_power : "  << scientific << totalPower << endl;
+//    fout << "# Initial_leakage : "  << scientific << leakage << endl;
+//    fout << "# Initial_power : "  << scientific << totalPower << endl;
     cout << "[PowerOpt] Initial_WNS : "  << worstSlack << endl;
-    cout << "[PowerOpt] Initial_leakage : "  << scientific << leakage << endl;
-    if (!po->getPtpxOff()) cout << "[PowerOpt] Initial_power : "  << scientific << totalPower << endl;
-    T.setPtcnt(0);
+//    cout << "[PowerOpt] Initial_leakage : "  << scientific << leakage << endl;
+//    if (!po->getPtpxOff()) cout << "[PowerOpt] Initial_power : "  << scientific << totalPower << endl;
+//    T.setPtcnt(0);
 
     bool initFileExist = false;
     string initFile = "init.tcl";
-    if (initFileExist) {
+/*    if (initFileExist) {
         T.readTcl(initFile);
         T.putCommand("current_instance");
         po->updateCellLib(&T);
-    }
+    }*/
 
     time_t t1, t2, t3, t4, t5;
     t1  = time(NULL);
@@ -205,14 +206,14 @@ int main(int argc, char *argv[])
     po->setBaseName();
     //cout<<"[PowerOpt] Leakage pre-computation "<<endl;
 
-    if (po->getLeakPT()) po->findLeakagePT(&T);
-    else po->findLeakage(&T);
+//    if (po->getLeakPT()) po->findLeakagePT(&T);
+//    else po->findLeakage(&T);
 
     bool rptPost = false;
 
     po->setDontTouch();
     t2  = time(NULL);
-    po->mark_clock_tree_cells(&T);
+    //po->mark_clock_tree_cells(&T);
     //po->print_pads();
     //po->print_gate_leakage_vals();
     //po->print_gates(); my_handler(0);
@@ -633,7 +634,7 @@ int main(int argc, char *argv[])
       po->createSetTrie();
       po->print_gates();
       po->topoSort();
-      po->print_fanin_cone(&T);
+      //po->print_fanin_cone(&T);
       cout << "[UPDATED] Gate Count : " << po->getGateNum() << endl;
       cout << "[UPDATED] Reg Count : " << po->getRegNum() << endl;
       cout << "[UPDATED] Net Count : " << po->getNetNum() << endl;
@@ -644,8 +645,8 @@ int main(int argc, char *argv[])
       //po->print_pads(); return 0;
       po->readPmemFile();// Generating the pmem file in the right format is a bit of a work. But for our benchmarks they are in flat_no_clk_gt/run_10.0/results_10.0/INPUT_DEPENDENT_RUNS/pmem_files
       po->readStaticPGInfo(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
-      po->simulate(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
-      po->simulate2(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
+      po->simulate();
+      po->simulate2();
       if (po->postprocess())
         po->simulation_post_processing(&T);
       po->dumpPmem(); // debug stuff for capturing PG info. Purpose in CroMoC
@@ -672,47 +673,47 @@ int main(int argc, char *argv[])
     //if (po->getSwapOp() == 2 && po->getExeOp() != 0 )
     //    po->setSOCEFlag(true);
 
-    T.writeChange("swaplist.tcl");
+    //T.writeChange("swaplist.tcl");
     if (po->getSOCEFlag()) {
-        T.makeEcoTcl("swaplist.tcl", "eco.tcl");
+        //T.makeEcoTcl("swaplist.tcl", "eco.tcl");
         cout<<"[PowerOpt] ECO Placement & Route ... "<<endl;
         po->exeSOCE();
         cout<<"[PowerOpt] ECO Placement & Route ... done "<<endl;
     } else {
-        T.makeEcoTcl("swaplist.tcl", "eco.tcl");
+        //T.makeEcoTcl("swaplist.tcl", "eco.tcl");
         cout<<"[PowerOpt] Write Output Netlist and DEF ... "<<endl;
         //T.writeVerilog(po->getVerilogOut());
         po->updateBiasCell();
         reader.updateModel(po, true);
-        po->writeOut(&T);
+        //po->writeOut(&T);
     }
-    po->exitPT();
+    //po->exitPT();
     if (rptPost) {
         cout << "[PowerOpt] PrimeTime server execution to report results " << endl;
-        po->exePTServer(true);
+        //po->exePTServer(true);
         cout<<"[PowerOpt] PrimeTime server contact ... "<<endl;
         while (true) {
-            T.initializeServerContact(po->getPtClientTcl());
+            //T.initializeServerContact(po->getPtClientTcl());
             po->wait (5);
-            if (T.checkPT()) break;
+            //if (T.checkPT()) break;
         }
         cout<<"[PowerOpt] PrimeTime server contact ... done "<<endl;
-        worstSlack = T.getWorstSlack(po->getClockName());
+        //worstSlack = T.getWorstSlack(po->getClockName());
         fout << "# Final_WNS: "  << fixed << worstSlack << endl;
         cout << "[PowerOpt] Final_WNS: "  << fixed << worstSlack << endl;
-        double fin_Leak = po->getPtpxOff() ? po->getLeakPower() : T.getLeakPower();
-        double fin_Pwr = po->getPtpxOff() ? 0 : T.getTotalPower();
-        fout << "# Final_leakage: "  << scientific << fin_Leak << endl;
-        if (!po->getPtpxOff()) fout << "# Final_power: "  << scientific << fin_Pwr << endl;
-        cout << "[PowerOpt] Final_leakage: "  << scientific << fin_Leak << endl;
-        if (!po->getPtpxOff()) cout << "[PowerOpt] Final_power: "  << scientific << fin_Pwr << endl;
-        double imp_Leak = (fin_Leak - po->getInitLeak())*100/po->getInitLeak();
-        double imp_Power = (fin_Pwr - po->getInitPower())*100/po->getInitPower();
-        fout << "# leakage_change: " << fixed << imp_Leak << endl;
-        if (!po->getPtpxOff()) fout << "# power_change: " << fixed << imp_Power << endl;
+        //double fin_Leak = po->getPtpxOff() ? po->getLeakPower() : T.getLeakPower();
+        //double fin_Pwr = po->getPtpxOff() ? 0 : T.getTotalPower();
+//        fout << "# Final_leakage: "  << scientific << fin_Leak << endl;
+//        if (!po->getPtpxOff()) fout << "# Final_power: "  << scientific << fin_Pwr << endl;
+//        cout << "[PowerOpt] Final_leakage: "  << scientific << fin_Leak << endl;
+//        if (!po->getPtpxOff()) cout << "[PowerOpt] Final_power: "  << scientific << fin_Pwr << endl;
+//        double imp_Leak = (fin_Leak - po->getInitLeak())*100/po->getInitLeak();
+//        double imp_Power = (fin_Pwr - po->getInitPower())*100/po->getInitPower();
+//        fout << "# leakage_change: " << fixed << imp_Leak << endl;
+//        if (!po->getPtpxOff()) fout << "# power_change: " << fixed << imp_Power << endl;
     }
     fout.close();
-    T.Exit();
+    //T.Exit();
     po->closeFiles();
     cout<<"[PowerOpt] Ending PowerOpt ... " << endl;
     return 0;
