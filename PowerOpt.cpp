@@ -2122,8 +2122,8 @@ bool PowerOpt::check_peripherals()
 
 
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
-  //if (per_addr_str != "00000000001100") return false; // per_addrs is 000c
-  if (per_addr_str != "00000000010100") return false; // per_addrs is 000c
+  if (per_addr_str != "00000000001100") return false; // per_addrs is 000c
+  //if (per_addr_str != "00000000010100") return false; // per_addrs is 000c
   return true;
 }
 
@@ -2185,17 +2185,17 @@ bool PowerOpt::check_sim_end(int& i, bool wavefront)
   else assert(0);
 
   string per_addr_str = per_addr_13_val+ per_addr_12_val+ per_addr_11_val+ per_addr_10_val+ per_addr_9_val + per_addr_8_val + per_addr_7_val + per_addr_6_val + per_addr_5_val + per_addr_4_val + per_addr_3_val + per_addr_2_val + per_addr_1_val + per_addr_0_val ;
-  //if (per_addr_str != "00000000001100") return false;
-  if (per_addr_str != "00000000010100") return false;
+  if (per_addr_str != "00000000001100") return false;
+  //if (per_addr_str != "00000000010100") return false;
 
-  string per_din_1_val;
+  string per_din_0_val;
   if (design == "flat_no_clk_gt")
-     per_din_1_val = m_pads[padNameIdMap.at("per_din_1_")]->getSimValue();
+     per_din_0_val = m_pads[padNameIdMap.at("per_din_0_")]->getSimValue();
   else if (design == "modified_9_hier")
-    per_din_1_val = m_pads[padNameIdMap.at("per_din[1]")]->getSimValue();
+    per_din_0_val = m_pads[padNameIdMap.at("per_din[0]")]->getSimValue();
   else assert(0);
   //ToggleType per_din_0_tog_type = m_pads[padNameIdMap["per_din\\[0\\]"]]->getSimToggType(); // checking for FALL might be hard when starting simulation from a saved state.
-  if (per_din_1_val != "0") return false;
+  if (per_din_0_val != "0") return false;
   return true;
 }
 

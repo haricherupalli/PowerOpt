@@ -644,6 +644,8 @@ int main(int argc, char *argv[])
       //po->print_pads(); return 0;
       po->readPmemFile();// Generating the pmem file in the right format is a bit of a work. But for our benchmarks they are in flat_no_clk_gt/run_10.0/results_10.0/INPUT_DEPENDENT_RUNS/pmem_files
       po->readStaticPGInfo(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
+      po->simulate(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
+      po->simulate2(); // Reads PG INFO from static instruction stream (the binary). Purpose currently handled in Cro(ss)Mo(dule)C(lusters)
       if (po->postprocess())
         po->simulation_post_processing(&T);
       po->dumpPmem(); // debug stuff for capturing PG info. Purpose in CroMoC
