@@ -4,7 +4,7 @@
 #include <vector>
 #include <string>
 #include <list>
-#include <slist.h>
+//#include <slist.h>
 #include <map>
 #include <iostream> // std::cout
 #include <utility> // std::pair

@@ -32,7 +32,7 @@ TCLLIBPATH = /usr/lib64
 #IFLAG = -I. -I$(OAINC) -I$(TCLINC) -I/usr/include/c++/3.4.6/backward/ -I /usr/include/linux/
 IFLAG = -I. -I$(OAINC) -I$(TCLINC) -I/usr/local/apps/00/01/common/gcc/4.2.0/Linux/x86_64/include/c++/4.2.0/backward/
 #IFLAG = -I. -I$(OAINC) -I$(TCLINC)
-LFLAG = -fPIC $(DBG) -L$(OALIBDIR) $(OALIBS) -L$(TCLLIBPATH) $(TCLLIB) -lm -lpthread -ldl -Wl,-R/lib
+LFLAG = -fPIC $(DBG) -L$(OALIBDIR)  -L$(TCLLIBPATH) $(TCLLIB) -lm -lpthread -ldl -Wl,-R/lib
 
 BINPATH = ../bin
 OBJPATH = ../obj
