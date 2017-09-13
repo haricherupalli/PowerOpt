@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
     string envFileStr = envFile;
     string cmdFileStr = cmdFile;
 
-    OAReader reader;
+    //OAReader reader;
 
     po->readEnvFile(envFileStr);
     po->readCmdFile(cmdFileStr);
@@ -128,10 +128,17 @@ int main(int argc, char *argv[])
     }
 
     cout << "[PowerOpt] Design read ..." << endl;
-    if (!reader.readDesign(po)) {
+/*    if (!reader.readDesign(po)) {
         cout << "Error in Design read (OA)" << endl;
         exit(0);
-    }
+    }*/
+    //my_handler(0);
+    po->fill_reg_cells_list();
+    po->DefParse();
+//    po->readConstantTerminals();// my_handler(0);
+//    po->topoSort();
+//    po->print_fanin_cone(&T);
+//    exit(0);
     //my_handler(0);
     cout << "[PowerOpt] Design read ... done " << endl;
 
@@ -684,7 +691,7 @@ int main(int argc, char *argv[])
         cout<<"[PowerOpt] Write Output Netlist and DEF ... "<<endl;
         //T.writeVerilog(po->getVerilogOut());
         po->updateBiasCell();
-        reader.updateModel(po, true);
+        //reader.updateModel(po, true);
         //po->writeOut(&T);
     }
     //po->exitPT();

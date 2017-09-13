@@ -457,6 +457,10 @@ class PowerOpt {
     int  getTestValue2() { return testValue2; }
     void clearToggledPath() { toggledPaths.clear();}
     void clearCriticalPath() { criticalPaths.clear();}
+    void DefParse();
+    void fill_reg_cells_list();
+    PinType getPinType(string term_name); 
+    bool netNameException(string net_name);
 
     //string pathConv(string PathIn);
     void clearHolded();
@@ -1059,6 +1063,13 @@ class PowerOpt {
     map<int, Cluster* > clusters; // Power Domains
     map<string, pair< bool, bool > > PC_taken_nottaken;;
     map<string, system_state*> PC_worst_system_state;
+
+    map<string, string> cell_name_and_type;
+    map<string, pair<string, string> > pin_name_net_direction;
+    map<string, vector<pair<string, string> > > net_all_connected; // net, cell, cell_pin
+    map<string, pair<string, string> > terminals_info; // net, cell, cell_pin
+    set<string> reg_cells_set;
+
     SetTrie* tree;
     Graph * graph;
     //vector< vector <gate*> > Power_domains;

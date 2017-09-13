@@ -150,6 +150,7 @@ namespace POWEROPT {
     int getId() { return id; }
     int getTopoId() { return node->getTopoId();}
     int getClusterId() { return cluster_id;}
+    //bool getFFFlag() { return (FFFlag || func == DFF || func == LH); }
     bool getFFFlag() { return FFFlag; }
     bool getIsMux() { return (func == MUX);}
     bool isClusterBoundaryDriver() ;

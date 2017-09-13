@@ -506,7 +506,7 @@ void PowerOpt::openFiles()
   all_toggled_gates_file.open       ( (outDir+string("/PowerOpt/all_toggled_gates_file" )).c_str()   ) ;
 
   //vcdOutFile = outDir+"/PowerOpt/"+vcdOutFile;
-  vcd_file.open((outDir+string("/PowerOpt/")+vcdOutFile).c_str()); 
+  vcd_file.open((outDir+string("/PowerOpt/")+vcdOutFile).c_str());
   Gate * dummy_g; Net* dummy_n; system_state* dummy_ss;
   dummy_g->openFiles(outDir);
   dummy_n->openFiles(outDir);
@@ -540,6 +540,268 @@ void PowerOpt::closeFiles()
   dmem_contents_file.close();
   pmem_contents_file.close();
   debug_file_second.close();
+}
+
+
+void PowerOpt::fill_reg_cells_list()
+{
+  ifstream reg_list_file;
+  string reg_cells_file = getRegCellsFile();
+  reg_list_file.open(reg_cells_file.c_str());
+  if (reg_list_file.is_open())
+  {
+    string line;
+    while (getline(reg_list_file, line))
+    {
+      reg_cells_set.insert(line);
+    }
+  }
+  else
+  {
+    cout << "[PowerOpt] List of regs not read. Is the file there where it should be? " << endl;
+    exit(0);
+  }
+}
+
+void PowerOpt::DefParse()
+{
+
+  string line;
+  bool in_components = false;
+  bool in_pins = false;
+  bool in_nets = false;
+  bool reading_a_net = false;
+  ifstream def_file;
+  def_file.open("openMSP430.def");
+  vector<string> tokens;
+  int num_components;
+  int num_pins;
+  int num_nets;
+  string net_name;
+  vector<pair < string, string> > cell_name_and_pin;
+  bool first_plus_in_net = true;
+
+  if (def_file.is_open())
+  {
+    while (getline(def_file, line))
+    {
+      trim(line);
+      if (line.size() > 11 && line.compare(0, 10, "COMPONENTS") == 0) {
+        tokenize(line, ' ', tokens);
+        num_components = strtoull(tokens[1].c_str(), NULL, 10);
+        tokens.clear();
+        in_components = true;
+      }
+      if (line.size() > 5 && line.compare(0, 4, "PINS") == 0) {
+        tokenize(line, ' ', tokens);
+        num_pins = strtoull(tokens[1].c_str(), NULL, 10);
+        tokens.clear();
+        in_pins = true;
+      }
+      if (line.size() > 5 && line.compare(0, 4, "NETS") == 0) {
+        tokenize(line, ' ', tokens);
+        num_nets = strtoull(tokens[1].c_str(), NULL, 10);
+        tokens.clear();
+        in_nets = true;
+      }
+      if (line.size() > 4 && line.compare(0, 3, "END") == 0) {
+        if (line.compare(4, 10, "COMPONENTS") == 0) {
+          //cout << line << endl;
+          in_components = false;
+        }
+        if (line.compare(4, 4, "PINS") == 0) {
+          in_pins = false;
+        }
+        if (line.compare(4, 4, "NETS") == 0) {
+          in_nets = false;
+        }
+      }
+      if (in_components == true) {
+        if (line[0] == '-') {
+          tokenize(line, ' ', tokens);
+          string cell_name = tokens[1];
+          string cell_type = tokens[2];
+          trim(cell_name); trim(cell_type);
+          cell_name_and_type.insert(make_pair(cell_name, cell_type));
+          tokens.clear();
+        }
+      }
+      if (in_pins == true) {
+        if (line[0] == '-') {
+          tokenize(line, ' ', tokens);
+          string pin_name = tokens[1];
+          string net_name = tokens[4];
+          string direction = tokens[7];
+          pin_name_net_direction.insert(make_pair(pin_name, make_pair(net_name, direction)));
+          tokens.clear();
+        }
+      }
+      if (in_nets == true) {
+        //cout << line << endl;
+        if (line[0] == '-') {
+          tokenize(line, ' ', tokens);
+          net_name = tokens[1];
+          reading_a_net = true;
+          first_plus_in_net = true;
+          tokens.clear();
+        }
+        else if (line[0] == '+') {
+          reading_a_net = false;
+          if (first_plus_in_net == true) {
+            first_plus_in_net = false;
+            assert(!net_name.empty());
+            assert(!cell_name_and_pin.empty());
+            net_all_connected.insert(make_pair(net_name, cell_name_and_pin));
+            cell_name_and_pin.clear();
+          }
+        }
+        else if (reading_a_net == true) {
+          bool in_parantheses = false;
+          string word_in_parantheses;
+          for (int i = 0; i < line.size(); i++)
+          {
+            if (line[i] == '(') {
+              in_parantheses = true;
+            }
+            else if (line[i] == ')') {
+              in_parantheses = false;
+              trim(word_in_parantheses);
+              vector<string> my_tokens;
+              tokenize(word_in_parantheses, ' ', my_tokens);
+              assert(my_tokens.size() == 2);
+              string cell_name = my_tokens[0];
+              string pin_name = my_tokens[1];
+              if (cell_name != "PIN")
+                assert(cell_name_and_type.find(cell_name) != cell_name_and_type.end());
+              else
+                assert(pin_name_net_direction.find(pin_name) != pin_name_net_direction.end());
+              cell_name_and_pin.push_back(make_pair (cell_name, pin_name));
+              word_in_parantheses.clear();
+            }
+            else if (in_parantheses == true) {
+              word_in_parantheses.append(1,line[i]);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  cout << " NUM CELLS " << cell_name_and_type.size() << endl;
+  cout << " NUM PINS " << pin_name_net_direction.size() << endl;
+  cout << " NUM NETS " << net_all_connected.size() << endl;
+
+
+  // GATES
+  map<string, string>::iterator it = cell_name_and_type.begin();
+  int gateIndex = 0;
+  for ( ; it!= cell_name_and_type.end(); it++)
+  {
+    string gate_name = it->first;
+    string cell_name = it->second;
+    gateNameIdMap[gate_name] = gateIndex;
+    bool FFFlag = false;
+    if (reg_cells_set.find(cell_name) != reg_cells_set.end()) { FFFlag = true; }
+    Gate* g = new Gate(gateIndex++, FFFlag, gate_name, cell_name, 0.0, 0, 0, 0, 0);
+    addGate(g);
+  }
+  // PINS -> PORT
+  int padIndex = 0;
+  map<string, pair<string, string> >::iterator it2 = pin_name_net_direction.begin();
+  for (; it2 != pin_name_net_direction.end() ; it2++)
+  {
+    string pad_name = it2->first;
+    string pad_net = it2->second.first;
+    string pad_direction = it2->second.second;
+    padNameIdMap[pad_name] = padIndex;
+    PadType padType = InputOutput;
+    if (pad_direction == "INPUT")
+    {
+      padType = PrimiaryInput;
+    }
+    else if (pad_direction == "OUTPUT")
+    {
+      padType = PrimiaryOutput;
+    }
+    else assert(0);
+    Pad* pad = new Pad(padIndex++, pad_name , padType , 0, 0, 0 , 0 );
+    addPad(pad);
+  }
+  // NETS and TERMINALS
+  map<string, vector<pair<string, string> > >::iterator it3 = net_all_connected.begin(); // net, cell, cell_pin
+  int netIndex = 0;
+  int termIndex = 0;
+  for (; it3 != net_all_connected.end(); it3++)
+  {
+    string net_name = it3->first;
+    if (netNameException(net_name)) continue;
+    Net * n = new Net(netIndex++, net_name);
+    vector<pair<string, string> >& all_connected = it3->second;
+    for (int i = 0; i != all_connected.size(); i++)
+    {
+      string gate_name = all_connected[i].first;
+      if (gate_name != "PIN") // GATE
+      {
+        string term_name = all_connected[i].second;
+        string terminal_full_name = gate_name+"/"+term_name;
+        Gate * g = m_gates[gateNameIdMap[gate_name]];
+        Terminal* term = NULL;
+        if (terminals_info.find(terminal_full_name) == terminals_info.end())
+        {
+          terminalNameIdMap.insert(make_pair(terminal_full_name, termIndex));
+          terminals_info[terminal_full_name] = make_pair(gate_name, term_name);
+          term = new Terminal(termIndex++, term_name);
+          addTerminal(term);
+          term->setGate(g);
+          term->addNet(n);
+          term->computeFullName();
+        }
+        else
+        {
+          assert(0); // there is no way you can come across the same terminal on a different net
+          //term = terms[terminalNameIdMap[terminal_full_name]];
+        }
+        assert(term != NULL);
+        // CONNECTIVITY
+        PinType pinType = getPinType(term_name);
+        if (pinType == OUTPUT)
+        {
+          term->setPinType(OUTPUT);
+          g->addFanoutTerminal(term);
+          n->addInputTerminal(term);
+          n->setDriverGate(g);
+        }
+        else if (pinType == INPUT)
+        {
+          term->setPinType(INPUT);
+          g->addFaninTerminal(term);
+          n->addOutputTerminal(term);
+          n->addFanoutGate(g);
+        }
+        else assert(0);
+      }
+      else // PIN
+      {
+        string pad_name = all_connected[i].second;
+        Pad*pad = m_pads[padNameIdMap[pad_name]];
+        pad->addNet(n);
+        n->addPad(pad);
+
+        // TODO ADD DRIVER GATE
+      }
+    }
+  }
+}
+
+bool PowerOpt::netNameException(string net_name)
+{
+  if (net_name == "VDD" || net_name == "GND" || net_name == "VSS" ) return true;
+}
+
+PinType PowerOpt::getPinType(string term_name)
+{
+  if (term_name == "ZN" || term_name == "Z" || term_name == "Q" ) return OUTPUT;
+  if (term_name == "I" || term_name == "D" || term_name == "CP" || term_name == "CDN" || term_name == "SDN" ) return INPUT;
 }
 
 void PowerOpt::print_processor_state_profile(int cycle_num, bool reg)
@@ -599,18 +861,18 @@ void PowerOpt::print_fanin_cone(designTiming* T)
         int id = gate->getTopoId();
         //if (!g->getFFFlag()) assert(id < parent_topo_id);
         fanins_file << " . \t  Gate is -->" << gate->getName() << " (" << terminal->getName()  << ") " << " (" << id << ") " <<  endl;
-        string gate_name_from_pt = T->getFaninGateAtTerm(terminal->getFullName());
+/*        string gate_name_from_pt = T->getFaninGateAtTerm(terminal->getFullName());
         if (gate->getName() != gate_name_from_pt) {
           cout << gate->getName() << " : " << gate_name_from_pt << endl;
           //assert(gate->getName() == gate_name_from_pt);
-        }
+        }*/
       }
       else if (net->getName() != terminal->getFullName()) {
         Pad* pad = net->getPad(0);
         int id = pad->getTopoId();
         //if (!g->getFFFlag()) assert(id < parent_topo_id);
         fanins_file <<  " . \t  Input Pad is --> " << pad->getName() << " (" << terminal->getName() << ") " <<  " (" << id << ") " << endl;
-        string pad_name_from_pt = T->getFaninPortAtTerm(terminal->getFullName());
+        //string pad_name_from_pt = T->getFaninPortAtTerm(terminal->getFullName());
         string pad_name = pad->getName();
         if (design == "flat_no_clk_gt")
         {
@@ -621,7 +883,7 @@ void PowerOpt::print_fanin_cone(designTiming* T)
       }
       else { // constant nets
         fanins_file << " . \t  Constant --> " << terminal->getSimValue() << " (" << terminal->getName() << ") "  << endl;
-        string value_from_pt = T->getTerminalConstValue(terminal->getFullName());
+        //string value_from_pt = T->getTerminalConstValue(terminal->getFullName());
         //assert(terminal->getSimValue() == value_from_pt);
       }
     }
@@ -635,10 +897,11 @@ void PowerOpt::print_fanin_cone(designTiming* T)
     else
     {
       fanins_file << "[PAD] " << i << "(" << pad->getName() << ")  (" << parent_topo_id << ") " << endl;
-      if (pad->getNetNum() != 1) continue;
       Net* net = pad->getNet(0);
+      if (pad->getNetNum() != 1) continue;
       Gate* gate = net->getDriverGate();
-      fanins_file << " . \t  Gate is -->" << gate->getName() << endl;
+      if (gate != NULL)
+        fanins_file << " . \t  Gate is -->" << gate->getName() << endl;
     }
 
   }
@@ -901,7 +1164,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
         sim_visited.push(node);
         Gate* gate = node->getGate();
         bool toggled = gate->computeVal(sim_wf); // here we push gates into sim_wf
-        //if (cycle_num > 0) 
+        //if (cycle_num > 0)
 //        if (toggled){
 //        }
         if (toggled && !gate->getIsClkTree())
@@ -1227,7 +1490,7 @@ string PowerOpt::getPmemAddr()
     }
   return all_x;
   }
-  
+
 
 
 
@@ -1790,7 +2053,7 @@ bool PowerOpt::readMem(int cycle_num, bool wavefront)
     }
     else instr = PMemory[pmem_addr]->instr;
     //if (pmem_addr == 12289) { pmem_addr = 3; instr = PMemory[3]->instr;}
-    
+
     if ( subnegFlag == true)
     {
       if(subnegState ==0)
@@ -3032,7 +3295,7 @@ bool PowerOpt::probeRegisters(int& cycle_num)
    }
 
    if (state_corrupted) return true;
-//   else 
+//   else
 //   {
 //     if (jump_detected == true)
 //     {
@@ -3219,7 +3482,7 @@ void PowerOpt::computeTopoSort_new(Graph* graph)
     if (node->getVisited() == true)
       continue;
     nodes_topo.push_back(node);
-    //debug_file << " Setting Topo_id of Node : " << node->getName() << " as "  << count << endl;
+    debug_file << " Setting Topo_id of Node : " << node->getName() << " as "  << count << endl;
     node->setTopoId(count++);
     node->setVisited(true);
     Net* net;
@@ -3576,7 +3839,7 @@ void PowerOpt::topoSort()
     cout << "Finished Top Sort" << endl;
     //printTopoOrder();
 //    cout << " Checking topo order ... " ;
-//    checkTopoOrder(graph);
+    //checkTopoOrder(graph);
 //    cout << " done " << endl;
 
     //TODO: COMPUTE EXPRESSIONS!!!
