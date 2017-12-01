@@ -7,7 +7,7 @@
 #include <bitset>
 #include <string>
 
-#define NUM_BITS 16
+#define NUM_BITS 32
 
 using namespace std;
 

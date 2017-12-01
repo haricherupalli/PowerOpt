@@ -47,6 +47,7 @@ namespace POWEROPT {
     void setTopoId(int val) { topo_id = val; }
     int getTopoId() const { return topo_id; }
     string getName() ;
+    string getType() ;
     bool allInputsReady();
     bool getIsFF();
     void checkTopoOrder();

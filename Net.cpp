@@ -1,6 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include "Net.h"
+#include "PowerOpt.h"
+#include "Globals.h"
 
 using namespace std;
 
@@ -107,10 +109,18 @@ bool check_toggles = false;
        sim_val = value; 
        sim_val_old_1 = sim_val_old_0;
        sim_val_old_0 = sim_val;
+       PowerOpt* po = PowerOpt::getInstance();
+       po->register_net_toggle(this);
+       //map<Net*, pair<string, bool> >& net_val_toggle_info = PowerOpt::getInstance()->getNetValToggleInfo();
        return true;
      }
     sim_toggle_type = CONSTANT;
-    if (value == "X") return true; // This should only be used when simulation uses the wavefront
+    if (value == "X")
+    {
+      PowerOpt* po = PowerOpt::getInstance();
+      po->register_net_toggle(this);
+      return true; // This should only be used when simulation uses the wavefront
+    }
      //cout << " NOT " << endl;
     return false;
   }
@@ -126,14 +136,14 @@ bool check_toggles = false;
 
   void Net::addFanoutGate(Gate* g)
   {
-  	for (int i = 0; i < fanout_gates.size(); i ++)
-  	{
-  		if (fanout_gates[i]->getId() == g->getId())
-  		{
-  			//cout<<"fanout gate "<<g->getId()<<" Name: "<<g->getName()<<" already added for gate "<<name<<endl;
-		  	return;
-		}
-  	}
+    for (int i = 0; i < fanout_gates.size(); i ++)
+    {
+      if (fanout_gates[i]->getId() == g->getId())
+      {
+        //cout<<"fanout gate "<<g->getId()<<" Name: "<<g->getName()<<" already added for gate "<<name<<endl;
+        return;
+      }
+    }
   	fanout_gates.push_back(g);
   }
 

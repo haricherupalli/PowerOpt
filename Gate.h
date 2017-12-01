@@ -5,6 +5,7 @@
 #include <cfloat>
 #include <math.h>
 #include <bitset>
+#include <string>
 #include "Grid.h"
 #include "Box.h"
 #include "typedefs.h"
@@ -18,7 +19,136 @@ namespace POWEROPT {
   class Grid;
   class Terminal;
   enum GateType {GATEPI, GATEPO, GATEIN, GATEUNKNOWN, GATEPADPI, GATEPADPO, GATEPADPIO};
-  enum CellFunc { AND, AOI, BUFF, DFF, INV, LH, MUX, NAND, NOR, OAI, OR, XNOR, XOR};
+  enum CellFunc { AND, AOI, BUFF, DFF, INV, LH, MUX, NAND, NOR, OAI, OR, XNOR, XOR,
+/* New adds */    ADDF, ADDFH, ADDH, AND2, AND3, AND4, AO21, AO22, AO2B2, AO2B2B, AOI21, AOI211, AOI21B, AOI22, AOI221, AOI222, AOI2B1, AOI2BB1, AOI2BB2, AOI31, AOI32, AOI33, BUF, MX2, MX3, MX4, MXI2, MXI2D, MXI3, MXI4, NAND2, NAND2B, NAND3, NAND3B, NAND4, NAND4B, NAND4BB, NOR2, NOR2B, NOR3, NOR3B, NOR4, NOR4B, NOR4BB, OA21, OA22, OAI21, OAI211, OAI21B, OAI22, OAI221, OAI222, OAI2B1, OAI2B11, OAI2B2, OAI2BB1, OAI2BB2, OAI31, OAI32, OAI33, OR2, OR3, OR4, SDFF, SDFFH, SDFFHQ, SDFFHQN, SDFFNH, SDFFNSRH, SDFFQ, SDFFQN, SDFFR, SDFFRHQ,  SDFFRQ, SDFFS, SDFFSHQ, SDFFSQ, SDFFSR, SDFFSRHQ, SDFFTR, SEDFF, SEDFFHQ, SEDFFTR, SMDFFHQ, TBUF, TIEHI, TIELO, TLAT, TLATN, TLATNCA, TLATNSR,  TLATNTSCA, TLATSR,  XNOR2, XNOR3, XOR2, XOR3,
+/* New of PL*/    BUFZ, DLY4, DFFQ, DFFRPQ, PREICG, SDFFRPQ, RF1R1WS, RFWL, LATCH};
+
+    static string cellFunc_to_name (CellFunc cellfunc)
+    {
+      switch (cellfunc)
+      {
+        case AND       : return "AND";
+        case AOI       : return "AOI";
+        case BUFF      : return "BUFF";
+        case DFF       : return "DFF";
+        case INV       : return "INV";
+        case LH        : return "LH";
+        case MUX       : return "MUX";
+        case NAND      : return "NAND";
+        case NOR       : return "NOR";
+        case OAI       : return "OAI";
+        case OR        : return "OR";
+        case XNOR      : return "XNOR";
+        case XOR       : return "XOR";
+        case ADDF      : return "ADDF";
+        case ADDFH     : return "ADDFH";
+        case ADDH      : return "ADDH";
+        case AND2      : return "AND2";
+        case AND3      : return "AND3";
+        case AND4      : return "AND4";
+        case AO21      : return "AO21";
+        case AO22      : return "AO22";
+        case AO2B2     : return "AO2B2";
+        case AO2B2B    : return "AO2B2B";
+        case AOI21     : return "AOI21";
+        case AOI211    : return "AOI211";
+        case AOI21B    : return "AOI21B";
+        case AOI22     : return "AOI22";
+        case AOI221    : return "AOI221";
+        case AOI222    : return "AOI222";
+        case AOI2B1    : return "AOI2B1";
+        case AOI2BB1   : return "AOI2BB1";
+        case AOI2BB2   : return "AOI2BB2";
+        case AOI31     : return "AOI31";
+        case AOI32     : return "AOI32";
+        case AOI33     : return "AOI33";
+        case BUF       : return "BUF";
+        case MX2       : return "MX2";
+        case MX3       : return "MX3";
+        case MX4       : return "MX4";
+        case MXI2      : return "MXI2";
+        case MXI2D     : return "MXI2D";
+        case MXI3      : return "MXI3";
+        case MXI4      : return "MXI4";
+        case NAND2     : return "NAND2";
+        case NAND2B    : return "NAND2B";
+        case NAND3     : return "NAND3";
+        case NAND3B    : return "NAND3B";
+        case NAND4     : return "NAND4";
+        case NAND4B    : return "NAND4B";
+        case NAND4BB   : return "NAND4BB";
+        case NOR2      : return "NOR2";
+        case NOR2B     : return "NOR2B";
+        case NOR3      : return "NOR3";
+        case NOR3B     : return "NOR3B";
+        case NOR4      : return "NOR4";
+        case NOR4B     : return "NOR4B";
+        case NOR4BB    : return "NOR4BB";
+        case OA21      : return "OA21";
+        case OA22      : return "OA22";
+        case OAI21     : return "OAI21";
+        case OAI211    : return "OAI211";
+        case OAI21B    : return "OAI21B";
+        case OAI22     : return "OAI22";
+        case OAI221    : return "OAI221";
+        case OAI222    : return "OAI222";
+        case OAI2B1    : return "OAI2B1";
+        case OAI2B11   : return "OAI2B11";
+        case OAI2B2    : return "OAI2B2";
+        case OAI2BB1   : return "OAI2BB1";
+        case OAI2BB2   : return "OAI2BB2";
+        case OAI31     : return "OAI31";
+        case OAI32     : return "OAI32";
+        case OAI33     : return "OAI33";
+        case OR2       : return "OR2";
+        case OR3       : return "OR3";
+        case OR4       : return "OR4";
+        case SDFF      : return "SDFF";
+        case SDFFH     : return "SDFFH";
+        case SDFFHQ    : return "SDFFHQ";
+        case SDFFHQN   : return "SDFFHQN";
+        case SDFFNH    : return "SDFFNH";
+        case SDFFNSRH  : return "SDFFNSRH";
+        case SDFFQ     : return "SDFFQ";
+        case SDFFQN    : return "SDFFQN";
+        case SDFFR     : return "SDFFR";
+        case SDFFRHQ   : return "SDFFRHQ";
+        case SDFFRQ    : return "SDFFRQ";
+        case SDFFS     : return "SDFFS";
+        case SDFFSHQ   : return "SDFFSHQ";
+        case SDFFSQ    : return "SDFFSQ";
+        case SDFFSR    : return "SDFFSR";
+        case SDFFSRHQ  : return "SDFFSRHQ";
+        case SDFFTR    : return "SDFFTR";
+        case SEDFF     : return "SEDFF";
+        case SEDFFHQ   : return "SEDFFHQ";
+        case SEDFFTR   : return "SEDFFTR";
+        case SMDFFHQ   : return "SMDFFHQ";
+        case TBUF      : return "TBUF";
+        case TIEHI     : return "TIEHI";
+        case TIELO     : return "TIELO";
+        case TLAT      : return "TLAT";
+        case TLATN     : return "TLATN";
+        case TLATNCA   : return "TLATNCA";
+        case TLATNSR   : return "TLATNSR";
+        case TLATNTSCA : return "TLATNTSCA";
+        case TLATSR    : return "TLATSR";
+        case XNOR2     : return "XNOR2";
+        case XNOR3     : return "XNOR3";
+        case XOR2      : return "XOR2";
+        case XOR3      : return "XOR3";
+        case BUFZ      : return "BUFZ";
+        case DLY4      : return "DLY4";
+        case DFFQ      : return "DFFQ";
+        case DFFRPQ    : return "DFFRPQ";
+        case PREICG    : return "PREICG";
+        case SDFFRPQ   : return "SDFFRPQ";
+        case RF1R1WS   : return "RF1R1WS";
+        case RFWL      : return "RFWL";
+        case LATCH     : return "LATCH";
+        default        : assert(0);
+      }
+    }
 
   class Gate {
   public:
@@ -29,7 +159,8 @@ namespace POWEROPT {
       oldCenterX = centerX = tlx + twidth/2;
       oldCenterY = centerY = tby + theight/2;
       toggle_count = 0;
-           if (cellName.compare(0,2,"AN") == 0) { func = AND;   gate_op = "&";}
+      SRAM_stored_value = "0";
+/*           if (cellName.compare(0,2,"AN") == 0) { func = AND;   gate_op = "&";}
       else if (cellName.compare(0,2,"AO") == 0) { func = AOI;   gate_op = "aoi";}
       else if (cellName.compare(0,2,"BU") == 0) { func = BUFF;  gate_op = "";}
       else if (cellName.compare(0,2,"DF") == 0) { func = DFF;   gate_op = "";}
@@ -41,9 +172,132 @@ namespace POWEROPT {
       else if (cellName.compare(0,2,"OA") == 0) { func = OAI;   gate_op = "oai";}
       else if (cellName.compare(0,2,"OR") == 0) { func = OR;    gate_op = "|";}
       else if (cellName.compare(0,2,"XN") == 0) { func = XNOR;  gate_op = "~^";}
-      else if (cellName.compare(0,2,"XO") == 0) { func = XOR;   gate_op = "^";}
+      else if (cellName.compare(0,2,"XO") == 0) { func = XOR;   gate_op = "^";}*/
+           if (cellName.substr(0,6 ) == "ADDF_X"       ) { func = ADDF;     }
+      else if (cellName.substr(0,7 ) == "ADDFH_X"     ) { func = ADDFH;    }
+      else if (cellName.substr(0,6 ) == "ADDH_X"      ) { func = ADDH;     }
+      else if (cellName.substr(0,6 ) == "AND2_X"      ) { func = AND2;     }
+      else if (cellName.substr(0,6 ) == "AND3_X"      ) { func = AND3;     }
+      else if (cellName.substr(0,6 ) == "AND4_X"      ) { func = AND4;     }
+      else if (cellName.substr(0,6 ) == "AO21_X"      ) { func = AO21;     }
+      else if (cellName.substr(0,6 ) == "AO22_X"      ) { func = AO22;     }
+      else if (cellName.substr(0,7 ) == "AO2B2_X"     ) { func = AO2B2;    }
+      else if (cellName.substr(0,8 ) == "AO2B2B_X"    ) { func = AO2B2B;   }
+      else if (cellName.substr(0,7 ) == "AOI21_X"     ) { func = AOI21;    }
+      else if (cellName.substr(0,8 ) == "AOI211_X"    ) { func = AOI211;   }
+      else if (cellName.substr(0,8 ) == "AOI21B_X"    ) { func = AOI21B;   }
+      else if (cellName.substr(0,7 ) == "AOI22_X"     ) { func = AOI22;    }
+      else if (cellName.substr(0,8 ) == "AOI221_X"    ) { func = AOI221;   }
+      else if (cellName.substr(0,8 ) == "AOI222_X"    ) { func = AOI222;   }
+      else if (cellName.substr(0,8 ) == "AOI2B1_X"    ) { func = AOI2B1;   }
+      else if (cellName.substr(0,9 ) == "AOI2BB1_X"   ) { func = AOI2BB1;  }
+      else if (cellName.substr(0,9 ) == "AOI2BB2_X"   ) { func = AOI2BB2;  }
+      else if (cellName.substr(0,7 ) == "AOI31_X"     ) { func = AOI31;    }
+      else if (cellName.substr(0,7 ) == "AOI32_X"     ) { func = AOI32;    }
+      else if (cellName.substr(0,7 ) == "AOI33_X"     ) { func = AOI33;    }
+      else if (cellName.substr(0,5 ) == "BUF_X"       ) { func = BUF;      }
+      else if (cellName.substr(0,6 ) == "BUFZ_X"      ) { func = BUFZ;     }
+      else if (cellName.substr(0,5 ) == "INV_X"       ) { func = INV;      }
+      else if (cellName.substr(0,5 ) == "MX2_X"       ) { func = MX2;      }
+      else if (cellName.substr(0,5 ) == "MX3_X"       ) { func = MX3;      }
+      else if (cellName.substr(0,5 ) == "MX4_X"       ) { func = MX4;      }
+      else if (cellName.substr(0,6 ) == "MXI2_X"      ) { func = MXI2;     }
+      else if (cellName.substr(0,7 ) == "MXI2D_X"     ) { func = MXI2D;    }
+      else if (cellName.substr(0,6 ) == "MXI3_X"      ) { func = MXI3;     }
+      else if (cellName.substr(0,6 ) == "MXI4_X"      ) { func = MXI4;     }
+      else if (cellName.substr(0,7 ) == "NAND2_X"     ) { func = NAND2;    }
+      else if (cellName.substr(0,8 ) == "NAND2B_X"    ) { func = NAND2B;   }
+      else if (cellName.substr(0,7 ) == "NAND3_X"     ) { func = NAND3;    }
+      else if (cellName.substr(0,8 ) == "NAND3B_X"    ) { func = NAND3B;   }
+      else if (cellName.substr(0,7 ) == "NAND4_X"     ) { func = NAND4;    }
+      else if (cellName.substr(0,8 ) == "NAND4B_X"    ) { func = NAND4B;   }
+      else if (cellName.substr(0,9 ) == "NAND4BB_X"   ) { func = NAND4BB;  }
+      else if (cellName.substr(0,6 ) == "NOR2_X"      ) { func = NOR2;     }
+      else if (cellName.substr(0,7 ) == "NOR2B_X"     ) { func = NOR2B;    }
+      else if (cellName.substr(0,6 ) == "NOR3_X"      ) { func = NOR3;     }
+      else if (cellName.substr(0,7 ) == "NOR3B_X"     ) { func = NOR3B;    }
+      else if (cellName.substr(0,6 ) == "NOR4_X"      ) { func = NOR4;     }
+      else if (cellName.substr(0,7 ) == "NOR4B_X"     ) { func = NOR4B;    }
+      else if (cellName.substr(0,8 ) == "NOR4BB_X"    ) { func = NOR4BB;   }
+      else if (cellName.substr(0,6 ) == "OA21_X"      ) { func = OA21;     }
+      else if (cellName.substr(0,6 ) == "OA22_X"      ) { func = OA22;     }
+      else if (cellName.substr(0,7 ) == "OAI21_X"     ) { func = OAI21;    }
+      else if (cellName.substr(0,8 ) == "OAI211_X"    ) { func = OAI211;   }
+      else if (cellName.substr(0,8 ) == "OAI21B_X"    ) { func = OAI21B;   }
+      else if (cellName.substr(0,7 ) == "OAI22_X"     ) { func = OAI22;    }
+      else if (cellName.substr(0,8 ) == "OAI221_X"    ) { func = OAI221;   }
+      else if (cellName.substr(0,8 ) == "OAI222_X"    ) { func = OAI222;   }
+      else if (cellName.substr(0,8 ) == "OAI2B1_X"    ) { func = OAI2B1;   }
+      else if (cellName.substr(0,9 ) == "OAI2B11_X"   ) { func = OAI2B11;  }
+      else if (cellName.substr(0,8 ) == "OAI2B2_X"    ) { func = OAI2B2;   }
+      else if (cellName.substr(0,9 ) == "OAI2BB1_X"   ) { func = OAI2BB1;  }
+      else if (cellName.substr(0,9 ) == "OAI2BB2_X"   ) { func = OAI2BB2;  }
+      else if (cellName.substr(0,7 ) == "OAI31_X"     ) { func = OAI31;    }
+      else if (cellName.substr(0,7 ) == "OAI32_X"     ) { func = OAI32;    }
+      else if (cellName.substr(0,7 ) == "OAI33_X"     ) { func = OAI33;    }
+      else if (cellName.substr(0,5 ) == "OR2_X"       ) { func = OR2;      }
+      else if (cellName.substr(0,5 ) == "OR3_X"       ) { func = OR3;      }
+      else if (cellName.substr(0,5 ) == "OR4_X"       ) { func = OR4;      }
+      else if (cellName.substr(0,6 ) == "SDFF_X"      ) { func = SDFF    ; }
+      else if (cellName.substr(0,7 ) == "SDFFH_X"     ) { func = SDFFH   ; }
+      else if (cellName.substr(0,8 ) == "SDFFHQ_X"    ) { func = SDFFHQ  ; }
+      else if (cellName.substr(0,9 ) == "SDFFHQN_X"   ) { func = SDFFHQN ; }
+      else if (cellName.substr(0,8 ) == "SDFFNH_X"    ) { func = SDFFNH  ; }
+      else if (cellName.substr(0,10) == "SDFFNSRH_X"  ) { func = SDFFNSRH; }
+      else if (cellName.substr(0,7 ) == "SDFFQ_X"     ) { func = SDFFQ   ; }
+      else if (cellName.substr(0,8 ) == "SDFFQN_X"    ) { func = SDFFQN  ; }
+      else if (cellName.substr(0,7 ) == "SDFFR_X"     ) { func = SDFFR   ; }
+      else if (cellName.substr(0,9 ) == "SDFFRHQ_X"   ) { func = SDFFRHQ ; }
+      else if (cellName.substr(0,8 ) == "SDFFRQ_X"    ) { func = SDFFRQ  ; }
+      else if (cellName.substr(0,7 ) == "SDFFS_X"     ) { func = SDFFS   ; }
+      else if (cellName.substr(0,9 ) == "SDFFSHQ_X"   ) { func = SDFFSHQ ; }
+      else if (cellName.substr(0,8 ) == "SDFFSQ_X"    ) { func = SDFFSQ  ; }
+      else if (cellName.substr(0,8 ) == "SDFFSR_X"    ) { func = SDFFSR  ; }
+      else if (cellName.substr(0,10) == "SDFFSRHQ_X"  ) { func = SDFFSRHQ; }
+      else if (cellName.substr(0,8 ) == "SDFFTR_X"    ) { func = SDFFTR  ; }
+      else if (cellName.substr(0,7 ) == "SEDFF_X"     ) { func = SEDFF   ; }
+      else if (cellName.substr(0,9 ) == "SEDFFHQ_X"   ) { func = SEDFFHQ ; }
+      else if (cellName.substr(0,9 ) == "SEDFFTR_X"   ) { func = SEDFFTR ; }
+      else if (cellName.substr(0,9 ) == "SMDFFHQ_X"   ) { func = SMDFFHQ ; }
+      else if (cellName.substr(0,11) == "TLATNTSCA_X" ) { func = TLATNTSCA; }
+      else if (cellName.substr(0,11) == "TIEL0_A"     ) { func = TIELO   ; }
+      else if (cellName.substr(0,7 ) == "XNOR2_X"     ) { func = XNOR2;    }
+      else if (cellName.substr(0,7 ) == "XNOR3_X"     ) { func = XNOR3;    }
+      else if (cellName.substr(0,6 ) == "XOR2_X"      ) { func = XOR2;     }
+      else if (cellName.substr(0,6 ) == "XOR3_X"      ) { func = XOR3;     }
+      // PLASTIC ARM STUFF
+      else if (cellName.substr(2,7 ) == "IOINV_X"     ) { func = INV;      }
+      else if (cellName.substr(2,7 ) == "IOBUF_X"     ) { func = BUF;      }
+      else if (cellName.substr(2,8 ) == "IOBUFZ_X"    ) { func = BUFZ;     }
+      else if (cellName.substr(2,5 ) == "INV_X"       ) { func = INV;      }
+      else if (cellName.substr(2,5 ) == "BUF_X"       ) { func = BUF;      }
+      else if (cellName.substr(2,7 ) == "NAND2_X"     ) { func = NAND2;    }
+      else if (cellName.substr(2,7 ) == "NAND3_X"     ) { func = NAND3;    }
+      else if (cellName.substr(2,6 ) == "NOR2_X"      ) { func = NOR2;     }
+      else if (cellName.substr(2,6 ) == "NOR3_X"      ) { func = NOR3;     }
+      else if (cellName.substr(2,7 ) == "AOI21_X"     ) { func = AOI21;    }
+      else if (cellName.substr(2,7 ) == "AOI22_X"     ) { func = AOI22;    }
+      else if (cellName.substr(2,8 ) == "AOI211_X"    ) { func = AOI211;   }
+      else if (cellName.substr(2,7 ) == "OAI21_X"     ) { func = OAI21;    }
+      else if (cellName.substr(2,7 ) == "OAI22_X"     ) { func = OAI22;    }
+      else if (cellName.substr(2,6 ) == "DLY4_X"      ) { func = DLY4;     }
+      else if (cellName.substr(2,7 ) == "TIEHI_X"     ) { func = TIEHI;    }
+      else if (cellName.substr(2,7 ) == "TIELO_X"     ) { func = TIELO;    }
+      else if (cellName.substr(2,6 ) == "DFFQ_X"      ) { func = DFFQ;     }
+      else if (cellName.substr(2,8 ) == "DFFRPQ_X"    ) { func = DFFRPQ;   }
+      else if (cellName.substr(2,8 ) == "PREICG_X"    ) { func = PREICG;   }
+      else if (cellName.substr(2,7 ) == "SDFFQ_X"     ) { func = SDFFQ;    }
+      else if (cellName.substr(2,9 ) == "SDFFRPQ_X"   ) { func = SDFFRPQ;  }
+      else if (cellName.substr(2,5 ) == "MX2_X"       ) { func = MX2;      }
+      else if (cellName.substr(2,8 ) == "RFAND2_X"    ) { func = AND2;     }
+      else if (cellName.substr(2,9 ) == "RF1R1WS_X"   ) { func = RF1R1WS;  }
+      else if (cellName.substr(2,10) == "RF1R1WSX_X"  ) { func = RF1R1WS;  }
+      else if (cellName.substr(2,6 ) == "RFWL_X"      ) { func = RFWL;     }
+      else if (cellName.substr(2,8 ) == "LATCH_X1"    ) { func = LATCH;    }
 
-        isClkTree = false;
+      //cout << " Gate is " << name << " Cell is " << cellName << " Func is " << cellFunc_to_name(func) << endl;
+
+      isClkTree = false;
       cluster_id = -1;
       dead_toggle = false;
       visited = false;
@@ -152,6 +406,7 @@ namespace POWEROPT {
     int getClusterId() { return cluster_id;}
     //bool getFFFlag() { return (FFFlag || func == DFF || func == LH); }
     bool getFFFlag() { return FFFlag; }
+    bool getIsTIE() { return (func == TIEHI || func == TIELO); }
     bool getIsMux() { return (func == MUX);}
     bool isClusterBoundaryDriver() ;
     // JMS-SHK begin
@@ -400,8 +655,223 @@ namespace POWEROPT {
                 bool computeXNORVal( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 bool computeXORVal ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 bool computeVal(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeValOne(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool computeValOne_new(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+
+                // BASIC GATES
+                void ComputeBasicAND (string A, string B, string& Y);
+                void ComputeBasicOR (string A, string B, string& Y);
+                void ComputeBasicXOR (string A, string B, string& Y);
+                void ComputeBasicINV (string A, string& Y);
+                void ComputeBasicMUX (string A, string B, string S,  string& Y);
+
+                void ComputeBasicAND_new (string& Y, string A, string B);
+                void ComputeBasicAND_new (string& Y, string A, string B, string C);
+                void ComputeBasicAND_new (string& Y, string A, string B, string C, string D);
+
+                void ComputeBasicOR_new (string& Y, string A, string B);
+                void ComputeBasicOR_new (string& Y, string A, string B, string C);
+                void ComputeBasicOR_new (string& Y, string A, string B, string C, string D);
+
+                void ComputeBasicXOR_new (string& Y, string A, string B);
+                void ComputeBasicXOR_new (string& Y, string A, string B, string C);
+                void ComputeBasicXOR_new (string& Y, string A, string B, string C, string D);
+
+                void ComputeBasicXNOR_new (string& Y, string A, string B);
+                void ComputeBasicXNOR_new (string& Y, string A, string B, string C);
+                void ComputeBasicXNOR_new (string& Y, string A, string B, string C, string D);
+
+                void ComputeBasicNAND_new (string& Y, string A, string B);
+                void ComputeBasicNAND_new (string& Y, string A, string B, string C);
+                void ComputeBasicNAND_new (string& Y, string A, string B, string C, string D);
+
+                void ComputeBasicNOR_new (string& Y, string A, string B);
+                void ComputeBasicNOR_new (string& Y, string A, string B, string C);
+                void ComputeBasicNOR_new (string& Y, string A, string B, string C, string D);
+
+                void ComputeBasicINV_new (string& Y, string A);
+                void ComputeBasicMUX_new (string& Y, string A, string B, string S);
+
+                bool ComputeValADDF_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValADDFH_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValADDH_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAND2_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAND3_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAND4_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAO21_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAO22_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAO2B2_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAO2B2B_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI21_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI211_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI21B_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI22_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI221_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI222_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI2B1_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI2BB1_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI2BB2_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI31_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI32_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI33_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValBUF_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValBUFZ_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValDLY4_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValTIELO_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValTIEHI_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValINV_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValLATCH_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMX2_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMX3_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMX4_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMXI2_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMXI2D_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMXI3_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMXI4_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND2_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND2B_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND3_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND3B_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND4_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND4B_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND4BB_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR2_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR2B_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR3_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR3B_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR4_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR4B_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR4BB_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOA21_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOA22_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI21_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI211_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI21B_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI22_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI221_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI222_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2B1_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2B11_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2B2_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2BB1_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2BB2_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI31_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI32_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI33_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOR2_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOR3_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOR4_new       ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValPREICG_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValRFWL_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValRF1R1WS_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFF_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFH_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFHQ_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFQ_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFR_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFRHQ_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFRQ_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFS_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFSHQ_new   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFSQ_new    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValTLATNTSCA_new ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValXNOR2_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValXNOR3_new     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValXOR2_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValXOR3_new      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+
+                bool ComputeValADDF     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValADDFH    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValADDH     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAND2     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAND3     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAND4     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAO21     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAO22     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAO2B2    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAO2B2B   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI21    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI211   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI21B   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI22    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI221   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI222   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI2B1   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI2BB1  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI2BB2  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI31    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI32    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValAOI33    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValBUF      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValBUFZ     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValDLY4     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValDFFQ     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValDFFRPQ   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValINV      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValLATCH    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMX2      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMX3      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMX4      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMXI2     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMXI2D     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMXI3     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValMXI4     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND2    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND2B   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND3    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND3B   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND4    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND4B   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNAND4BB  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR2     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR2B    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR3     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR3B    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR4     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR4B    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValNOR4BB    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOA21     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOA22     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI21    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI211   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI21B   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI22    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI221   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI222   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2B1   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2B11  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2B2   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2BB1  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI2BB2  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI31    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI32    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOAI33    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOR2      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOR3      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValOR4      ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValPREICG   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValRF1R1WS  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValRFWL     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFF     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFH    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFHQ   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFQ    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFR    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFRHQ  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFRPQ  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFRQ   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFS    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFSHQ  ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValSDFFSQ   ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValTLATNTSCA( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValXNOR2    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValXNOR3    ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValXOR2     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                bool ComputeValXOR3     ( priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 bool transferDtoQ(priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
                 string getSimValue();
+                void setSimValueReg(string val, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
+                void print_gate_debug_info();
 
 
     //assume gate delay is computed as the average value of TPLH and TPHL
@@ -555,6 +1025,7 @@ namespace POWEROPT {
     vector<string> cellList;
     string PathStr;
     GNode* node;
+    string SRAM_stored_value; // PLASTICARM CELL
     string gate_op;
     bool isClkTree;
     static ofstream gate_debug_file;

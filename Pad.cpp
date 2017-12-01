@@ -23,7 +23,11 @@ namespace POWEROPT {
 
   void Pad::setSimValue(string value, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf)
   {
-    if (nets.size() == 0) return; // a pad need not be connected to anything
+    if (nets.size() == 0)
+    {
+      sim_val = value;
+      return; // a pad need not be connected to anything
+    }
     Net* net = nets[0];
     bool toggled = net->setSimValue(value);
     if (toggled) 
@@ -41,16 +45,16 @@ namespace POWEROPT {
     }
   }
 
-/*  void Pad::setSimValue(string value)
+  void Pad::setSimValue(string value)
   {
     if (nets.size() == 0) return; // a pad need not be connected to anything
     Net* net = nets[0];
     net->setSimValue(value);
-  }*/
+  }
 
   string Pad::getSimValue()
   {
-    if (nets.size() == 0) return  "0" ; // ONLY works for per_addrs
+    if (nets.size() == 0) return  sim_val; // ONLY works for per_addrs
     return nets[0]->getSimValue();
   }
 

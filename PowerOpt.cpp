@@ -2,6 +2,8 @@
 
 namespace POWEROPT {
 
+int PowerOpt::st_cycle_num = 0;
+
 static void tokenize (string s, char delim, vector<string> & tokens)
 {
   stringstream iss;
@@ -34,6 +36,14 @@ static string binary (unsigned int x)
 static string bin2hex (string binary_str)
 {
   bitset<16> set(binary_str);
+  stringstream ss;
+  ss << hex << uppercase << set.to_ulong();
+  return ss.str();
+}
+
+static string bin2hex32 (string binary_str)
+{
+  bitset<32> set(binary_str);
   stringstream ss;
   ss << hex << uppercase << set.to_ulong();
   return ss.str();
@@ -298,6 +308,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             dbgSelectGatesFile = getTokenS(line, "-dbgSelectGates ");
         if (line.find("-pmemFile ") != string::npos)
             pmem_file_name = getTokenS(line, "-pmemFile ");
+        if (line.find("-ignoreNetsFile ") != string::npos)
+            ignore_nets_file_name = getTokenS(line, "-ignoreNetsFile ");
         if (line.find("-def ") != string::npos)
             defFile = getTokenS(line, "-def ");
         if (line.find("-spef ") != string::npos)
@@ -428,6 +440,8 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             inp_ind_branches = getTokenI(line,"-inp_ind_branches ");
         if (line.find("-inputValueFile ") != string::npos)
             inputValueFile = getTokenS(line,"-inputValueFile ");
+        if (line.find("-outputValueFile ") != string::npos)
+            outputValueFile = getTokenS(line,"-outputValueFile ");
         if (line.find("-outDir ") != string::npos)
             outDir = getTokenS(line,"-outDir ");
         if (line.find("-subneg") != string::npos)
@@ -436,6 +450,10 @@ void PowerOpt::readCmdFile(string cmdFileStr)
             sim_units = getTokenI(line,"-sim_units ");
         if (line.find("-maintain_toggle_profiles") != string::npos)
             maintain_toggle_profiles = getTokenI(line,"-maintain_toggle_profiles ");
+        if (line.find("-one_pins_file") != string::npos)
+            one_pins_file_name = getTokenS(line,"-one_pins_file ");
+        if (line.find("-zero_pins_file") != string::npos)
+            zero_pins_file_name = getTokenS(line,"-zero_pins_file ");
     }
 
     assert(num_sim_cycles > 0 );
@@ -494,16 +512,20 @@ void PowerOpt::openFiles()
   }
   missed_nets.open                  ( (outDir+string("/PowerOpt/Missed_nets")).c_str(), fstream::app ) ;
   toggle_profile_file.open          ( (outDir+string("/PowerOpt/toggle_profile_file"    )).c_str()   ) ;
-  debug_file.open                   ( (outDir+string("/PowerOpt/debug_file"             )).c_str()   ) ;
+  //debug_file.open                   ( (outDir+string("/PowerOpt/debug_file"             )).c_str()   ) ;
+  debug_file.open                   ("/dev/null") ;
   pmem_request_file.open            ( (outDir+string("/PowerOpt/pmem_request_file"      )).c_str()   ) ;
   dmem_request_file.open            ( (outDir+string("/PowerOpt/dmem_request_file"      )).c_str()   ) ;
+  output_value_file.open            ( (outDir+string("/PowerOpt/output_value_file"      )).c_str()   ) ;
   fanins_file.open                  ( (outDir+string("/PowerOpt/fanins_file"            )).c_str()   ) ;
   processor_state_profile_file.open ( (outDir+string("/PowerOpt/processor_state_profile")).c_str()   ) ;
   dmem_contents_file.open           ( (outDir+string("/PowerOpt/dmem_contents_file"     )).c_str()   ) ;
   pmem_contents_file.open           ( (outDir+string("/PowerOpt/pmem_contents_file"     )).c_str()   ) ;
   debug_file_second.open            ( (outDir+string("/PowerOpt/debug_file_second"      )).c_str()   ) ;
+  //debug_file_second.open            ("/dev/null") ;
   units_file.open                   ( (outDir+string("/PowerOpt/UNITS_INFO"             )).c_str()   ) ;
   all_toggled_gates_file.open       ( (outDir+string("/PowerOpt/all_toggled_gates_file" )).c_str()   ) ;
+  net_toggle_info_file.open         ( (outDir+string("/PowerOpt/net_toggle_info_file"   )).c_str()   ) ;
 
   //vcdOutFile = outDir+"/PowerOpt/"+vcdOutFile;
   vcd_file.open((outDir+string("/PowerOpt/")+vcdOutFile).c_str());
@@ -511,6 +533,7 @@ void PowerOpt::openFiles()
   dummy_g->openFiles(outDir);
   dummy_n->openFiles(outDir);
   dummy_ss->openFiles(outDir);
+  //debug_file_second.rdbuf(NULL);
 }
 
 void PowerOpt::closeFiles()
@@ -531,6 +554,7 @@ void PowerOpt::closeFiles()
   missed_nets.close();
   units_file.close();
   all_toggled_gates_file.close();
+  net_toggle_info_file.close();
   toggle_profile_file.close();
   debug_file.close();
   pmem_request_file.close();
@@ -572,7 +596,7 @@ void PowerOpt::DefParse()
   bool in_nets = false;
   bool reading_a_net = false;
   ifstream def_file;
-  def_file.open("openMSP430.def");
+  def_file.open(defFile.c_str());
   vector<string> tokens;
   int num_components;
   int num_pins;
@@ -585,6 +609,7 @@ void PowerOpt::DefParse()
   {
     while (getline(def_file, line))
     {
+      //debug_file << line << endl;
       trim(line);
       if (line.size() > 11 && line.compare(0, 10, "COMPONENTS") == 0) {
         tokenize(line, ' ', tokens);
@@ -645,13 +670,14 @@ void PowerOpt::DefParse()
           first_plus_in_net = true;
           tokens.clear();
         }
-        else if (line[0] == '+') {
+        else if (line[0] == '+' || line[0] == ';') {
           reading_a_net = false;
           if (first_plus_in_net == true) {
             first_plus_in_net = false;
             assert(!net_name.empty());
-            assert(!cell_name_and_pin.empty());
+            //assert(!cell_name_and_pin.empty()); // CAN BE AN UNCONNECTED NET
             net_all_connected.insert(make_pair(net_name, cell_name_and_pin));
+            //debug_file << " INSERTING " << net_name << endl;
             cell_name_and_pin.clear();
           }
         }
@@ -702,6 +728,7 @@ void PowerOpt::DefParse()
     gateNameIdMap[gate_name] = gateIndex;
     bool FFFlag = false;
     if (reg_cells_set.find(cell_name) != reg_cells_set.end()) { FFFlag = true; }
+    //if (cell_name == "PLTIELO_X1" || cell_name == "PLTIEHI_X1") continue;
     Gate* g = new Gate(gateIndex++, FFFlag, gate_name, cell_name, 0.0, 0, 0, 0, 0);
     addGate(g);
   }
@@ -736,6 +763,7 @@ void PowerOpt::DefParse()
     string net_name = it3->first;
     if (netNameException(net_name)) continue;
     Net * n = new Net(netIndex++, net_name);
+    addNet(n);
     vector<pair<string, string> >& all_connected = it3->second;
     for (int i = 0; i != all_connected.size(); i++)
     {
@@ -755,9 +783,8 @@ void PowerOpt::DefParse()
           term->setGate(g);
           term->addNet(n);
           term->computeFullName();
-        }
-        else
-        {
+          //debug_file << "NET : " << net_name << " TERM : " << term->getFullName() << endl;
+        } else {
           assert(0); // there is no way you can come across the same terminal on a different net
           //term = terms[terminalNameIdMap[terminal_full_name]];
         }
@@ -800,13 +827,65 @@ bool PowerOpt::netNameException(string net_name)
 
 PinType PowerOpt::getPinType(string term_name)
 {
-  if (term_name == "ZN" || term_name == "Z" || term_name == "Q" ) return OUTPUT;
-  if (term_name == "I" || term_name == "D" || term_name == "CP" || term_name == "CDN" || term_name == "SDN" ) return INPUT;
+//  if (term_name == "ZN" || term_name == "Z" || term_name == "Q" ) return OUTPUT;
+//  if (term_name == "I" || term_name == "D" || term_name == "CP" || term_name == "CDN" || term_name == "SDN" ) return INPUT;
+// TSMC ARM
+  if (term_name == "QN" ||
+      term_name == "Y" ||
+      term_name == "ECK" ||
+      term_name == "Q" ||
+      term_name == "S" ||
+      term_name == "CO" ||
+      term_name == "RBL") return OUTPUT;
+  if ( term_name == "A" ||
+       term_name == "A0" ||
+       term_name == "A0N" ||
+       term_name == "A1" ||
+       term_name == "A1N" ||
+       term_name == "A2" ||
+       term_name == "AN" ||
+       term_name == "B" ||
+       term_name == "B0" ||
+       term_name == "B0N" ||
+       term_name == "B1" ||
+       term_name == "B1N" ||
+       term_name == "B2" ||
+       term_name == "BN" ||
+       term_name == "C" ||
+       term_name == "C0" ||
+       term_name == "C1" ||
+       term_name == "CI" ||
+       term_name == "CK" ||
+       term_name == "CKN" ||
+       term_name == "D" ||
+       term_name == "D0" ||
+       term_name == "D1" ||
+       term_name == "E" ||
+       term_name == "G" ||
+       term_name == "GN" ||
+       term_name == "OE" ||
+       term_name == "RN" ||
+       term_name == "RWL" ||
+       term_name == "WBL" ||
+       term_name == "WWL" ||
+       term_name == "S0" ||
+       term_name == "S1" ||
+       term_name == "SE" ||
+       term_name == "SI" ||
+       term_name == "SN" ) return INPUT;
 }
 
-void PowerOpt::print_processor_state_profile(int cycle_num, bool reg)
+void PowerOpt::print_processor_state_profile(int cycle_num, bool reg, bool pos_edge)
 {
-  processor_state_profile_file <<  "PRINTING PROFILE FOR CYCLE " << cycle_num << endl;
+
+  if (pos_edge)
+  {
+    processor_state_profile_file <<  "PRINTING PROFILE FOR CYCLE " << cycle_num << "(p)" << endl;
+  }
+  else
+  {
+    processor_state_profile_file <<  "PRINTING PROFILE FOR CYCLE " << cycle_num << "(n)" << endl;
+  }
 //  for (int i = 0; i < terms.size(); i++)
 //  {
 //    Terminal * term = terms[i];
@@ -819,11 +898,11 @@ void PowerOpt::print_processor_state_profile(int cycle_num, bool reg)
       if (gate->getFFFlag() == false) continue;
     gate->print_terms(processor_state_profile_file);
   }
-/*  for (int i = 0; i < m_pads.size(); i++)
+  for (int i = 0; i < m_pads.size(); i++)
   {
     Pad *pad  = m_pads[i];
     processor_state_profile_file << pad->getName() << ":" << pad->getSimValue() << endl ;
-  }*/
+  }
 //  list<GNode*>::iterator it = nodes_topo.begin();
 //  for (it = nodes_topo.begin(); it != nodes_topo.end(); it ++)
 //  {
@@ -897,8 +976,8 @@ void PowerOpt::print_fanin_cone(designTiming* T)
     else
     {
       fanins_file << "[PAD] " << i << "(" << pad->getName() << ")  (" << parent_topo_id << ") " << endl;
-      Net* net = pad->getNet(0);
       if (pad->getNetNum() != 1) continue;
+      Net* net = pad->getNet(0);
       Gate* gate = net->getDriverGate();
       if (gate != NULL)
         fanins_file << " . \t  Gate is -->" << gate->getName() << endl;
@@ -923,7 +1002,7 @@ void PowerOpt::populateGraphDatabase(Graph* graph)
          node->setIsSource(true);
          graph->addSource(node);
          graph->addWfNode(node);
-         debug_file << "Adding : " << node->getName() << endl;
+         //debug_file << "Adding : " << node->getName() << endl;
          graph->addNode(node);
        }
        else if (pad->getType() == PrimiaryOutput)
@@ -941,7 +1020,7 @@ void PowerOpt::populateGraphDatabase(Graph* graph)
          node->setIsSink(true);
          graph->addSource(node);
          graph->addWfNode(node);
-         debug_file << "Adding : " << node->getName() << endl;
+         //debug_file << "Adding : " << node->getName() << endl;
          graph->addSink(node);
          graph->addNode(node);
        }
@@ -963,11 +1042,20 @@ void PowerOpt::populateGraphDatabase(Graph* graph)
         node->setIsSink(true);
         graph->addSource(node);
         graph->addWfNode(node);
-        debug_file << "Adding : " << node->getName() << endl;
+        //debug_file << "Adding : " << node->getName() << endl;
         graph->addSink(node);
         graph->addNode(node);
       }
-      else  // Other gates are nodes
+      else if (gate->getIsTIE())
+      {
+        node->setGate(gate);
+        node->setIsSource(true);
+        node->setIsSink(false);
+        graph->addSource(node);
+        graph->addWfNode(node);
+        graph->addNode(node);
+      }
+      else // Other gates are nodes
       {
         node->setGate(gate);
         node->setIsSink(false);
@@ -1089,6 +1177,7 @@ void PowerOpt::readSimInitFile()
       value = tokens[1];
       trim(name);
       trim(value);
+      if (value == "x") value = "X";
       // apply to the terminal
       map<string, int>::iterator it = terminalNameIdMap.find(name);
       if (it != terminalNameIdMap.end())
@@ -1097,10 +1186,10 @@ void PowerOpt::readSimInitFile()
         term->setSimValue(value, sim_wf);
         //debug_file << term->getFullName() << " : " << value << endl;
       }
-      else
+      else //if (padNameIdMap.find(name) != padNameIdMap.end())
       {
         it = padNameIdMap.find(name);
-        //assert(it != padNameIdMap.end());
+        assert(it != padNameIdMap.end());
         Pad* pad = m_pads[it->second];
         pad->setSimValue(value, sim_wf);
         //debug_file << pad->getName() << " : "  << value << endl;
@@ -1134,16 +1223,34 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
   if (pos_edge)
   {
     cout << "Simulating cycle " << cycle_num << "(p)" << endl;
+    debug_file << "Simulating cycle " << cycle_num << "(p)" << endl;
   }
   else
   {
     cout << "Simulating cycle " << cycle_num << "(n)" << endl;
+    debug_file << "Simulating cycle " << cycle_num << "(n)" << endl;
   }
-  Pad* dco_clk_pad = m_pads[padNameIdMap["dco_clk"]];
-  string dco_clk_value = dco_clk_pad->getSimValue();
-  if (dco_clk_value == "1") dco_clk_pad-> setSimValue("0", sim_wf);
-  else if (dco_clk_value == "0") dco_clk_pad-> setSimValue("1", sim_wf);
-  else { cout << " dco_clk : " <<  dco_clk_value << endl; assert(0); }
+  if (design == "CORTEXM0PLUS")
+  {
+    Pad* HCLK_pad = m_pads[padNameIdMap["HCLK"]];
+    string HCLK_value = HCLK_pad->getSimValue();
+    if (HCLK_value == "1") HCLK_pad-> setSimValue("0", sim_wf);
+    else if (HCLK_value == "0") HCLK_pad-> setSimValue("1", sim_wf);
+    else { cout << " HCLK : " <<  HCLK_value << endl; assert(0); }
+    Pad* SCLK_pad = m_pads[padNameIdMap["SCLK"]];
+    string SCLK_value = SCLK_pad->getSimValue();
+    if (SCLK_value == "1") SCLK_pad-> setSimValue("0", sim_wf);
+    else if (SCLK_value == "0") SCLK_pad-> setSimValue("1", sim_wf);
+    else { cout << " SCLK : " <<  SCLK_value << endl; assert(0); }
+  }
+  else if (design == "PLASTICARM")
+  {
+    Pad* I_CLKSYS_pad = m_pads[padNameIdMap["I_CLKSYS"]];
+    string I_CLKSYS_value = I_CLKSYS_pad->getSimValue();
+    if (I_CLKSYS_value == "1") I_CLKSYS_pad-> setSimValue("0", sim_wf);
+    else if (I_CLKSYS_value == "0") I_CLKSYS_pad-> setSimValue("1", sim_wf);
+    else { cout << " I_CLKSYS : " <<  I_CLKSYS_value << endl; assert(0); }
+  }
   clearSimVisited();
   if(wavefront)
   {
@@ -1151,6 +1258,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
     int toggled_count = 0;
     //debug_file << "Cycle : " << cycle_num << endl;
     //missed_nets << "Cycle : " << cycle_num << endl;
+    debug_file << "Sim_wf size is " << sim_wf.size() << endl;
     while (!sim_wf.empty())
     {
       GNode* node = sim_wf.top(); sim_wf.pop();
@@ -1160,19 +1268,18 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
         if (node->getVisited() == true) continue; // This code is necessary to not re-evaluate gates that were already evaluated. A node can be pushed multiple times into sim_wf.
         node->setVisited(true);
 
-        //debug_file << node->getName() << endl;
+        //debug_file << node->getName() << " : "  ;
+        debug_file << "Sim_wf size is " << sim_wf.size() << endl;
         sim_visited.push(node);
         Gate* gate = node->getGate();
         bool toggled = gate->computeVal(sim_wf); // here we push gates into sim_wf
-        //if (cycle_num > 0)
-//        if (toggled){
-//        }
         if (toggled && !gate->getIsClkTree())
         {
           toggled_count++;
           if (maintain_toggle_profiles == 1) gate->updateToggleProfile(cycle_num);
           //cycle_toggled_indices.push_back(gate->getId());
-          all_toggled_gates.insert(gate->getId());
+          if (cycle_num > 8)
+            all_toggled_gates.insert(gate->getId());
           cycle_toggled_indices.push_back(gate->getId());
           int cluster_id = gate->getClusterId();
           //debug_file << node->getName() << endl;
@@ -1186,7 +1293,7 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
               cluster->setActive(true);
             }
           }
-          addVCDNetVal(gate->getFanoutTerminal(0)->getNet(0));
+          //addVCDNetVal(gate->getFanoutTerminal(0)->getNet(0));
           //writeVCDNet(gate->getFanoutTerminal(0)->getNet(0));
         }
         else
@@ -1196,12 +1303,15 @@ void PowerOpt::runSimulation(bool wavefront, int cycle_num, bool pos_edge)
         if (toggled && gate->getIsClkTree())
         {
           //debug_file << "clock_tree_cell : " <<  node->getName() << " : " <<  node->getGate()->getFanoutTerminal(0)->getNet(0)->getName() << " : " <<  node->getSimValue()<< endl;
-          addVCDNetVal(gate->getFanoutTerminal(0)->getNet(0));
+          //addVCDNetVal(gate->getFanoutTerminal(0)->getNet(0));
           //writeVCDNet(gate->getFanoutTerminal(0)->getNet(0),cycle_num);
         }
       }
     }
-    //debug_file << "In cycle " << cycle_num << " " << gate_count << " gates were simulated and " << toggled_count << " toggled."  << endl;
+    if (pos_edge)
+      debug_file_second << "In cycle " << cycle_num << " (p) " << gate_count << " gates were simulated and " << toggled_count << " toggled."  << endl;
+    else
+      debug_file_second << "In cycle " << cycle_num << " (n) " << gate_count << " gates were simulated and " << toggled_count << " toggled."  << endl;
   }
   else
   {
@@ -1275,8 +1385,8 @@ void PowerOpt::readSelectGatesFile()
 void PowerOpt::readConstantTerminals() // These are gate pins that are constant in the design. Like logic 1 and logic 0.
 {
   ifstream one_pins_file, zero_pins_file;
-  one_pins_file.open("one_pins"); // full path or include in cmd file.
-  zero_pins_file.open("zero_pins");
+  one_pins_file.open(one_pins_file_name.c_str()); // full path or include in cmd file.
+  zero_pins_file.open(zero_pins_file_name.c_str());
   string line;
   if (one_pins_file.is_open())
   {
@@ -1286,7 +1396,14 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       vector<string> tokens;
       tokenize(line, ':', tokens);
       string gate_name = tokens[0];
-      string term_name = tokens[1];
+      string term_name = "";
+      string pad_name = gate_name; // not sure if it is a pad or a gate yet;
+
+      if (tokens.size() > 1)
+      {
+        assert(tokens.size() == 2);
+        term_name = tokens[1];
+      }
 
       string full_term_name = gate_name + "/" + term_name;
 
@@ -1296,7 +1413,7 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
         Terminal* term = terms[terminalNameIdMap[full_term_name]];
         term->setSimValue("1");
       }
-      else
+      else if (gateNameIdMap.find(gate_name) != gateNameIdMap.end())
       {
         int id = gateNameIdMap.at(gate_name);
         Gate * gate = m_gates[id];
@@ -1326,6 +1443,20 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
         terminalNameIdMap[name] = term->getId();
         netNameIdMap[n->getName()] = n->getId();
       }
+      else if (padNameIdMap.find(pad_name) != padNameIdMap.end())
+      {
+        int id = padNameIdMap.at(pad_name);
+        Pad* pad = m_pads.at(id);
+        int num_nets_of_pad = pad->getNetNum();
+        if (num_nets_of_pad == 0)
+        {
+          Net* n = new Net(nets.size(), pad->getName(), true);
+          pad->addNet(n);
+          n->addPad(pad);
+        }
+        pad->setSimValue("1");
+      }
+      else assert(0);
     }
   }
   if (zero_pins_file.is_open())
@@ -1336,7 +1467,14 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
       vector<string> tokens;
       tokenize(line, ':', tokens);
       string gate_name = tokens[0];
-      string term_name = tokens[1];
+      string term_name = "";
+      string pad_name = gate_name;
+
+      if (tokens.size() > 1)
+      {
+        assert(tokens.size() == 2);
+        term_name = tokens[1];
+      }
 
       string full_term_name = gate_name + "/" + term_name;
       if (gate_name.find("Logic1") != string::npos || gate_name.find("Logic0") != string::npos) continue;
@@ -1345,9 +1483,9 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
         Terminal* term = terms[terminalNameIdMap[full_term_name]];
         term->setSimValue("0");
       }
-      else
+      else if (gateNameIdMap.find(gate_name) != gateNameIdMap.end())
       {
-        int id = gateNameIdMap[gate_name];
+        int id = gateNameIdMap.at(gate_name);
         Gate * gate = m_gates[id];
         int num_terms = terms.size();
         Terminal* term = new Terminal(num_terms, term_name);
@@ -1373,6 +1511,25 @@ void PowerOpt::readConstantTerminals() // These are gate pins that are constant 
         terminalNameIdMap[name] = term->getId();
         netNameIdMap[n->getName()] = n->getId();
       }
+      else if (padNameIdMap.find(pad_name) != padNameIdMap.end())
+      {
+        int id = padNameIdMap.at(pad_name);
+        Pad* pad = m_pads.at(id);
+        int num_nets_of_pad = pad->getNetNum();
+        if (num_nets_of_pad == 0)
+        {
+          Net* n = new Net(nets.size(), pad->getName(), true);
+          pad->addNet(n);
+          n->addPad(pad);
+        }
+        pad->setSimValue("0");
+//        if (pad_name == "HADDR[31]")
+//        {
+//          cout << pad_name << endl;
+//        }
+
+      }
+      else assert(0);
     }
   }
 
@@ -1390,9 +1547,9 @@ void PowerOpt::printSelectGateValues()
 
 void PowerOpt::updateRegOutputs(int cycle_num)
 {
-  Pad* dco_clk_pad = m_pads[padNameIdMap["dco_clk"]];
-  string dco_clk_value = dco_clk_pad->getSimValue();
-  if (dco_clk_value != "1") return;
+//  Pad* dco_clk_pad = m_pads[padNameIdMap["dco_clk"]];
+//  string dco_clk_value = dco_clk_pad->getSimValue();
+//  if (dco_clk_value != "1") return;
   //cout << " Updating Reg Outputs " << endl;
   list<Gate*>::iterator it;
   int toggled_count = 0;
@@ -1405,7 +1562,7 @@ void PowerOpt::updateRegOutputs(int cycle_num)
       toggled_count++;
       if (maintain_toggle_profiles == 1) ff_gate->updateToggleProfile(cycle_num);
       cycle_toggled_indices.push_back(ff_gate->getId());
-      //if (cycle_num > 0)
+      if (cycle_num > 1)
         all_toggled_gates.insert(ff_gate->getId());
     }
   }
@@ -1422,7 +1579,7 @@ void PowerOpt::readPmemFile()
      cout << "Reading PMEM ..." ;
      int addr = 0;
      while ((fscanf(pmem_file, "%x", &hex) != EOF)) {
-       vector<bool> power_domain_activity_annotation (cluster_id, false);
+       //vector<bool> power_domain_activity_annotation (cluster_id, false);
        //const vector<bool>& reference = power_domain_activity_annotation;
        Instr* instr = new Instr(hex);
        //instr->domain_activity.resize(4, false);
@@ -1432,6 +1589,21 @@ void PowerOpt::readPmemFile()
      cout << " done" << endl;
   } else {
     cout << "ERROR: Cannot open pmem file!" << endl;
+  }
+}
+
+void PowerOpt::readIgnoreNetsFile()
+{
+  ifstream ignore_nets_file;
+  ignore_nets_file.open(ignore_nets_file_name.c_str());
+  if (ignore_nets_file.is_open())
+  {
+    string line;
+    while(getline(ignore_nets_file, line))
+    {
+      trim(line);
+      ignore_nets.insert(line);
+    }
   }
 }
 
@@ -1465,11 +1637,17 @@ void PowerOpt::readStaticPGInfo()
   }
 }
 
+
+string PowerOpt::getHaddr()
+{
+
+}
+
 string PowerOpt::getPmemAddr()
 {
   // HERE
   // return in if.
-  string all_x="XXXXXXXXXXXXXX";
+/*  string all_x="XXXXXXXXXXXXXX";
   if (subnegFlag == true)
   {
     if(subnegState ==0)
@@ -1489,7 +1667,7 @@ string PowerOpt::getPmemAddr()
       subnegState=0;
     }
   return all_x;
-  }
+  }*/
 
 
 
@@ -1529,6 +1707,51 @@ string PowerOpt::getPmemAddr()
     pmem_addr_2_val  = m_pads[padNameIdMap.at("pmem_addr[2]")]->getSimValue();
     pmem_addr_1_val  = m_pads[padNameIdMap.at("pmem_addr[1]")]->getSimValue();
     pmem_addr_0_val  = m_pads[padNameIdMap.at("pmem_addr[0]")]->getSimValue();
+  }
+  else if (design  == "CORTEXM0PLUS")
+  {
+    string  HADDR_31_val, HADDR_30_val, HADDR_29_val, HADDR_28_val, HADDR_27_val, HADDR_26_val, HADDR_25_val, HADDR_24_val, HADDR_23_val, HADDR_22_val, HADDR_21_val, HADDR_20_val, HADDR_19_val, HADDR_18_val, HADDR_17_val, HADDR_16_val, HADDR_15_val, HADDR_14_val, HADDR_13_val, HADDR_12_val, HADDR_11_val, HADDR_10_val, HADDR_9_val, HADDR_8_val, HADDR_7_val, HADDR_6_val, HADDR_5_val, HADDR_4_val, HADDR_3_val, HADDR_2_val, HADDR_1_val, HADDR_0_val;
+    HADDR_31_val = m_pads[padNameIdMap.at("HADDR[31]")]->getSimValue();
+    HADDR_30_val = m_pads[padNameIdMap.at("HADDR[30]")]->getSimValue();
+    HADDR_29_val = m_pads[padNameIdMap.at("HADDR[29]")]->getSimValue();
+    HADDR_28_val = m_pads[padNameIdMap.at("HADDR[28]")]->getSimValue();
+
+    if (HADDR_31_val + HADDR_30_val + HADDR_29_val + HADDR_28_val == "0000" ) // PMEM IS SELECTED // HSEL
+    {
+//      string HWRITE = m_pads[padNameIdMap.at("HWRITE")]->getSimValue();
+//      assert(HWRITE == "0");
+      HADDR_27_val = m_pads[padNameIdMap.at("HADDR[27]")]->getSimValue();
+      HADDR_26_val = m_pads[padNameIdMap.at("HADDR[26]")]->getSimValue();
+      HADDR_25_val = m_pads[padNameIdMap.at("HADDR[25]")]->getSimValue();
+      HADDR_24_val = m_pads[padNameIdMap.at("HADDR[24]")]->getSimValue();
+      HADDR_23_val = m_pads[padNameIdMap.at("HADDR[23]")]->getSimValue();
+      HADDR_22_val = m_pads[padNameIdMap.at("HADDR[22]")]->getSimValue();
+      HADDR_21_val = m_pads[padNameIdMap.at("HADDR[21]")]->getSimValue();
+      HADDR_20_val = m_pads[padNameIdMap.at("HADDR[20]")]->getSimValue();
+      HADDR_19_val = m_pads[padNameIdMap.at("HADDR[19]")]->getSimValue();
+      HADDR_18_val = m_pads[padNameIdMap.at("HADDR[18]")]->getSimValue();
+      HADDR_17_val = m_pads[padNameIdMap.at("HADDR[17]")]->getSimValue();
+      HADDR_16_val = m_pads[padNameIdMap.at("HADDR[16]")]->getSimValue();
+      HADDR_15_val = m_pads[padNameIdMap.at("HADDR[15]")]->getSimValue();
+      HADDR_14_val = m_pads[padNameIdMap.at("HADDR[14]")]->getSimValue();
+      HADDR_13_val = m_pads[padNameIdMap.at("HADDR[13]")]->getSimValue();
+      HADDR_12_val = m_pads[padNameIdMap.at("HADDR[12]")]->getSimValue();
+      HADDR_11_val = m_pads[padNameIdMap.at("HADDR[11]")]->getSimValue();
+      HADDR_10_val = m_pads[padNameIdMap.at("HADDR[10]")]->getSimValue();
+      HADDR_9_val = m_pads[padNameIdMap.at("HADDR[9]")]->getSimValue();
+      HADDR_8_val = m_pads[padNameIdMap.at("HADDR[8]")]->getSimValue();
+      HADDR_7_val = m_pads[padNameIdMap.at("HADDR[7]")]->getSimValue();
+      HADDR_6_val = m_pads[padNameIdMap.at("HADDR[6]")]->getSimValue();
+      HADDR_5_val = m_pads[padNameIdMap.at("HADDR[5]")]->getSimValue();
+      HADDR_4_val = m_pads[padNameIdMap.at("HADDR[4]")]->getSimValue();
+      HADDR_3_val = m_pads[padNameIdMap.at("HADDR[3]")]->getSimValue();
+      HADDR_2_val = m_pads[padNameIdMap.at("HADDR[2]")]->getSimValue();
+      HADDR_1_val = m_pads[padNameIdMap.at("HADDR[1]")]->getSimValue();
+      HADDR_0_val = m_pads[padNameIdMap.at("HADDR[0]")]->getSimValue();
+      string pmem_addr_str = HADDR_19_val+ HADDR_18_val+ HADDR_17_val+ HADDR_16_val+ HADDR_15_val+ HADDR_14_val+ HADDR_13_val+ HADDR_12_val+ HADDR_11_val+ HADDR_10_val+ HADDR_9_val+ HADDR_8_val+ HADDR_7_val+ HADDR_6_val+ HADDR_5_val+ HADDR_4_val+ HADDR_3_val+ HADDR_2_val;
+      return pmem_addr_str;
+    }
+    return "";
   }
   else
   {
@@ -1572,6 +1795,48 @@ string PowerOpt::getDmemAddr()
     dmem_addr_2_val  = m_pads[padNameIdMap.at("dmem_addr[2]")]->getSimValue();
     dmem_addr_1_val  = m_pads[padNameIdMap.at("dmem_addr[1]")]->getSimValue();
     dmem_addr_0_val  = m_pads[padNameIdMap.at("dmem_addr[0]")]->getSimValue();
+  }
+  else if (design == "CORTEXM0PLUS")
+  {
+    string  HADDR_31_val, HADDR_30_val, HADDR_29_val, HADDR_28_val, HADDR_27_val, HADDR_26_val, HADDR_25_val, HADDR_24_val, HADDR_23_val, HADDR_22_val, HADDR_21_val, HADDR_20_val, HADDR_19_val, HADDR_18_val, HADDR_17_val, HADDR_16_val, HADDR_15_val, HADDR_14_val, HADDR_13_val, HADDR_12_val, HADDR_11_val, HADDR_10_val, HADDR_9_val, HADDR_8_val, HADDR_7_val, HADDR_6_val, HADDR_5_val, HADDR_4_val, HADDR_3_val, HADDR_2_val, HADDR_1_val, HADDR_0_val;
+    HADDR_31_val = m_pads[padNameIdMap.at("HADDR[31]")]->getSimValue();
+    HADDR_30_val = m_pads[padNameIdMap.at("HADDR[30]")]->getSimValue();
+    HADDR_29_val = m_pads[padNameIdMap.at("HADDR[29]")]->getSimValue();
+    HADDR_28_val = m_pads[padNameIdMap.at("HADDR[28]")]->getSimValue();
+    if (HADDR_31_val + HADDR_30_val + HADDR_29_val + HADDR_28_val == "0010" ) // PMEM IS SELECTED // HSEL
+    {
+      HADDR_27_val = m_pads[padNameIdMap.at("HADDR[27]")]->getSimValue();
+      HADDR_26_val = m_pads[padNameIdMap.at("HADDR[26]")]->getSimValue();
+      HADDR_25_val = m_pads[padNameIdMap.at("HADDR[25]")]->getSimValue();
+      HADDR_24_val = m_pads[padNameIdMap.at("HADDR[24]")]->getSimValue();
+      HADDR_23_val = m_pads[padNameIdMap.at("HADDR[23]")]->getSimValue();
+      HADDR_22_val = m_pads[padNameIdMap.at("HADDR[22]")]->getSimValue();
+      HADDR_21_val = m_pads[padNameIdMap.at("HADDR[21]")]->getSimValue();
+      HADDR_20_val = m_pads[padNameIdMap.at("HADDR[20]")]->getSimValue();
+      HADDR_19_val = m_pads[padNameIdMap.at("HADDR[19]")]->getSimValue();
+      HADDR_18_val = m_pads[padNameIdMap.at("HADDR[18]")]->getSimValue();
+      HADDR_17_val = m_pads[padNameIdMap.at("HADDR[17]")]->getSimValue();
+      HADDR_16_val = m_pads[padNameIdMap.at("HADDR[16]")]->getSimValue();
+      HADDR_15_val = m_pads[padNameIdMap.at("HADDR[15]")]->getSimValue();
+      HADDR_14_val = m_pads[padNameIdMap.at("HADDR[14]")]->getSimValue();
+      HADDR_13_val = m_pads[padNameIdMap.at("HADDR[13]")]->getSimValue();
+      HADDR_12_val = m_pads[padNameIdMap.at("HADDR[12]")]->getSimValue();
+      HADDR_11_val = m_pads[padNameIdMap.at("HADDR[11]")]->getSimValue();
+      HADDR_10_val = m_pads[padNameIdMap.at("HADDR[10]")]->getSimValue();
+      HADDR_9_val = m_pads[padNameIdMap.at("HADDR[9]")]->getSimValue();
+      HADDR_8_val = m_pads[padNameIdMap.at("HADDR[8]")]->getSimValue();
+      HADDR_7_val = m_pads[padNameIdMap.at("HADDR[7]")]->getSimValue();
+      HADDR_6_val = m_pads[padNameIdMap.at("HADDR[6]")]->getSimValue();
+      HADDR_5_val = m_pads[padNameIdMap.at("HADDR[5]")]->getSimValue();
+      HADDR_4_val = m_pads[padNameIdMap.at("HADDR[4]")]->getSimValue();
+      HADDR_3_val = m_pads[padNameIdMap.at("HADDR[3]")]->getSimValue();
+      HADDR_2_val = m_pads[padNameIdMap.at("HADDR[2]")]->getSimValue();
+      HADDR_1_val = m_pads[padNameIdMap.at("HADDR[1]")]->getSimValue();
+      HADDR_0_val = m_pads[padNameIdMap.at("HADDR[0]")]->getSimValue();
+      string dmem_addr_str = HADDR_19_val+ HADDR_18_val+ HADDR_17_val+ HADDR_16_val+ HADDR_15_val+ HADDR_14_val+ HADDR_13_val+ HADDR_12_val+ HADDR_11_val+ HADDR_10_val+ HADDR_9_val+ HADDR_8_val+ HADDR_7_val+ HADDR_6_val+ HADDR_5_val+ HADDR_4_val+ HADDR_3_val+ HADDR_2_val;
+      return dmem_addr_str;
+    }
+    return "";
   }
   else
   {
@@ -1622,6 +1887,45 @@ string PowerOpt::getDmemDin()
     dmem_din_2_val  = m_pads[padNameIdMap.at("dmem_din[2]")]->getSimValue();
     dmem_din_1_val  = m_pads[padNameIdMap.at("dmem_din[1]")]->getSimValue();
     dmem_din_0_val  = m_pads[padNameIdMap.at("dmem_din[0]")]->getSimValue();
+  }
+  else if (design == "CORTEXM0PLUS")
+  {
+    string  HWDATA_31_val, HWDATA_30_val, HWDATA_29_val, HWDATA_28_val, HWDATA_27_val, HWDATA_26_val, HWDATA_25_val, HWDATA_24_val, HWDATA_23_val, HWDATA_22_val, HWDATA_21_val, HWDATA_20_val, HWDATA_19_val, HWDATA_18_val, HWDATA_17_val, HWDATA_16_val, HWDATA_15_val, HWDATA_14_val, HWDATA_13_val, HWDATA_12_val, HWDATA_11_val, HWDATA_10_val, HWDATA_9_val, HWDATA_8_val, HWDATA_7_val, HWDATA_6_val, HWDATA_5_val, HWDATA_4_val, HWDATA_3_val, HWDATA_2_val, HWDATA_1_val, HWDATA_0_val;
+    HWDATA_31_val = m_pads[padNameIdMap.at("HWDATA[31]")]->getSimValue();
+    HWDATA_30_val = m_pads[padNameIdMap.at("HWDATA[30]")]->getSimValue();
+    HWDATA_29_val = m_pads[padNameIdMap.at("HWDATA[29]")]->getSimValue();
+    HWDATA_28_val = m_pads[padNameIdMap.at("HWDATA[28]")]->getSimValue();
+    HWDATA_27_val = m_pads[padNameIdMap.at("HWDATA[27]")]->getSimValue();
+    HWDATA_26_val = m_pads[padNameIdMap.at("HWDATA[26]")]->getSimValue();
+    HWDATA_25_val = m_pads[padNameIdMap.at("HWDATA[25]")]->getSimValue();
+    HWDATA_24_val = m_pads[padNameIdMap.at("HWDATA[24]")]->getSimValue();
+    HWDATA_23_val = m_pads[padNameIdMap.at("HWDATA[23]")]->getSimValue();
+    HWDATA_22_val = m_pads[padNameIdMap.at("HWDATA[22]")]->getSimValue();
+    HWDATA_21_val = m_pads[padNameIdMap.at("HWDATA[21]")]->getSimValue();
+    HWDATA_20_val = m_pads[padNameIdMap.at("HWDATA[20]")]->getSimValue();
+    HWDATA_19_val = m_pads[padNameIdMap.at("HWDATA[19]")]->getSimValue();
+    HWDATA_18_val = m_pads[padNameIdMap.at("HWDATA[18]")]->getSimValue();
+    HWDATA_17_val = m_pads[padNameIdMap.at("HWDATA[17]")]->getSimValue();
+    HWDATA_16_val = m_pads[padNameIdMap.at("HWDATA[16]")]->getSimValue();
+    HWDATA_15_val = m_pads[padNameIdMap.at("HWDATA[15]")]->getSimValue();
+    HWDATA_14_val = m_pads[padNameIdMap.at("HWDATA[14]")]->getSimValue();
+    HWDATA_13_val = m_pads[padNameIdMap.at("HWDATA[13]")]->getSimValue();
+    HWDATA_12_val = m_pads[padNameIdMap.at("HWDATA[12]")]->getSimValue();
+    HWDATA_11_val = m_pads[padNameIdMap.at("HWDATA[11]")]->getSimValue();
+    HWDATA_10_val = m_pads[padNameIdMap.at("HWDATA[10]")]->getSimValue();
+    HWDATA_9_val = m_pads[padNameIdMap.at("HWDATA[9]")]->getSimValue();
+    HWDATA_8_val = m_pads[padNameIdMap.at("HWDATA[8]")]->getSimValue();
+    HWDATA_7_val = m_pads[padNameIdMap.at("HWDATA[7]")]->getSimValue();
+    HWDATA_6_val = m_pads[padNameIdMap.at("HWDATA[6]")]->getSimValue();
+    HWDATA_5_val = m_pads[padNameIdMap.at("HWDATA[5]")]->getSimValue();
+    HWDATA_4_val = m_pads[padNameIdMap.at("HWDATA[4]")]->getSimValue();
+    HWDATA_3_val = m_pads[padNameIdMap.at("HWDATA[3]")]->getSimValue();
+    HWDATA_2_val = m_pads[padNameIdMap.at("HWDATA[2]")]->getSimValue();
+    HWDATA_1_val = m_pads[padNameIdMap.at("HWDATA[1]")]->getSimValue();
+    HWDATA_0_val = m_pads[padNameIdMap.at("HWDATA[0]")]->getSimValue();
+    string dmem_data_str = HWDATA_31_val+ HWDATA_30_val+ HWDATA_29_val+ HWDATA_28_val+ HWDATA_27_val+ HWDATA_26_val+ HWDATA_25_val+ HWDATA_24_val+ HWDATA_23_val+ HWDATA_22_val+ HWDATA_21_val+ HWDATA_20_val+ HWDATA_19_val+ HWDATA_18_val+ HWDATA_17_val+ HWDATA_16_val+ HWDATA_15_val+ HWDATA_14_val+ HWDATA_13_val+ HWDATA_12_val+ HWDATA_11_val+ HWDATA_10_val+ HWDATA_9_val+ HWDATA_8_val+ HWDATA_7_val+ HWDATA_6_val+ HWDATA_5_val+ HWDATA_4_val+ HWDATA_3_val+ HWDATA_2_val+ HWDATA_1_val+ HWDATA_0_val;
+    return dmem_data_str;
+
   }
   else
   {
@@ -1713,6 +2017,66 @@ xbitset operator | (xbitset a, xbitset b)
 }
 
 
+void PowerOpt::writeDmem(int cycle_num)
+{
+  if (dmem_write != true) return;
+  if (hasX(dmem_addr_str)) return;
+  xbitset Dmem_higher;
+  xbitset Dmem_lower;
+  xbitset Dmem_except_byte_00;
+  xbitset Dmem_except_byte_01;
+  xbitset Dmem_except_byte_10;
+  xbitset Dmem_except_byte_11;
+  string dmem_din_str = getDmemDin();
+  xbitset dmem_din(dmem_din_str);
+     if (design == "CORTEXM0PLUS")
+     {
+       switch(dmem_write_mode)
+       {
+         case 0:  // WRITE THE WHOLE WORD
+            DMemory[dmem_addr] = dmem_din;
+            dmem_request_file << " Writing Data (full) " << dmem_din_str << " at cycle " << cycle_num <<  endl;
+            break;
+         case 1: // WRITE LOWER 16
+            Dmem_higher = DMemory[dmem_addr] & xbitset(4294901760); // upper 16 bits are 1
+            DMemory[dmem_addr] = Dmem_higher | (dmem_din & xbitset(65535)); // pass lower bits of dmem_din
+            dmem_request_file << "Writing Data (low 16) " << dmem_din_str << " at cycle " << cycle_num<< endl;
+            break;
+         case 2: // WRITE UPPER 16
+            Dmem_lower = DMemory[dmem_addr] & xbitset(65535); // lower 16 bits are 1
+            DMemory[dmem_addr] = Dmem_lower | (dmem_din & xbitset(4294901760)); // pass upper bits of dmem_din
+            dmem_request_file << "Writing Data (high 16) " << dmem_din_str << " at cycle " << cycle_num<< endl;
+            break;
+         case 3:
+            Dmem_except_byte_00 = DMemory[dmem_addr] & xbitset(4294967040); // upper 24 bits
+            DMemory[dmem_addr] = Dmem_except_byte_00 | (dmem_din & xbitset(255)); // pass lower bits of dmem_din
+            dmem_request_file << "Writing Data (byte 00) " << dmem_din_str << " at cycle " << cycle_num<< endl;
+            break;
+         case 4:
+            Dmem_except_byte_01 = DMemory[dmem_addr] & xbitset(4294902015); // upper 16 bits and lower 8 bits
+            DMemory[dmem_addr] = Dmem_except_byte_01 | (dmem_din & xbitset(65280)); // pass second lower 8 bits
+            dmem_request_file << "Writing Data (byte 01) " << dmem_din_str << " at cycle " << cycle_num<< endl;
+            break;
+         case 5:
+            Dmem_except_byte_10 = DMemory[dmem_addr] & xbitset(4278255615); // upper 8 bits and lower 16 bits
+            DMemory[dmem_addr] = Dmem_except_byte_10 | (dmem_din & xbitset(16711680)); // pass third lower 8 bits
+            dmem_request_file << "Writing Data (byte 10) " << dmem_din_str<< " at cycle " << cycle_num << endl;
+            break;
+         case 6:
+            Dmem_except_byte_11 = DMemory[dmem_addr] & xbitset(16777215); // lower 24 bits
+            DMemory[dmem_addr] = Dmem_except_byte_10 | (dmem_din & xbitset(4278190080)); // pass upper 8 bits
+            dmem_request_file << "Writing Data (byte 11) " << dmem_din_str << " at cycle " << cycle_num<< endl;
+            break;
+         default : assert(0);
+       }
+       dmem_write = false;
+
+       return ;
+     }
+     assert(0);
+}
+
+
 void PowerOpt::handleDmem(int cycle_num)
 {
      string dmem_cen = m_pads[padNameIdMap["dmem_cen"]]->getSimValue();
@@ -1763,6 +2127,340 @@ void PowerOpt::handleDmem(int cycle_num)
          break;
      }
 
+}
+
+void PowerOpt::sendHRData(string data_str)
+{
+  std::reverse(data_str.begin(), data_str.end());
+  m_pads[padNameIdMap.at("HRDATA[31]")]->setSimValue(data_str.substr(31,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[30]")]->setSimValue(data_str.substr(30,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[29]")]->setSimValue(data_str.substr(29,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[28]")]->setSimValue(data_str.substr(28,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[27]")]->setSimValue(data_str.substr(27,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[26]")]->setSimValue(data_str.substr(26,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[25]")]->setSimValue(data_str.substr(25,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[24]")]->setSimValue(data_str.substr(24,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[23]")]->setSimValue(data_str.substr(23,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[22]")]->setSimValue(data_str.substr(22,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[21]")]->setSimValue(data_str.substr(21,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[20]")]->setSimValue(data_str.substr(20,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[19]")]->setSimValue(data_str.substr(19,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[18]")]->setSimValue(data_str.substr(18,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[17]")]->setSimValue(data_str.substr(17,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[16]")]->setSimValue(data_str.substr(16,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[15]")]->setSimValue(data_str.substr(15,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[14]")]->setSimValue(data_str.substr(14,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[13]")]->setSimValue(data_str.substr(13,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[12]")]->setSimValue(data_str.substr(12,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[11]")]->setSimValue(data_str.substr(11,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[10]")]->setSimValue(data_str.substr(10,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[9]")]->setSimValue(data_str.substr(9,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[8]")]->setSimValue(data_str.substr(8,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[7]")]->setSimValue(data_str.substr(7,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[6]")]->setSimValue(data_str.substr(6,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[5]")]->setSimValue(data_str.substr(5,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[4]")]->setSimValue(data_str.substr(4,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[3]")]->setSimValue(data_str.substr(3,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[2]")]->setSimValue(data_str.substr(2,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[1]")]->setSimValue(data_str.substr(1,1), sim_wf);
+  m_pads[padNameIdMap.at("HRDATA[0]")]->setSimValue(data_str.substr(0,1), sim_wf);
+}
+
+void PowerOpt::handleHaddrBools(int cycle_num)
+{
+  if (design != "CORTEXM0PLUS") return ;
+  if (send_instr == true)
+  {
+    sendHRData(pmem_instr);
+    send_instr = false;
+  }
+  else if (send_data == true)
+  {
+    sendHRData(dmem_data);
+    send_data = false;
+
+  }
+  else if (periph_selected)
+  {
+    string data_str ;
+    if (send_input == true && input_count < inputs.size())
+    {
+       data_str = inputs[input_count];
+       input_count++;
+       sendHRData(data_str);
+       send_input= false;
+       debug_file_second << " sending data " << data_str << " input_count is " << input_count <<  endl;
+       cout << " sending data " << data_str << " input_count is " << input_count <<  endl;
+       pmem_request_file << " sending data " << data_str << " input_count is " << input_count <<  endl;
+    }
+    //else assert(0);
+  }
+  else
+  {
+    string allX = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+    string all0 = "00000000000000000000000000000000";
+    sendHRData(all0);
+  }
+
+
+}
+
+string PowerOpt::getRegVal(string regName, int start_bit, int end_bit)
+{
+  stringstream ss;
+  string returnVal;
+  if (design  == "CORTEXM0PLUS")
+  {
+    for (int i = end_bit; i >= start_bit; i--)
+    {
+      ss << "u_top_u_sys_u_core_"<< regName;
+      ss << "_reg_" << i << "_";
+      string reg_name = ss.str();
+      string val;
+      string term_name = reg_name+"/Q";
+      map<string, int>::iterator it = terminalNameIdMap.find(term_name);
+      if (it == terminalNameIdMap.end())
+      {
+        term_name = reg_name+"/QN";
+        it = terminalNameIdMap.find(term_name);
+        if (it == terminalNameIdMap.end())
+        {
+          val = "0";
+        }
+        else
+        {
+          val = terms[it->second]->getSimValue();
+          if (val == "1") val = "0";
+          else if (val == "0") val = "1";
+          else if (val =="X") val = "X";
+          else assert(0);
+        }
+      }
+      else val = terms[it->second]->getSimValue();
+      if (regName == "op_q" && i == 8)
+      {
+        if (val == "1") val = "0";
+        else if (val == "0") val = "1";
+        else if (val =="X") val = "X";
+        else assert(0);
+      }
+      returnVal += val;
+      ss.str("");
+    }
+  }
+  return returnVal;
+
+}
+
+string PowerOpt::getPortVal(string portName, int start_bit, int end_bit, char separator)
+{
+    assert(design == "CORTEXM0PLUS" || design == "PLASTICARM");
+    string returnVal;
+    for (int i = end_bit; i >= start_bit; i--)
+    {
+       stringstream ss;
+       ss << portName << "[" << i << "]";
+       string port_name = ss.str();
+       string val = m_pads[padNameIdMap.at(port_name)] ->getSimValue();
+       returnVal += val;
+    }
+    return returnVal;
+}
+
+string PowerOpt::getNetVal(string netName, int start_bit, int end_bit, char separator)
+{
+    assert(design == "CORTEXM0PLUS" || design == "PLASTICARM");
+    string returnVal;
+    for (int i = end_bit; i >= start_bit; i--)
+    {
+       stringstream ss;
+       ss << netName << "[" << i << "]";
+       string net_name = ss.str();
+       string val = nets[netNameIdMap.at(net_name)] ->getSimValue();
+       returnVal += val;
+    }
+    return returnVal;
+}
+
+bool PowerOpt::handleHaddr(int cycle_num)
+{
+    if (design != "CORTEXM0PLUS") return false;
+    string  HADDR_31_val, HADDR_30_val, HADDR_29_val, HADDR_28_val, HADDR_27_val, HADDR_26_val, HADDR_25_val, HADDR_24_val, HADDR_23_val, HADDR_22_val, HADDR_21_val, HADDR_20_val, HADDR_19_val, HADDR_18_val, HADDR_17_val, HADDR_16_val, HADDR_15_val, HADDR_14_val, HADDR_13_val, HADDR_12_val, HADDR_11_val, HADDR_10_val, HADDR_9_val, HADDR_8_val, HADDR_7_val, HADDR_6_val, HADDR_5_val, HADDR_4_val, HADDR_3_val, HADDR_2_val, HADDR_1_val, HADDR_0_val;
+    HADDR_31_val = m_pads[padNameIdMap.at("HADDR[31]")]->getSimValue();
+    HADDR_30_val = m_pads[padNameIdMap.at("HADDR[30]")]->getSimValue();
+    HADDR_29_val = m_pads[padNameIdMap.at("HADDR[29]")]->getSimValue();
+    HADDR_28_val = m_pads[padNameIdMap.at("HADDR[28]")]->getSimValue();
+    string HADDR_upper_nibble = HADDR_31_val + HADDR_30_val + HADDR_29_val + HADDR_28_val;
+    string HADDR = getPortVal("HADDR", 0, 31,  '[');
+    string HRDATA = getPortVal("HRDATA", 0, 31, '[');
+    string HWDATA = getPortVal("HWDATA", 0, 31, '[');
+    string op_q = getRegVal("op_q", 0,  15);
+    if (hasX(HADDR) && HADDR_upper_nibble != "0010")
+    {
+      if (cycle_num > 5)
+      {
+        cout << "HADDR has X" << endl;
+        pmem_request_file << "HADDR has X" << endl;
+        pmem_request_file << " HADDR is " << HADDR << " and HRDATA is " << HRDATA << " op_q is " << op_q << " at cycle " << cycle_num << endl;
+        debug_file_second << " HADDR is " << HADDR << " at cycle " << cycle_num << endl;
+        debug_file_second << " HRDATA is " << HRDATA << " at cycle " << cycle_num << endl;
+        debug_file_second << " HWDATA is " << HWDATA << " at cycle " << cycle_num << endl;
+        return true;
+      }
+      return false;
+    }
+    else
+    {
+      debug_file << " HADDR is " << HADDR << " and HRDATA is " << HRDATA << " op_q is " << op_q << " at cycle " << cycle_num << endl;
+      if (hasX(HADDR))
+      {
+        pmem_request_file << " HADDR is " << HADDR << " and HRDATA is " << HRDATA << " op_q is " << op_q << " at cycle " << cycle_num << endl;
+      }
+      else
+      {
+        pmem_request_file << " HADDR is " << bin2hex32(HADDR) << " and HRDATA is " << HRDATA << " op_q is " << op_q << " at cycle " << cycle_num << endl;
+      }
+      //debug_file << " HADDR is " << HADDR << " and HRDATA is " << HRDATA << " at cycle " << cycle_num << endl;
+      debug_file_second << " HADDR is " << HADDR << " at cycle " << cycle_num << endl;
+      debug_file_second << " HRDATA is " << HRDATA << " at cycle " << cycle_num << endl;
+      debug_file_second << " HWDATA is " << HWDATA << " at cycle " << cycle_num << endl;
+      if (HADDR_upper_nibble == "0000") // PMEM
+      {
+        string pmem_addr_str = getPmemAddr();
+        string HTRANS_1 = m_pads[padNameIdMap.at("HTRANS[1]")]->getSimValue();
+        send_instr = true;
+        if (HTRANS_1 == "1" && pmem_addr_str != "") // READ DATA NOW
+        {
+          pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
+          if (PMemory.find(pmem_addr) != PMemory.end())
+          {
+            instr = PMemory[pmem_addr]->instr;
+            pmem_instr = bitset<32>(instr).to_string();
+          }
+          //pmem_instr = binary(instr);
+          //else
+          //pmem_instr = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+          //string pmem_instr_hex = bin2hex(pmem_instr);
+          //pmem_request_file << " PMEM ADDR IS " << pmem_addr_str << " (" << bin2hex32(pmem_addr_str) << ") INSTR IS " << pmem_instr << " (" << bin2hex32(pmem_instr) << ") at cycle " << cycle_num <<  endl;
+          return 0;
+        }
+        else return 0;
+      }
+      if (HADDR_upper_nibble == "0010") // DMEM
+      {
+        send_data = true;
+        dmem_data = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+        //dmem_data = "00000000000000000000000000000000";
+        //string HSEL = m_pads[padNameIdMap.at("HSEL")]->getSimValue();
+        debug_file_second << " RAM " << endl;
+        string HTRANS_1 = m_pads[padNameIdMap.at("HTRANS[1]")]->getSimValue();
+        string HREADY = m_pads[padNameIdMap.at("HREADY")]->getSimValue();
+        string HWRITE = m_pads[padNameIdMap.at("HWRITE")]->getSimValue();
+        bool AHB_ACCESS = (HTRANS_1 == "1" && HREADY == "1");
+        bool AHB_WRITE = AHB_ACCESS && (HWRITE == "1");
+        bool RAM_WRITE = AHB_WRITE;// SKIPPING MODELING BUFFERED WRITES
+        bool RAM_READ = AHB_ACCESS && (HWRITE == "0");// SKIPPING MODELING BUFFERED WRITES
+        string HADDR_1_val = m_pads[padNameIdMap.at("HADDR[1]")]->getSimValue();
+        string HADDR_0_val = m_pads[padNameIdMap.at("HADDR[0]")]->getSimValue();
+        string HSIZE_1_val = m_pads[padNameIdMap.at("HSIZE[1]")]->getSimValue();
+        string HSIZE_0_val = m_pads[padNameIdMap.at("HSIZE[0]")]->getSimValue();
+        dmem_addr_str = getDmemAddr();
+        dmem_addr = strtoull(dmem_addr_str.c_str(), NULL, 2);
+        if (RAM_WRITE == true)
+        {
+          dmem_write = true;
+          //if (hasX(dmem_addr_str)) { cout << " WRITING TO ADDRESS WITH X" << endl; }
+          if (HSIZE_1_val == "1") // WRITE THE WHOLE WORD
+          {
+            dmem_write_mode = 0;
+          }
+          else if (HSIZE_1_val == "0" && HSIZE_0_val == "1") // WRITE HALF WORD 16 bits
+          {
+            if (HADDR_1_val == "0") // WRITE LOWER 16
+            {
+              dmem_write_mode = 1;
+            }
+            else if  (HADDR_1_val == "1") // UPPER 16
+            {
+              dmem_write_mode = 2;
+            }
+            else assert(0);
+          }
+          else if (HSIZE_1_val == "0" && HSIZE_0_val == "0") // WRITE BYTE
+          {
+            if (HADDR_1_val == "0" && HADDR_0_val == "0") // WRITE BYTE 00
+            {
+              dmem_write_mode = 3;
+            }
+            else if  (HADDR_1_val == "0" && HADDR_0_val == "1") // WRITE BYTE 01
+            {
+              dmem_write_mode = 4;
+            }
+            else if (HADDR_1_val == "1" && HADDR_0_val == "0") // WRITE BYTE 10
+            {
+              dmem_write_mode = 5;
+            }
+            else if (HADDR_1_val == "1" && HADDR_0_val == "1")
+            {
+              dmem_write_mode = 6;
+            }
+            else assert(0);
+
+          }
+          else assert(0);
+        }
+        else if (RAM_READ == true)
+        {
+          if ( hasX(dmem_addr_str) || DMemory.find(dmem_addr) == DMemory.end())
+            //dmem_data = "00000000000000000000000000000000";
+            dmem_data = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+          else
+            dmem_data = DMemory[dmem_addr].to_string();
+        }
+      }
+      if (HADDR_upper_nibble == "0100") // PERIPH
+      {
+        periph_selected = true;
+        if (HADDR == "01000000000000000001000000000100")
+          send_input = true;
+        if (HADDR == "01000000000000000001000000001100")
+          read_output = true;
+      }
+      else
+      {
+        return false;
+        //if ( cycle_num > 1) assert(0);
+      }
+    }
+    return false;
+}
+
+bool PowerOpt::readOutputs()
+{
+  if (!read_output || design != "CORTEXM0PLUS")  return false;
+  string HWDATA = getPortVal("HWDATA", 0, 31, '[');
+  //string HWDATA_hex = bin2hex(HWDATA);
+  output_value_file << HWDATA << endl;
+  read_output = false;
+
+}
+
+
+bool PowerOpt::sendInputs_new()
+{
+  static int i = 0;
+  if (send_input)
+  {
+    string data_str ;
+    if (i < inputs.size())
+    {
+      data_str = inputs[i]; i++;
+    }
+    else assert(0);
+    sendHRData(data_str);
+    send_input= false;
+    debug_file_second << " sending data " << data_str << " i is " << i <<  endl;
+  }
 }
 
 bool PowerOpt::sendInputs()
@@ -1988,6 +2686,39 @@ void PowerOpt::checkCorruption(int i)
 
 }
 
+
+
+bool PowerOpt::handleBranches_ARM(int cycle_num)
+{
+  //string op_q = getRegVal("op_q", 0,  15);
+  string op_q_upper_nibble = getRegVal("op_q", 12, 15);
+  string op_q_upper_second_nibble = getRegVal("op_q", 8, 11);
+  instr_name = "";
+
+  if (op_q_upper_nibble == "1101") // conditional branch
+  {
+         if (op_q_upper_second_nibble == "0000") { instr_name = "BEQ" ; }
+    else if (op_q_upper_second_nibble == "0001") { instr_name = "BNE" ; }
+    else if (op_q_upper_second_nibble == "0010") { instr_name = "BCS" ; }
+    else if (op_q_upper_second_nibble == "0011") { instr_name = "BCC" ; }
+    else if (op_q_upper_second_nibble == "0100") { instr_name = "BMI" ; }
+    else if (op_q_upper_second_nibble == "0101") { instr_name = "BPL" ; }
+    else if (op_q_upper_second_nibble == "0110") { instr_name = "BVS" ; }
+    else if (op_q_upper_second_nibble == "0111") { instr_name = "BVC" ; }
+    else if (op_q_upper_second_nibble == "1000") { instr_name = "BHI" ; }
+    else if (op_q_upper_second_nibble == "1001") { instr_name = "BLS" ; }
+    else if (op_q_upper_second_nibble == "1010") { instr_name = "BGE" ; }
+    else if (op_q_upper_second_nibble == "1011") { instr_name = "BLT" ; }
+    else if (op_q_upper_second_nibble == "1100") { instr_name = "BGT" ; }
+    else if (op_q_upper_second_nibble == "1101") { instr_name = "BLE" ; }
+    pmem_request_file << " Instr is " << instr_name << " at cycle " << cycle_num << endl;
+
+  }
+
+
+
+}
+
 bool PowerOpt::handleCondJumps(int cycle_num)
 {
   bool can_skip = false;
@@ -2044,6 +2775,21 @@ void PowerOpt::compute_leakage_energy() // No caller function
 bool PowerOpt::readMem(int cycle_num, bool wavefront)
 {
     string pmem_addr_str = getPmemAddr();
+    if (design == "CORTEXM0PLUS")
+    {
+      string HTRANS_1 = m_pads[padNameIdMap.at("HTRANS[1]")]->getSimValue();
+      if (HTRANS_1 == "1" && pmem_addr_str != "") // READ DATA NOW
+      {
+         pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
+         instr = PMemory[pmem_addr]->instr;
+         pmem_request_file << " PMEM ADDR IS " << pmem_addr << " INSTR IS " << instr << endl;
+         //pmem_instr = binary(instr);
+         pmem_instr = bitset<32> (instr).to_string();
+         send_instr = true;
+         return 0;
+      }
+      else return 0;
+    }
     pmem_addr = strtoull(pmem_addr_str.c_str(), NULL, 2);// binary to int
     static string  last_addr_string;
     if (pmem_addr > 12287) instr = 0;
@@ -2190,9 +2936,8 @@ void PowerOpt::sendPerDout(string data_str)
 
 void PowerOpt::sendData (string data_str)
 {
-  if (!send_data) return;
   dmem_request_file << " Reading Data " << data_str << endl;
-  cout << " Reading Data " << data_str << endl;
+  //cout << " Reading Data " << data_str << endl;
   // NOTE : inverting the assignments because to_string() of bitset assumes the same orientation of the bits as the constructor. to_string() does NOT invert the bit string for you.
   if (design == "flat_no_clk_gt")
   {
@@ -2231,6 +2976,43 @@ void PowerOpt::sendData (string data_str)
     m_pads[padNameIdMap.at("dmem_dout[2]")]  -> setSimValue(data_str.substr(13,1), sim_wf);
     m_pads[padNameIdMap.at("dmem_dout[1]")]  -> setSimValue(data_str.substr(14,1), sim_wf);
     m_pads[padNameIdMap.at("dmem_dout[0]")]  -> setSimValue(data_str.substr(15,1), sim_wf);
+  }
+  else if (design == "CORTEXM0PLUS")
+  {
+    std::reverse(data_str.begin(), data_str.end());
+    m_pads[padNameIdMap.at("HRDATA[31]")] -> setSimValue(data_str.substr(31,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[30]")] -> setSimValue(data_str.substr(30,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[29]")] -> setSimValue(data_str.substr(29,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[28]")] -> setSimValue(data_str.substr(28,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[27]")] -> setSimValue(data_str.substr(27,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[26]")] -> setSimValue(data_str.substr(26,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[25]")] -> setSimValue(data_str.substr(25,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[24]")] -> setSimValue(data_str.substr(24,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[23]")] -> setSimValue(data_str.substr(23,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[22]")] -> setSimValue(data_str.substr(22,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[21]")] -> setSimValue(data_str.substr(21,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[20]")] -> setSimValue(data_str.substr(20,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[19]")] -> setSimValue(data_str.substr(19,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[18]")] -> setSimValue(data_str.substr(18,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[17]")] -> setSimValue(data_str.substr(17,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[16]")] -> setSimValue(data_str.substr(16,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[15]")] -> setSimValue(data_str.substr(15,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[14]")] -> setSimValue(data_str.substr(14,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[13]")] -> setSimValue(data_str.substr(13,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[12]")] -> setSimValue(data_str.substr(12,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[11]")] -> setSimValue(data_str.substr(11,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[10]")] -> setSimValue(data_str.substr(10,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[9]")]  -> setSimValue(data_str.substr(9,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[8]")]  -> setSimValue(data_str.substr(8,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[7]")]  -> setSimValue(data_str.substr(7,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[6]")]  -> setSimValue(data_str.substr(6,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[5]")]  -> setSimValue(data_str.substr(5,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[4]")]  -> setSimValue(data_str.substr(4,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[3]")]  -> setSimValue(data_str.substr(3,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[2]")]  -> setSimValue(data_str.substr(2,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[1]")]  -> setSimValue(data_str.substr(1,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[0]")]  -> setSimValue(data_str.substr(0,1), sim_wf);
+
   }
   else assert(0);
   send_data = false;
@@ -2276,6 +3058,43 @@ void PowerOpt::sendInstr(string instr_str)
     m_pads[padNameIdMap.at("pmem_dout[2]")]  -> setSimValue(instr_str.substr(2 ,1), sim_wf);
     m_pads[padNameIdMap.at("pmem_dout[1]")]  -> setSimValue(instr_str.substr(1 ,1), sim_wf);
     m_pads[padNameIdMap.at("pmem_dout[0]")]  -> setSimValue(instr_str.substr(0 ,1), sim_wf);
+  }
+  else if (design == "CORTEXM0PLUS")
+  {
+    std::reverse(instr_str.begin(), instr_str.end());
+    m_pads[padNameIdMap.at("HRDATA[31]")] -> setSimValue(instr_str.substr(31,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[30]")] -> setSimValue(instr_str.substr(30,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[29]")] -> setSimValue(instr_str.substr(29,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[28]")] -> setSimValue(instr_str.substr(28,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[27]")] -> setSimValue(instr_str.substr(27,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[26]")] -> setSimValue(instr_str.substr(26,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[25]")] -> setSimValue(instr_str.substr(25,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[24]")] -> setSimValue(instr_str.substr(24,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[23]")] -> setSimValue(instr_str.substr(23,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[22]")] -> setSimValue(instr_str.substr(22,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[21]")] -> setSimValue(instr_str.substr(21,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[20]")] -> setSimValue(instr_str.substr(20,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[19]")] -> setSimValue(instr_str.substr(19,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[18]")] -> setSimValue(instr_str.substr(18,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[17]")] -> setSimValue(instr_str.substr(17,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[16]")] -> setSimValue(instr_str.substr(16,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[15]")] -> setSimValue(instr_str.substr(15,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[14]")] -> setSimValue(instr_str.substr(14,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[13]")] -> setSimValue(instr_str.substr(13,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[12]")] -> setSimValue(instr_str.substr(12,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[11]")] -> setSimValue(instr_str.substr(11,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[10]")] -> setSimValue(instr_str.substr(10,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[9]")]  -> setSimValue(instr_str.substr(9,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[8]")]  -> setSimValue(instr_str.substr(8,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[7]")]  -> setSimValue(instr_str.substr(7,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[6]")]  -> setSimValue(instr_str.substr(6,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[5]")]  -> setSimValue(instr_str.substr(5,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[4]")]  -> setSimValue(instr_str.substr(4,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[3]")]  -> setSimValue(instr_str.substr(3,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[2]")]  -> setSimValue(instr_str.substr(2,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[1]")]  -> setSimValue(instr_str.substr(1,1), sim_wf);
+    m_pads[padNameIdMap.at("HRDATA[0]")]  -> setSimValue(instr_str.substr(0,1), sim_wf);
+
   }
   else assert(0);
   send_instr = false;
@@ -2327,8 +3146,16 @@ void PowerOpt::initialRun()
 
 bool PowerOpt::check_peripherals()
 {
-	string per_enable_val  = m_pads[padNameIdMap.at("per_en")]->getSimValue();
-  if (per_enable_val != "1") return false;
+  if (design == "flat_no_clk_gt" || design == "modified_9_hier")
+  {
+    string per_enable_val  = m_pads[padNameIdMap.at("per_en")]->getSimValue();
+    if (per_enable_val != "1") return false;
+  }
+  else if (design == "CORTEXM0PLUS")
+  {
+    return true;
+
+  }
 
   string per_we_0_val, per_we_1_val;
   if (design == "flat_no_clk_gt")
@@ -2340,6 +3167,11 @@ bool PowerOpt::check_peripherals()
   {
      per_we_1_val  = m_pads[padNameIdMap.at("per_we[1]")]->getSimValue();
      per_we_0_val  = m_pads[padNameIdMap.at("per_we[0]")]->getSimValue();
+  }
+  else if (design == "CORTEXM0PLUS")
+  {
+    cout << design << endl;
+    return true;
   }
   else assert(0);
 
@@ -2392,6 +3224,48 @@ bool PowerOpt::check_peripherals()
 
 bool PowerOpt::check_sim_end(int& i, bool wavefront)
 {
+  if (design == "PLASTICARM") return false;
+  if (design == "CORTEXM0PLUS")
+  {
+    static bool read_test_pass = false;
+    static bool read_test_complete = false;
+    static bool test_pass = false;
+    static bool test_complete = false;
+    string HADDR = getPortVal("HADDR", 0, 31, '[');
+    string HWRITE = m_pads[padNameIdMap.at("HWRITE")]->getSimValue();
+    if (read_test_pass == true)
+    {
+      string HWDATA = getPortVal("HWDATA", 0, 31, '[');
+      if (HWDATA == "00000010000000100000001000000010")
+      {
+        test_pass = true;
+      }
+      read_test_pass = false;
+    }
+    else if (read_test_complete == true)
+    {
+      string HWDATA = getPortVal("HWDATA", 0, 31, '[');
+      if (HWDATA == "00000001000000010000000100000001")
+      {
+        test_complete = true;
+        if (test_pass == true)
+        {
+          cout << "SIM SUCCESS" << endl;
+        }
+        return true;
+      }
+      read_test_complete = false;
+    }
+    if (HADDR == "01000000000000000000000000001000" && HWRITE == "1")
+    {
+      read_test_pass = true;
+    }
+    else if (HADDR == "01000000000000000000000000000100" && HWRITE == "1")
+    {
+      read_test_complete = true;
+    }
+    return false;
+  }
 	string per_enable_val  = m_pads[padNameIdMap.at("per_en")]->getSimValue();
   if (per_enable_val != "1") return false;
 
@@ -2714,21 +3588,74 @@ string PowerOpt::getPC()
 
 bool PowerOpt::checkIfHung()
 {
-  static unsigned count = 0;
-  static unsigned last_instr;
-  if (instr == last_instr)
-    count ++;
+  if (design != "CORTEXM0PLUS") return false;
+  if (instr == hung_check_last_instr)
+    hung_check_count ++;
   else
   {
-    count = 0;
-    last_instr = instr;
+    hung_check_count = 0;
+    hung_check_last_instr = instr;
   }
 
-  if (count > 10) {
+  if (hung_check_count > 20) {
     cout << " System hung" << endl;
+    pmem_request_file << " System hung" << endl;
     return true;
   }
   return false;
+}
+
+void PowerOpt::SaveAllNetVals()
+{
+  for (int i = 0; i < getNetNum(); i++)
+  {
+    Net* net = getNet(i);
+    string sim_val = net->getSimValue();
+    bool toggled_state = false;
+    net_val_toggle_info.insert(make_pair(net, make_pair(sim_val, toggled_state)));
+  }
+}
+
+void PowerOpt::tbstuff(int cycle_num)
+{
+  if (design == "PLASTICARM")
+  {
+    if (cycle_num == 4)
+    {
+      SaveAllNetVals();
+    }
+    if (cycle_num == 8)
+    {
+      m_pads[padNameIdMap.at("I_NPOR")] -> setSimValue("1", sim_wf);
+    }
+  }
+  if (design == "CORTEXM0PLUS") 
+  {
+    if (cycle_num == 2)
+    {
+      m_pads[padNameIdMap.at("HRESETn")] -> setSimValue("0", sim_wf);
+    }
+    if (cycle_num == 4)
+    {
+      SaveAllNetVals();
+    }
+    if (cycle_num == 8)
+    {
+      m_pads[padNameIdMap.at("HRESETn")] -> setSimValue("1", sim_wf);
+    }
+    if (cycle_num == 9)
+    {
+      m_pads[padNameIdMap.at("WICDSREQn")] -> setSimValue("0", sim_wf);
+    }
+  }
+}
+
+void PowerOpt::register_net_toggle(Net* net)
+{
+  if (st_cycle_num < 4) return;
+  map<Net*, pair<string, bool> >:: iterator it = net_val_toggle_info.find(net);
+  assert(it != net_val_toggle_info.end());
+  net_val_toggle_info[net].second = true;
 }
 
 void PowerOpt::simulate()
@@ -2737,99 +3664,200 @@ void PowerOpt::simulate()
   readSimInitFile();
   readDmemInitFile();
   readInputValueFile();
+  pmem_instr = "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX";
+  input_count = 0;
+
   bool wavefront = true;
   bool done_inputs = false;
+  bool read_output = false;
+  bool dmem_write = false;
+  bool brk = false;
+  hung_check_count = 0;
+  hung_check_last_instr = 0;
   jump_cycle = 0;
-  int i = 0;
-  print_processor_state_profile(0,true);
-  //for (i = 0; i < num_sim_cycles; i++)
-  writeVCDBegin();
+  print_processor_state_profile(0,false, true);
   cycle_toggled_indices.clear();
   while(true)
   {
-    i++;
-    if (check_peripherals() == true) {
-      cout << " STARTING SIMULATION NOW !! at cycle " << i << endl;
-      print_dmem_contents(i);
-      print_processor_state_profile(i, false);
-      //return;
-    }
-    bool brk = readMem(i, wavefront);// -->  handleCondJumps()
-    if(subnegFlag == false){
+    st_cycle_num++;
+    tbstuff(st_cycle_num);
+    //sendInputs_new();
+    writeDmem(st_cycle_num);
+    readOutputs();
+    bool ret_val = handleHaddr(st_cycle_num);
+    brk |= ret_val;
     brk |= checkIfHung();
-    brk |= (i> num_sim_cycles);
-    }
-    if (brk == true) break;
-    runSimulation(wavefront, i, false); // simulates the negative edge
-    writeVCDCycle(2*i);
-
-    if (!done_inputs)
+    brk |= (st_cycle_num > num_sim_cycles);
+    if (brk == true)
     {
-      done_inputs = sendInputs();
-    }
-    else
-      recvInputs1(i, wavefront);
-
-    updateFromMem();
-    recvInputs2(i, wavefront);
-
-    runSimulation(wavefront, i, true); // simulates  the positive edge
-    writeVCDCycle(2*i+1); //  Since writeVCDCycle actually writes half a cycle ! Go through the function to see why;
-    updateRegOutputs(i);
-
-    vector<int>& toggled_set_indices = cycle_toggled_indices;
-    // DEAD_END GATE ELIMINATION
-    // generate toggled_gates_str
-    if (is_dead_end_check == true)
-    {
-       string toggled_gates_str;
-       toggled_gates_str += m_gates[cycle_toggled_indices[0]]->getName();
-       for (int j = 0; j< cycle_toggled_indices.size(); j++)
-       {
-         int id = cycle_toggled_indices[j] ;
-         Gate* gate = m_gates[id];
-         string gate_name = gate->getName();
-         toggled_gates_str += ","+gate_name;
-       }
-       vector<int> live_toggled_set_indices;
-       check_for_dead_ends(i, toggled_gates_str, live_toggled_set_indices);
-       toggled_set_indices = live_toggled_set_indices;
-    }
-
-    // GENERATE UNITS
-    if (i < 2) toggled_set_indices.clear();
-    if (sim_units == 1)
-    {
-      sort(toggled_set_indices.begin(), toggled_set_indices.end());
-      if (!tree-> essr(toggled_set_indices, false))
-        tree->insert(toggled_set_indices);
-    }
-    toggled_set_indices.clear(); cycle_toggled_indices.clear();
-    //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
-    if (print_processor_state_profile_every_cycle == 1) {
-      print_processor_state_profile(i, false);
-    }
-    else if (print_processor_state_profile_every_cycle == 2) {
-      print_processor_state_profile(i, true);
-    }
-    if (probeRegisters(i) == true)
-    {
-      print_processor_state_profile(i, true);
-      dump_Dmemory();
-      cout << "ENDING SIMULATION due to STATE CORRUPTION at " << i << endl;
+      cout << " BREAKING " << endl;
       break;
     }
 
-    if (check_sim_end(i, wavefront) == true) {
+    if (design == "PLASTICARM")
+    {
+      string uRSD_CORE_rom_addr = getNetVal("uRSD_CORE_rom_addr", 0, 9, '[');
+      pmem_request_file << "ROM addr is " << uRSD_CORE_rom_addr << " at cycle " << st_cycle_num << endl;
+    }
+
+
+    runSimulation(wavefront, st_cycle_num, false); // simulates the negative edge
+
+    handleHaddrBools(st_cycle_num);
+
+    if (print_processor_state_profile_every_cycle == 1) {
+      print_processor_state_profile(st_cycle_num, false, false);
+//      string HRDATA = getPortVal ("HRDATA", 0, 31, '[');
+//      debug_file << " pmem_instr is " << pmem_instr << endl;
+//      debug_file << " HRDATA is " << HRDATA << endl;
+//      debug_file_second << " pmem_instr is " << pmem_instr << endl;
+//      debug_file_second << " HRDATA is " << HRDATA << endl;
+    }
+    else if (print_processor_state_profile_every_cycle == 2) {
+      print_processor_state_profile(st_cycle_num, true, false);
+    }
+
+    //updateFromMem();
+    //recvInputs2(i, wavefront);
+
+    runSimulation(wavefront, st_cycle_num, true); // simulates  the positive edge
+    //writeVCDCycle(2*i+1); //  Since writeVCDCycle actually writes half a cycle ! Go through the function to see why;
+    if (print_processor_state_profile_every_cycle == 1) {
+      print_processor_state_profile(st_cycle_num, false, true);
+//      string HRDATA = getPortVal ("HRDATA", 0, 31, '[');
+//      debug_file << " pmem_instr is " << pmem_instr << endl;
+//      debug_file << " HRDATA is " << HRDATA << endl;
+//      debug_file_second << " pmem_instr is " << pmem_instr << endl;
+//      debug_file_second << " HRDATA is " << HRDATA << endl;
+    }
+    else if (print_processor_state_profile_every_cycle == 2) {
+      print_processor_state_profile(st_cycle_num, true, true);
+    }
+    updateRegOutputs(st_cycle_num); // print proc state is before flops get updated to match with VCS
+
+    if (probeRegisters_ARM(st_cycle_num) == true && st_cycle_num > 5 )
+    {
+      cout << " ENDING SIMULATION DUE TO STATE CORRUPTION " << endl;
+      break;
+    }
+    if (check_sim_end(st_cycle_num, wavefront) == true ) {
       cout << "ENDING SIMULATION" << endl;
       break ;
     }
+
+    //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
+    //Gate* my_gate = m_gates[gateNameIdMap.at("u_top/u_sys/u_core/U92")];
   }
-  global_curr_cycle = i;
+  global_curr_cycle = st_cycle_num;
   vcd_file.close();
-  print_dmem_contents(i-1);
-  cout << "Total Leakage Energy is " << total_leakage_energy*1e-9 << endl;
-  cout << "Baseline Leakage Energy is " << baseline_leakage_energy*1e-9 << endl;
+}
+
+void PowerOpt::simulate3()
+{
+  bool wavefront = true;
+  bool done_inputs = false;
+  while(!sys_state_queue.empty())
+  {
+    system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
+
+    if (conservative_state == 1)
+    {
+      string HADDR_str = sys_state->HADDR;
+      int local_id = sys_state->local_id;
+      map< string, map<int , system_state* > >::iterator hbcit = HADDR_branch_conservative_state.find(HADDR_str);
+      if (hbcit == HADDR_branch_conservative_state.end())
+      {
+        map<int, system_state*> new_map;
+        new_map.insert(make_pair(local_id, sys_state));
+        HADDR_branch_conservative_state.insert(make_pair(HADDR_str, new_map));
+        cout << " NEW HADDR " << HADDR_str << endl;
+        pmem_request_file << " NEW HADDR " << HADDR_str << endl;
+      }
+      else
+      {
+        map<int, system_state*> & branch_state_map = hbcit->second;
+        map<int, system_state*>::iterator bcit = branch_state_map.find(local_id);
+        if (bcit == branch_state_map.end())
+        {
+          branch_state_map.insert(make_pair(local_id, sys_state));
+        }
+        else
+        {
+          system_state* stored_state = bcit->second;
+          system_state & this_state = *sys_state;
+          bool can_skip = stored_state->compare_and_update_state_ARM(this_state);
+          if (can_skip == true)
+          {
+            cout << "SKIPPING !" << sys_state->get_state_short() << endl;
+            pmem_request_file << "SKIPPING !" << sys_state->get_state_short() << endl;
+            continue;
+          }
+          cout << " OLD HADDR : " << HADDR_str << " NOT SKIPPING" << sys_state->get_state_short() << endl;
+          pmem_request_file << " OLD HADDR : " << HADDR_str << " NOT SKIPPING" << sys_state->get_state_short() << endl;
+          // need to have a report on conservative state generation here
+          sys_state = stored_state;
+        }
+      }
+    }
+    else
+    {
+      cout << " CONSERVATIVE STATE NOT MAINTAINTED " << endl;
+    }
+
+    map<int, string>::iterator it;
+    for (it = sys_state->net_sim_value_map.begin(); it != sys_state->net_sim_value_map.end(); it++)
+    {
+       int net_id = it->first; string sim_val = it->second;
+       nets[net_id]->setSimValue(sim_val);
+    }
+
+    sim_wf = sys_state->sim_wf;
+    DMemory = sys_state->DMemory;
+    int start_cycle = sys_state->cycle_num;
+    input_count = sys_state->input_count;
+
+    cout << "RESUMING " << sys_state->get_state_short() <<  endl;
+    pmem_request_file << "------------------------------ RE-RUNNING FROM SAVED POINT ----------------" << endl;
+    hung_check_count = 0;
+    hung_check_last_instr = 0;
+
+    bool brk = false;
+    for (int st_cycle_num = start_cycle; st_cycle_num < num_sim_cycles; st_cycle_num++)
+    {
+      writeDmem(st_cycle_num);
+      readOutputs();
+      brk |= handleHaddr(st_cycle_num);
+      brk |= checkIfHung();
+      brk |= (st_cycle_num> num_sim_cycles);
+      if (brk == true) break;
+      runSimulation(wavefront, st_cycle_num, false); // simulates the negative edge
+      handleHaddrBools(st_cycle_num);
+      runSimulation(wavefront, st_cycle_num, true); // simulates  the positive edge
+      updateRegOutputs(st_cycle_num);
+      if (print_processor_state_profile_every_cycle == 1) {
+        print_processor_state_profile(st_cycle_num, false, true);
+        string HRDATA = getPortVal ("HRDATA", 0, 31, '[');
+        debug_file << " pmem_instr is " << pmem_instr << endl;
+        debug_file << " HRDATA is " << HRDATA << endl;
+        debug_file_second << " pmem_instr is " << pmem_instr << endl;
+        debug_file_second << " HRDATA is " << HRDATA << endl;
+      }
+      else if (print_processor_state_profile_every_cycle == 2) {
+        print_processor_state_profile(st_cycle_num, true, true);
+      }
+      if (probeRegisters_ARM(st_cycle_num) == true && st_cycle_num > 1 ) {
+        cout << " ENDING SIMULATION DUE TO STATE CORRUPTION " << endl;
+        break;
+      }
+      if (check_sim_end(st_cycle_num, wavefront) == true ) {
+        cout << "ENDING SIMULATION" << endl;
+        break ;
+      }
+
+    }
+
+  }
+
 }
 
 
@@ -2841,7 +3869,7 @@ void PowerOpt::simulate2()
   bool wavefront = true;
   bool done_inputs = false;
   jump_cycle = 0;
-  cout << " simulate2() " << endl;
+  cout << " simulate3() " << endl;
   while(!sys_state_queue.empty())
   {
     system_state* sys_state = sys_state_queue.front(); sys_state_queue.pop();
@@ -2852,25 +3880,25 @@ void PowerOpt::simulate2()
     if (conservative_state == 1)
     {
       map<string, system_state*>::iterator sit = PC_worst_system_state.find(PC);
-    if (sit == PC_worst_system_state.end())
-    {
-      // NEW PC
-        PC_worst_system_state[PC] = sys_state;
-      cout << " NEW PC " << PC_hex << endl;
-    }
-    else
-    {
-      // COMPARE THE SYSTEM STATES
-        system_state*  stored_state = sit->second;
-      system_state & this_state = *sys_state;
-        bool can_skip = stored_state->compare_and_update_state(this_state);
-      if (can_skip == true)
+      if (sit == PC_worst_system_state.end())
       {
+        // NEW PC
+        PC_worst_system_state[PC] = sys_state;
+        cout << " NEW PC " << PC_hex << endl;
+      }
+      else
+      {
+        // COMPARE THE SYSTEM STATES
+        system_state*  stored_state = sit->second;
+        system_state & this_state = *sys_state;
+        bool can_skip = stored_state->compare_and_update_state(this_state);
+        if (can_skip == true)
+        {
           cout << "SKIPPING ! " <<  sys_state->get_state_short() << endl;
           pmem_request_file  << "SKIPPING " << sys_state->get_state_short() << endl;
-        sleep(1) ;
-        continue;
-      }
+          sleep(1) ;
+          continue;
+        }
         cout << " OLD PC : " << PC_hex << " NOT SKIPPING." << sys_state->get_state_short() <<  endl;
         sys_state = stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
       }
@@ -2967,10 +3995,10 @@ void PowerOpt::simulate2()
 
       //debug_file_second << " R10 is " << getGPR(10)  << " R14 is " << getGPR(14) << " at cycle " << i << endl;
       if (print_processor_state_profile_every_cycle == 1) {
-        print_processor_state_profile(i, false);
+        print_processor_state_profile(i, false, true);
       }
       else if (print_processor_state_profile_every_cycle == 2) {
-        print_processor_state_profile(i, true);
+        print_processor_state_profile(i, true, true);
       }
       if (probeRegisters(i) == true)
       {
@@ -2988,6 +4016,26 @@ void PowerOpt::simulate2()
   }
 }
 
+void PowerOpt::print_net_toggle_info()
+{
+  map<Net* , pair<string , bool> >::iterator it = net_val_toggle_info.begin();
+ for (; it !=  net_val_toggle_info.end(); it++)
+ {
+   Net* net = it->first;
+   bool toggled = it->second.second;
+   if (toggled == true)
+   {
+     net_toggle_info_file << net->getName() << " Toggled" << endl;
+   }
+   else
+   {
+     string val = it->second.first;
+     net_toggle_info_file << net->getName() << " Constant val : " << val  << endl;
+   }
+
+ }
+}
+
 void PowerOpt::simulation_post_processing(designTiming* T)
 {
   cout << "Unique (subsetted, during insert) toggle groups count = " << tree->num_sets() << endl;
@@ -2997,7 +4045,8 @@ void PowerOpt::simulation_post_processing(designTiming* T)
   //find_dynamic_slack_subset(T);
 
   dump_units();
-  dump_all_toggled_gates_file();
+  //dump_all_toggled_gates_file();
+  print_net_toggle_info();
 
   print_dmem_contents(global_curr_cycle);
 
@@ -3098,14 +4147,28 @@ string PowerOpt::getGPR(int num)
 
 system_state* PowerOpt::get_current_system_state(int cycle_num)
 {
-    system_state* s_state = new system_state(nets, sim_wf, DMemory,  cycle_num, getPC(), pmem_instr,  false );
-    return s_state;
+  system_state * s_state;
+  if (design == "CORTEXM0PLUS")
+    s_state = new system_state(nets, sim_wf, DMemory,  cycle_num, getPortVal("HADDR", 0, 31, '['), getPortVal("HRDATA", 0, 31, '['), input_count);
+  else
+    s_state = new system_state(nets, sim_wf, DMemory,  cycle_num, getPC(), pmem_instr,  false );
+  return s_state;
+}
+
+system_state* PowerOpt::get_current_system_state_at_branch(int cycle_num, int branch_id)
+{
+  system_state * s_state;
+  if (design == "CORTEXM0PLUS")
+    s_state = new system_state(nets, sim_wf, DMemory,  cycle_num, getPortVal("HADDR", 0, 31, '['), getPortVal("HRDATA", 0, 31, '['), input_count, branch_id);
+  else
+    s_state = new system_state(nets, sim_wf, DMemory,  cycle_num, getPC(), pmem_instr,  false );
+  return s_state;
 }
 
 bool PowerOpt::get_conservative_state(system_state* sys_state)
 {
   string PC = sys_state->PC;
-  if (PC.find("X") != string::npos) { cout << "PC Corrupt at sys_state with ID : " << sys_state->id << endl; return true; }
+  if (PC.find("X") != string::npos) { cout << "PC Corrupt at sys_state with ID : " << sys_state->global_id << endl; return true; }
   string PC_hex = bin2hex(PC);
   map<string, system_state*>::iterator sit = PC_worst_system_state.find(PC);
   if (sit == PC_worst_system_state.end())
@@ -3130,6 +4193,699 @@ bool PowerOpt::get_conservative_state(system_state* sys_state)
     sys_state = & stored_state; // USE THE STORED (AND UPDATED STATE) FOR SIMULATION
   }
   return false;
+}
+
+
+bool PowerOpt::probeRegisters_ARM(int& cycle_num)
+{
+  if (design != "CORTEXM0PLUS") return false;
+  handleBranches_ARM(cycle_num);
+  string V ;
+  string N ;
+  string Z ;
+  string C ;
+  N = terms[terminalNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_/Q"]]->getSimValue();
+  Z = terms[terminalNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_/Q"]]->getSimValue();
+  C = terms[terminalNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_/Q"]]->getSimValue();
+  V = terms[terminalNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_/Q"]]->getSimValue();
+/*  string apsr_reg = getRegVal("apsr_q", 0, 3);
+  pmem_request_file << " APSR is " << apsr_reg << " at cycle " << cycle_num << endl;*/
+
+   bool state_corrupted = false;
+   if (instr_name == "BEQ" || instr_name == "BNE")
+   {
+     if (Z == "X")
+     {
+       pmem_request_file << "Z is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+     }
+   }
+   else if (instr_name == "BCS" || instr_name == "BCC")
+   {
+     if (C == "X")
+     {
+       pmem_request_file << "C is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+
+     }
+
+   }
+   else if (instr_name == "BMI" || instr_name == "BPL")
+   {
+     if (N == "X")
+     {
+       pmem_request_file << "N is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+
+
+     }
+
+   }
+   else if (instr_name == "BVS" || instr_name == "BVC")
+   {
+     if (V == "X")
+     {
+       pmem_request_file << "V is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+
+
+     }
+
+   }
+   else if (instr_name == "BHI" || instr_name == "BLS")
+   {
+
+     if (C == "X")
+     {
+       state_corrupted = true;
+       if ( Z == "X")
+       {
+         pmem_request_file << "C and Z are corrupt" << endl;
+         // POSSIBILITY 1
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("0", sim_wf); // C
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf); // Z
+         system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_1);
+
+         // POSSIBILITY 2
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("0", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_2);
+
+         // POSSIBILITY 3
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("1", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_3);
+
+         // POSSIBILITY 4
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("1", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_4);
+
+       }
+       else
+       {
+         pmem_request_file << "C (not Z) is corrupt" << endl;
+         // POSSIBILITY 1
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_1);
+
+         // POSSIBILITY 2
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_2);
+       }
+     }
+     else if (Z == "X")
+     {
+       state_corrupted = true;
+       pmem_request_file << "Z (not C) is corrupt" << endl;
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+     }
+     else { } // DO NOTHING
+
+/*     if (C == "X" || Z == "X")
+     {
+       pmem_request_file << "C or Z is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("0", sim_wf); // C
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf); // Z
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+
+       // POSSIBILITY 3
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_3);
+
+       // POSSIBILITY 4
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_1_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_4);
+     }*/
+
+   }
+   else if (instr_name == "BGE" || instr_name == "BLT")
+   {
+
+     if (N == "X")
+     {
+       state_corrupted = true;
+       if  (V == "X")
+       {
+         pmem_request_file << "N and V are corrupt" << endl;
+         // POSSIBILITY 1
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_1);
+
+         // POSSIBILITY 2
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_2);
+
+         // POSSIBILITY 3
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_3);
+
+         // POSSIBILITY 4
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_4);
+       }
+       else
+       {
+         pmem_request_file << "N (not V) is corrupt" << endl;
+
+         // POSSIBILITY 1
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_1);
+
+         // POSSIBILITY 2
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_2);
+
+       }
+     }
+     else if (V =="X")
+     {
+       pmem_request_file << "V (not N) is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+
+
+     }
+     else {} // DO NOTHING
+/*     if (N == "X" || V == "X")
+     {
+       pmem_request_file << "N or V is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+
+       // POSSIBILITY 3
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_3);
+
+       // POSSIBILITY 4
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_4);
+
+     }*/
+
+   }
+   else if (instr_name == "BGT" || instr_name == "BLE")
+   {
+     if ( Z == "X")
+     {
+       state_corrupted = true;
+       if (N == "X")
+       {
+         if (V == "X") // ZNV
+         {
+           pmem_request_file << "Z and N and V are corrupt" << endl;
+           // POSSIBILITY 1
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+           system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_1);
+
+           // POSSIBILITY 2
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+           system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_2);
+
+           // POSSIBILITY 3
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+           system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_3);
+
+           // POSSIBILITY 4
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+           system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_4);
+
+           // POSSIBILITY 5
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+           system_state* sys_state_5 = get_current_system_state_at_branch(cycle_num, 5) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_5->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_5->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_5);
+
+           // POSSIBILITY 6
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+           system_state* sys_state_6 = get_current_system_state_at_branch(cycle_num, 6) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_6->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_6->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_6);
+
+           // POSSIBILITY 7
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+           system_state* sys_state_7 = get_current_system_state_at_branch(cycle_num, 7) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_7->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_7->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_7);
+
+           // POSSIBILITY 8
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+           system_state* sys_state_8 = get_current_system_state_at_branch(cycle_num, 8) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_8->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_8->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_8);
+         }
+         else // ZN
+         {
+           pmem_request_file << "Z and N (not V) are corrupt" << endl;
+           // POSSIBILITY 1
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+           system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_1);
+
+           // POSSIBILITY 2
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+           system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_2);
+
+           // POSSIBILITY 3
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+           system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_3);
+
+           // POSSIBILITY 4
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+           system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_4);
+
+         }
+       }
+       else if (V == "X") // ZV
+       {
+           pmem_request_file << "Z and V (not N) are corrupt" << endl;
+           // POSSIBILITY 1
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+           system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_1);
+
+           // POSSIBILITY 2
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+           system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_2);
+
+           // POSSIBILITY 3
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+           system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_3);
+
+           // POSSIBILITY 4
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+           m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+           system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+           cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+           pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+           sys_state_queue.push(sys_state_4);
+
+
+       }
+       else // Z
+       {
+         pmem_request_file << "Z (not N and not V) is corrupt" << endl;
+         // POSSIBILITY 1
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_1);
+
+         // POSSIBILITY 2
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_2);
+       }
+     }
+     else if (N == "X")
+     {
+       if (V == "X") // NV
+       {
+         pmem_request_file << "N and V (not Z) are corrupt" << endl;
+         // POSSIBILITY 1
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_1);
+
+         // POSSIBILITY 2
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_2);
+
+         // POSSIBILITY 3
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_3);
+
+         // POSSIBILITY 4
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_4);
+
+       }
+       else // N
+       {
+         pmem_request_file << "N (not V not Z) is corrupt" << endl;
+         state_corrupted = true;
+
+         // POSSIBILITY 1
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+         system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_1);
+
+         // POSSIBILITY 2
+         m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+         system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+         cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+         sys_state_queue.push(sys_state_2);
+
+
+       }
+     }
+     else if (V == "X") // V
+     {
+       pmem_request_file << "V (not N not Z) is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+
+     }
+     else {}
+/*     if (Z == "X"  || N == "X" || V == "X")
+     {
+       pmem_request_file << "Z or N or V is corrupt" << endl;
+       state_corrupted = true;
+
+       // POSSIBILITY 1
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_1 = get_current_system_state_at_branch(cycle_num, 1) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_1->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_1);
+
+       // POSSIBILITY 2
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_2 = get_current_system_state_at_branch(cycle_num, 2) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_2->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_2);
+
+       // POSSIBILITY 3
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_3 = get_current_system_state_at_branch(cycle_num, 3) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_3->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_3);
+
+       // POSSIBILITY 4
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_4 = get_current_system_state_at_branch(cycle_num, 4) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_4->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_4);
+
+       // POSSIBILITY 5
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_5 = get_current_system_state_at_branch(cycle_num, 5) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_5->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_5->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_5);
+
+       // POSSIBILITY 6
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("0", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_6 = get_current_system_state_at_branch(cycle_num, 6) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_6->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_6->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_6);
+
+       // POSSIBILITY 7
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("0", sim_wf);
+       system_state* sys_state_7 = get_current_system_state_at_branch(cycle_num, 7) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_7->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_7->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_7);
+
+       // POSSIBILITY 8
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_0_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_2_"]]->setSimValueReg("1", sim_wf);
+       m_gates[gateNameIdMap["u_top_u_sys_u_core_apsr_q_reg_3_"]]->setSimValueReg("1", sim_wf);
+       system_state* sys_state_8 = get_current_system_state_at_branch(cycle_num, 8) ;
+       cout << "PUSHING SYSTEM STATE : " << sys_state_8->get_state_short() <<  endl;
+       pmem_request_file << "PUSHING SYSTEM STATE : " << sys_state_8->get_state_short() <<  endl;
+       sys_state_queue.push(sys_state_8);
+
+     }*/
+
+   }
+   return state_corrupted;
 }
 
 bool PowerOpt::probeRegisters(int& cycle_num)
@@ -3485,34 +5241,41 @@ void PowerOpt::computeTopoSort_new(Graph* graph)
     debug_file << " Setting Topo_id of Node : " << node->getName() << " as "  << count << endl;
     node->setTopoId(count++);
     node->setVisited(true);
-    Net* net;
+    vector<Net*> nets;
     if (node->getIsPad() == true)
     {
       Pad* pad = node->getPad();
       if (pad->getNetNum() == 0) continue;
-      net = pad->getNet(0);
+      nets.push_back(pad->getNet(0));
     }
     else
     {
       assert(node->getIsGate() == true);
       Gate* gate = node->getGate();
-      assert(gate->getFanoutTerminalNum() == 1);
-      net = gate->getFanoutTerminal(0)->getNet(0);
-    }
-    net->setTopoSortMarked(true);
-    debug_file << "   Net is : " <<  net->getName() << endl;
-    for (int i = 0; i < net->getTerminalNum(); i++)
-    {
-      Terminal * term = net->getTerminal(i);
-      if (term->getPinType() == OUTPUT)
-        continue;
-      debug_file << "       Terminal is : " << term->getFullName() << endl;
-      Gate* gate_nxt = term->getGate();
-      GNode* node_nxt = gate_nxt->getGNode();
-      if (gate_nxt->allInpNetsVisited() == true && node_nxt->getVisited() == false)
+      //assert(gate->getFanoutTerminalNum() == 1);
+      for (int i = 0; i < gate->getFanoutTerminalNum() ; i++)
       {
-        debug_file << "Adding : " << node_nxt->getName() << " from terminal : " << term->getFullName() << " and Net : " << net->getName() << endl;
-        graph->addWfNode(node_nxt);// add to queue
+        nets.push_back(gate->getFanoutTerminal(i)->getNet(0));
+      }
+    }
+    for (int j = 0; j < nets.size(); j++)
+    {
+      Net * net = nets[j];
+      net->setTopoSortMarked(true);
+      debug_file << "   Net is : " <<  net->getName() << endl;
+      for (int i = 0; i < net->getTerminalNum(); i++)
+      {
+        Terminal * term = net->getTerminal(i);
+        if (term->getPinType() == OUTPUT)
+          continue;
+        debug_file << "       Terminal is : " << term->getFullName() << endl;
+        Gate* gate_nxt = term->getGate();
+        GNode* node_nxt = gate_nxt->getGNode();
+        if (gate_nxt->allInpNetsVisited() == true && node_nxt->getVisited() == false)
+        {
+          debug_file << "Adding : " << node_nxt->getName() << " from terminal : " << term->getFullName() << " and Net : " << net->getName() << endl;
+          graph->addWfNode(node_nxt);// add to queue
+        }
       }
     }
   }
@@ -3760,12 +5523,26 @@ void PowerOpt::print_nets()
 
 void PowerOpt::print_regs()
 {
+  debug_file << " REGS : " << endl;
   list<Gate*>::iterator it;
   for(it = m_regs.begin(); it != m_regs.end(); it++)
   {
     Gate* ff_gate = *it;
-    cout << ff_gate->getName() << endl;
+    debug_file << ff_gate->getName() << endl;
   }
+  debug_file << " DONE REGS " << endl;
+
+  debug_file << " REG OUT_PINS : " << endl;
+  for (it = m_regs.begin(); it!=m_regs.end(); it++)
+  {
+    Gate* ff_gate = *it;
+    for (int i =0; i < ff_gate->getFanoutTerminalNum(); i++)
+    {
+      Terminal* term = ff_gate->getFanoutTerminal(i);
+      debug_file << term->getFullName() << endl;
+    }
+  }
+  debug_file << " DONE REG OUT_PINS : " << endl;
 }
 
 void PowerOpt::print_gates()
@@ -3774,7 +5551,7 @@ void PowerOpt::print_gates()
   for (int i =0; i < getGateNum(); i++)
   {
     Gate* gate = m_gates[i];
-    debug_file << gate->getName() << " : " << i << endl;
+    debug_file << gate->getName() << " : " << i << " NUM FANOUT TERMS : " << gate->getFanoutTerminalNum() <<  endl;
   }
   debug_file << " DONE GATES " << endl;
 
@@ -3792,13 +5569,15 @@ void PowerOpt::print_term_exprs()
 
 void PowerOpt::print_terminals()
 {
+  debug_file << " TERMS : " << endl;
   for (int i = 0; i < getTerminalNum(); i++)
   {
     Terminal* term = terms[i];
     debug_file << i << " : " << term->getFullName() << " --> " ;
-    //term->printNets(debug_file);
+    term->printNets(debug_file);
     debug_file << endl;
   }
+  debug_file << " DONE TERMS " << endl;
 }
 
 void PowerOpt::printTopoOrder()
@@ -3807,7 +5586,7 @@ void PowerOpt::printTopoOrder()
   for (it = nodes_topo.begin(); it != nodes_topo.end(); it ++)
   {
      GNode* node = *it;
-     cout << node->getTopoId() << " : " <<  node->getName() << endl;
+     cout << node->getTopoId() << " : " <<  node->getName() << " : " << node->getType() << endl;
   }
 /*  for (int i =0; i < m_gates_topo.size(); i++)
   {
@@ -3837,10 +5616,10 @@ void PowerOpt::topoSort()
     graph->clear_visited();
     //graph->print();
     cout << "Finished Top Sort" << endl;
-    //printTopoOrder();
-//    cout << " Checking topo order ... " ;
-    //checkTopoOrder(graph);
-//    cout << " done " << endl;
+    printTopoOrder();
+    cout << " Checking topo order ... " ;
+    checkTopoOrder(graph);
+    cout << " done " << endl;
 
     //TODO: COMPUTE EXPRESSIONS!!!
 
@@ -4684,7 +6463,7 @@ void PowerOpt::handle_toggled_nets_to_get_processor_state( vector < pair < strin
     }
   }
 
-  print_processor_state_profile(cycle_time, false);
+  print_processor_state_profile(cycle_time, false, true);
 
 }
 

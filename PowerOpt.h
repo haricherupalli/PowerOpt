@@ -164,21 +164,25 @@ class PowerOpt {
     void my_debug(designTiming * T);
     void print_indexed_toggled_set(vector<int> & unit, float worst_slack);
     void print_fanin_cone(designTiming* T);
-    void print_processor_state_profile(int cycle_num, bool reg);
+    void print_processor_state_profile(int cycle_num, bool reg, bool pos_edge);
     void print_dmem_contents(int cycle_num);
     void checkConnectivity(designTiming* T);
+    set<string>& get_ignore_nets() { return ignore_nets; }
     string getPC();
     string getGPR(int num);
     void getSimValOfTerminal(string term_name, string& val);
    void topoSort();
     void simulate();
     void simulate2();
+    void simulate3();
     void simulation_post_processing(designTiming * T);
     bool check_peripherals();
     bool check_sim_end(int& i, bool wavefront);
     void readPmemFile();
+    void readIgnoreNetsFile();
     void readStaticPGInfo();
     void compute_leakage_energy();
+    string getHaddr();
     string getPmemAddr();
     void dumpPmem();
     int getEState();
@@ -189,7 +193,20 @@ class PowerOpt {
     string getDmemLow();
     string getDmemHigh();
     void handleDmem(int cycle_num);
+    void writeDmem(int cycle_num);
+    bool handleHaddr(int cycle_num);
+    void handleHaddrBools(int cycle_num);
+    string getPortVal(string portName, int start_bit, int end_bit, char separator);
+    string getNetVal(string netName, int start_bit, int end_bit, char separator);
+    string getRegVal(string regName, int start_bit, int end_bit);
+    void tbstuff(int cycle_num);
+    void SaveAllNetVals();
+    //map<Net* , pair<string, bool> > & getNetValToggleInfo() { return net_val_toggle_info;}
+    void register_net_toggle(Net* net);
+    void print_net_toggle_info();
     bool sendInputs();
+    bool sendInputs_new(); // FOR CORTEXM0
+    bool readOutputs(); // FOR CORTEXM0
     bool readHandShake();
     void recvInputs1(int cycle_num, bool wavefront);
     void recvInputs2(int cycle_num, bool wavefront);
@@ -197,10 +214,12 @@ class PowerOpt {
     bool readMem(int cycle_num, bool wavefront);
     bool checkIfHung();
     bool handleCondJumps(int cycle_num);
+    bool handleBranches_ARM(int cycle_num);
     void checkCorruption(int i);
     void sendInstr(string instr_str);
     void sendData (string data_str);
     void sendPerDout (string data_str);
+    void sendHRData (string data_str);
     void sendIRQX ();
     void sendDbgX ();
     void testReadAddr();
@@ -214,7 +233,9 @@ class PowerOpt {
     void readDmemInitFile();
     void updateRegOutputs(int cycle_num);
     bool probeRegisters(int& cycle_num);
+    bool probeRegisters_ARM(int& cycle_num);
     system_state* get_current_system_state(int cycle_num);
+    system_state* get_current_system_state_at_branch(int cycle_num, int branch_id);
     bool get_conservative_state(system_state* sys_state);
     void updateFromMem();
     void printRegValues();
@@ -870,6 +891,7 @@ class PowerOpt {
     ofstream toggled_nets_file;
     ofstream units_file;
     ofstream all_toggled_gates_file;
+    ofstream net_toggle_info_file;
     ofstream unique_not_toggle_gate_sets;
     ofstream unique_toggle_gate_sets;
     ofstream slack_profile_file;
@@ -886,6 +908,7 @@ class PowerOpt {
     ofstream fanins_file;
     ofstream processor_state_profile_file;
     ofstream dmem_contents_file;
+    ofstream output_value_file;
     ofstream pmem_contents_file;
     ofstream missed_nets;
     ofstream vcd_odd_file;
@@ -987,10 +1010,14 @@ class PowerOpt {
     string clusterNamesFile;
     string simInitFile;
     string inputValueFile;
+    string outputValueFile;
     string dmemInitFile;
     string staticPGInfoFile;
     string dbgSelectGatesFile;
     string pmem_file_name;
+    string ignore_nets_file_name;
+    string one_pins_file_name;
+    string zero_pins_file_name;
     string worstSlacksFile;
     string ptServerName;
     string reportFile;
@@ -1050,6 +1077,7 @@ class PowerOpt {
     vector<vector< pair<string, string> > > toggled_gate_vector_rise_fall;
     vector<vector< pair<Terminal*, ToggleType> > > toggled_term_vector;
     vector<string> dbgSelectGates;
+    set<string> ignore_nets;
 
     vector<int> cycles_of_toggled_gate_vector; // this holds the corresponding cycles for the toggled gate vector.
     vector<pair<int, map<string, pair< int, pair<int, float> > >::iterator > > per_cycle_toggled_sets; // cycle_time, iterator to map
@@ -1063,6 +1091,8 @@ class PowerOpt {
     map<int, Cluster* > clusters; // Power Domains
     map<string, pair< bool, bool > > PC_taken_nottaken;;
     map<string, system_state*> PC_worst_system_state;
+    map< string, map<int , system_state* > > HADDR_branch_conservative_state;
+    map <Net* , pair<string, bool> > net_val_toggle_info;
 
     map<string, string> cell_name_and_type;
     map<string, pair<string, string> > pin_name_net_direction;
@@ -1081,16 +1111,28 @@ class PowerOpt {
     vector<int> cycle_toggled_indices;
     set<int> all_toggled_gates;
     string dmem_data;
+    int dmem_write_mode;
+    int hung_check_count;
+    int hung_check_last_instr;
+    //xbitset dmem_din;
+    bool dmem_write;
+    unsigned int dmem_addr;
+    string dmem_addr_str;
     unsigned int instr;
     string pmem_instr;
     string instr_name;
     long global_curr_cycle;
+    static int st_cycle_num;
     int jump_cycle;
     bool jump_detected;
     bool recv_inputs;
     bool send_data;
     bool send_instr;
     unsigned int pmem_addr;
+    unsigned int HADDR;
+    bool  read_output;
+    bool  send_input;
+    bool  periph_selected;
     int cluster_id;
     double total_leakage_energy;
     double baseline_leakage_energy;
@@ -1099,6 +1141,7 @@ class PowerOpt {
     int  subnegState;
     int sim_units;
     int maintain_toggle_profiles;
+    int input_count;
 };
 
 }

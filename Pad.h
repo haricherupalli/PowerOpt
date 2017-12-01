@@ -58,13 +58,14 @@ namespace POWEROPT {
     void print();
     void setExpr();
     void setSimValue(string value, priority_queue<GNode*, vector<GNode*>, sim_wf_compare>& sim_wf);
-    //void setSimValue(string value);
+    void setSimValue(string value);
     string getSimValue() ;
     int getTopoId() { return node->getTopoId(); }
     ToggleType getSimToggType() ;
     
   private:
     int id;
+    string sim_val;
     string name;
     Pin pin;
     PadType type;

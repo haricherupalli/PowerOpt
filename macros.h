@@ -4,7 +4,7 @@
 namespace POWEROPT {
 
 #define DOSE_SENSITIVITY (-2.0) //nm/%
-#define D 1.0 //original exposure dose
+//#define D 1.0 //original exposure dose
 #define GRID_WIDTH 20
 #define GRID_HEIGHT 20
 #define CHANNEL_LENGTH 100 //nm

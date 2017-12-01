@@ -14,6 +14,13 @@ namespace POWEROPT {
         if (isGate)  return gate->getName();
     }
 
+    string GNode::getType()
+    {
+        assert(!(isPad&isGate));
+        if (isPad)  return "PAD";
+        if (isGate) return gate->getCellName() ;
+    }
+
     bool GNode::allInputsReady()
     {
        assert(isGate);
